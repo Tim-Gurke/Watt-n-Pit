@@ -4,7 +4,7 @@
 
 [APK herunterladen](https://github.com/Tim-Gurke/WattPit/releases/latest) · [Einrichtung](#einrichtung) · [CSV-Import](docs/CSV-IMPORT.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
-## Version 0.1.0
+## Version 0.1.1
 
 - SmartSolar 75/15 und SmartShunt 300 A gleichzeitig über Bluetooth-Sofortanzeige.
 - Akku-Ladezustand, Restlaufzeit, Spannung, Strom, entnommene Ah und Batteriebilanz.
@@ -49,7 +49,7 @@ Positiver Batteriestrom bedeutet Laden, negativer Batteriestrom Entladen. Restla
 
 ## Stand und offene Aufgaben
 
-0.1.0 ist eine erste Testversion. Decoder, CSV-Verarbeitung, Android-Lint, APK-Build und die Oberfläche sind automatisiert geprüft. **Die Prüfung an echten Victron-Geräten steht noch aus.**
+0.1.1 ist eine erste Testversion. Decoder, CSV-Verarbeitung, Android-Lint, APK-Build und die Oberfläche sind automatisiert geprüft. **Die Prüfung an echten Victron-Geräten steht noch aus.**
 
 **Direktes automatisches Nachladen gespeicherter Gerätetrends ist noch nicht implementiert.** Die offene Sofortanzeige überträgt Livewerte und keine archivierten Zeitreihen. Ein belastbar verifizierter Archivzugriff ist der nächste zentrale Entwicklungsschritt. Ziel: Beim nächsten Empfang fehlende Zeitbereiche automatisch holen, eigene Aufzeichnungen priorisieren und unterbrochene Downloads fortsetzen. CSV-Import ist bereits verfügbar. Fehlende Vergangenheit wird nicht aus aktuellen Werten erfunden.
 
@@ -68,3 +68,6 @@ Die APK liegt unter `app/build/outputs/apk/debug/app-debug.apk`. Die öffentlich
 Für die Oberflächenprüfung: `node tools/ui-smoke.cjs` (Playwright erforderlich; startet einen lokalen Asset-Server selbst). Die App selbst nutzt keine npm-Abhängigkeiten.
 
 MIT-Lizenz. Unabhängiges Projekt, kein offizielles Victron-Produkt.
+
+## Tagesarchiv in 0.1.1
+Victron SolarHistory.csv wird getrennt von Livewerten gespeichert und im Verlauf als Tageswerttabelle angezeigt. Der automatische Bluetooth-Archivabruf bleibt offen.

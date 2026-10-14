@@ -111,7 +111,7 @@ final class Repository {
         }
         if (now - statsTime > 30_000) { cachedStats = db.stats(); statsTime = now; }
         return new JSONObject().put("running",running).put("status",status).put("devices",devices).put("found",discovery)
-                .put("readings",readings).put("stats",cachedStats).put("event",event).put("eventId",eventId)
+                .put("readings",readings).put("stats",cachedStats).put("solarDaily",db.daily()).put("event",event).put("eventId",eventId)
                 .put("settings",new JSONObject().put("theme",prefs.getString("theme","dark"))
                     .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10)));
     }

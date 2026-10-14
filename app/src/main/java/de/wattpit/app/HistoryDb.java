@@ -16,15 +16,41 @@ import java.util.*;
 
 final class HistoryDb extends SQLiteOpenHelper {
     private static final String[] NUMBERS = {"voltage","current","power","soc","solar","yieldWh","ttg","consumed","temperature","aux","load","state","error","alarm"};
-    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 1); setWriteAheadLoggingEnabled(true); }
+    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 2); setWriteAheadLoggingEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE readings (ts INTEGER NOT NULL, device TEXT NOT NULL, kind TEXT NOT NULL, origin TEXT NOT NULL, " +
                 "voltage REAL, current REAL, power REAL, soc REAL, solar REAL, yieldWh REAL, ttg REAL, consumed REAL, temperature REAL, aux REAL, load REAL, " +
                 "state INTEGER, error INTEGER, alarm INTEGER, UNIQUE(ts,device,origin))");
         db.execSQL("CREATE INDEX history_window ON readings(ts,kind,origin)");
         db.execSQL("CREATE INDEX history_device ON readings(device,ts)");
+        createDaily(db);
     }
-    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { throw new IllegalStateException("Unbekannte Datenbankversion."); }
+    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { if (oldVersion < 2) createDaily(db); }
+
+    private static void createDaily(SQLiteDatabase db) { db.execSQL("CREATE TABLE IF NOT EXISTS solar_daily(day TEXT PRIMARY KEY, payload TEXT NOT NULL)"); }
+    JSONArray daily() throws Exception {
+        JSONArray out = new JSONArray();
+        try (Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM solar_daily ORDER BY day DESC",null)) { while(c.moveToNext()) out.put(new JSONObject(c.getString(0))); }
+        return out;
+    }
+    private int[] importDaily(CsvCodec.Table table) {
+        int inserted=0,duplicates=0,rejected=0;
+        SQLiteDatabase db=getWritableDatabase(); db.beginTransaction();
+        try {
+            for(List<String> row:table.rows) {
+                try {
+                    java.time.LocalDate day=java.time.LocalDate.parse(row.get(1),java.time.format.DateTimeFormatter.ofPattern("M/d/uu"));
+                    JSONObject payload=new JSONObject().put("day",day.toString());
+                    for(int i=2;i<table.headers.size();i++) payload.put(table.headers.get(i),Double.parseDouble(row.get(i)));
+                    ContentValues v=new ContentValues();v.put("day",day.toString());v.put("payload",payload.toString());
+                    if(db.insertWithOnConflict("solar_daily",null,v,SQLiteDatabase.CONFLICT_IGNORE)!=-1)inserted++;else duplicates++;
+                } catch(Exception e) { rejected++; }
+            }
+            if(inserted==0 && duplicates==0)throw new IllegalArgumentException("Keine lesbaren Tagesdaten gefunden.");
+            db.setTransactionSuccessful();
+        } finally {db.endTransaction();}
+        return new int[]{inserted,duplicates,rejected};
+    }
 
     boolean insert(Reading r) {
         ContentValues v = new ContentValues();
@@ -68,6 +94,7 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
 
     int[] importTable(CsvCodec.Table table, Map<String, Integer> map, String kind) {
+        if (table.headers.contains("Days ago") && table.headers.contains("Yield(Wh)")) return importDaily(table);
         int inserted = 0, duplicates = 0, rejected = 0;
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();

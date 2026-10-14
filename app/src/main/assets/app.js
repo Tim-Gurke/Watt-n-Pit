@@ -8,8 +8,8 @@ const icons = {
   solar:'<path d="m5 9-2 10h18L19 9ZM6 14h12M10 9l-1 10m5-10 1 10M12 2v3M5 4l2 2m12-2-2 2"/>',
   overview:'<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
   history:'<path d="M3 3v18h18M6 15l4-5 4 3 6-8"/>',
-  devices:'<path d="m8 7 8 10-4 4V3l4 4-8 10"/><path d="M5 5v2m14 10v2"/>',
-  settings:'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="m9 3 1-1h4l1 3 3 1 3 1v4l-2 1-1 3 1 3-3 3-3-1-3 1-1 2H7l-1-3-3-1v-4l2-1 1-3-1-3 3-3Z"/>',
+  devices:'<path d="M7 7l10 10-5 5V2l5 5L7 17"/><path d="M5 5v2m14 10v2"/>',
+  settings:'<circle cx="12" cy="12" r="3.5"/><polygon points="20.00,12.00 19.96,12.78 21.81,13.95 21.57,14.90 21.24,15.83 20.82,16.71 18.65,16.44 18.18,17.08 17.66,17.66 17.08,18.18 17.56,20.31 16.71,20.82 15.83,21.24 14.90,21.57 13.56,19.85 12.78,19.96 12.00,20.00 11.22,19.96 10.05,21.81 9.10,21.57 8.17,21.24 7.29,20.82 7.56,18.65 6.92,18.18 6.34,17.66 5.82,17.08 3.69,17.56 3.18,16.71 2.76,15.83 2.43,14.90 4.15,13.56 4.04,12.78 4.00,12.00 4.04,11.22 2.19,10.05 2.43,9.10 2.76,8.17 3.18,7.29 5.35,7.56 5.82,6.92 6.34,6.34 6.92,5.82 6.44,3.69 7.29,3.18 8.17,2.76 9.10,2.43 10.44,4.15 11.22,4.04 12.00,4.00 12.78,4.04 13.95,2.19 14.90,2.43 15.83,2.76 16.71,3.18 16.44,5.35 17.08,5.82 17.66,6.34 18.18,6.92 20.31,6.44 20.82,7.29 21.24,8.17 21.57,9.10 19.85,10.44 19.96,11.22"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   import:'<path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/>',
   play:'<path d="m8 4 12 8-12 8Z"/>',
@@ -19,6 +19,7 @@ const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">$
 const escapeHtml = text => String(text == null ? '' : text).replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num = (value, digits=0) => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('de-DE',{minimumFractionDigits:digits,maximumFractionDigits:digits});
 const valueUnit = (value,unit,digits=0) => `${num(value,digits)} <small>${unit}</small>`;
+function formatRemaining(minutes) { const total=Math.max(0,Math.round(minutes)),h=Math.floor(total/60),m=total%60; return `${h ? h+' <small>h</small> ' : ''}${m||!h ? m+' <small>min</small>' : ''}`.trim(); }
 const clock = t => new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
 const date = t => new Date(t).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
 let snapshot = {running:false,status:'Aufzeichnung pausiert',devices:[],found:[],readings:[],stats:{count:0},settings:{theme:'dark',capacity:100,sampleSeconds:10}};
@@ -78,7 +79,7 @@ function renderOverview() {
   $('socArc').style.strokeDashoffset = 484-(shunt?.soc == null ? 0 : shunt.soc/100*484);
   $('socArc').style.stroke = shunt?.soc != null && shunt.soc < 20 ? 'var(--orange)' : 'var(--mint)';
   const ttg = shunt?.ttg;
-  $('remaining').innerHTML = ttg == null ? '—' : ttg < 60 ? `${num(ttg)} <small>min</small>` : `${num(Math.floor(ttg/60))} <small>h</small>${Math.round(ttg%60)?` ${num(Math.round(ttg%60))} <small>m</small>`:''}`;
+  $('remaining').innerHTML = ttg == null ? '—' : formatRemaining(ttg);
   $('remainingHint').textContent = shunt?.current > 0.03 && ttg == null ? 'Akku wird geladen' : 'Wert vom Shunt';
   $('remainingAh').innerHTML = valueUnit(shunt?.soc == null ? null : shunt.soc/100*snapshot.settings.capacity,'Ah',1);
   $('solarValue').innerHTML = valueUnit(solar?.solar,'W');
@@ -132,6 +133,7 @@ function poll() {
   if (page === 'devices') renderDevices();
   if (page === 'settings') renderSettings();
   if (page === 'history') {
+    renderDaily();
     const count = snapshot.stats?.count || 0;
     $('historyStats').innerHTML = `<span class="info-symbol">i</span><p>${demo?'Demo zeigt erfundene Beispieldaten.':count?`${num(count)} gespeicherte Messpunkte${snapshot.stats.from?` · ab ${date(snapshot.stats.from)}`:''}. Der Export enthält alle gespeicherten Daten.`:'Noch keine gespeicherten Messpunkte. Starte die Aufzeichnung oder importiere eine CSV.'}</p>`;
   }
@@ -313,6 +315,11 @@ function releasePointer(event){
 $('historyChart').addEventListener('pointerup',releasePointer);
 $('historyChart').addEventListener('pointercancel',event=>{pointers.delete(event.pointerId);gesture=null;});
 
+function renderDaily() {
+ let el=$('solarDailyArchive'); if(!el){el=document.createElement('article');el.id='solarDailyArchive';el.className='card';$('historyStats').after(el);}
+ const rows=snapshot.solarDaily||[];el.hidden=!rows.length;
+ el.innerHTML='<h2>Solar-Tagesarchiv</h2><p class="muted">Importierte Tageswerte · keine Live-Messpunkte. Heute kann noch unvollständig sein.</p><div style="overflow-x:auto"><table><thead><tr><th>Tag</th><th>Ertrag Wh</th><th>Maximum W</th><th>Batterie min/max V</th></tr></thead><tbody>'+rows.map(r=>`<tr><td>${escapeHtml(r.day)}</td><td>${num(r['Yield(Wh)'])}</td><td>${num(r['Max. PV power(W)'])}</td><td>${num(r['Min. battery voltage(V)'],2)} / ${num(r['Max. battery voltage(V)'],2)}</td></tr>`).join('')+'</tbody></table></div>';
+}
 function chooseImport(){if(native)native.chooseImport();else toast('CSV-Dateien werden in der Android-App importiert.');}
 function chooseExport(){if(native)native.chooseExport();else toast('Der Export ist in der Android-App verfügbar.');}
 const mappingLabels={timestamp:'Datum & Zeit',date:'Datum separat',clock:'Zeit separat',voltage:'Batteriespannung',current:'Batteriestrom',power:'Batterieleistung',soc:'Ladezustand / SOC',solar:'Solarleistung',yieldWh:'Tagesertrag',ttg:'Restlaufzeit',consumed:'Entnommene Ah',temperature:'Temperatur',aux:'Zusatzspannung',load:'Laststrom',state:'Ladephase (Code)',error:'Fehlercode',alarm:'Alarm (Bitmaske)'};
@@ -321,9 +328,11 @@ window.onImportPreview = result => {
   const nativeFile=result.map.kind!=null && result.map.device!=null;
   const fields=Object.keys(mappingLabels),basic=['timestamp','date','clock','voltage','current','soc','power','solar'];
   const mapRow=field=>`<div class="map-row"><label for="map-${field}">${mappingLabels[field]}</label><select id="map-${field}" data-field="${field}"><option value="-1">Nicht vorhanden</option>${result.headers.map((h,i)=>`<option value="${i}">${escapeHtml(h)}</option>`).join('')}</select><div id="example-${field}" class="map-example"></div></div>`;
-  openModal('Verlauf importieren',`<p class="muted"><strong>${escapeHtml(result.name)}</strong><br>${num(result.rows)} Zeilen gefunden. Prüfe die Zuordnung, bevor die Daten übernommen werden.${nativeFile?'<br>WattPit-Datei erkannt: Gerätetyp und Datenquelle bleiben erhalten.':''}</p><label class="form-field">Gerätetyp<select id="importKind"><option value="shunt">SmartShunt · Batterie</option><option value="solar">SmartSolar · Solar</option></select></label><div class="mapping-list">${basic.map(mapRow).join('')}<details><summary>Weitere Messwerte</summary>${fields.filter(f=>!basic.includes(f)).map(mapRow).join('')}</details></div><p class="muted" style="margin-top:16px">Zeitangaben ohne Zeitzone werden in der lokalen Telefonzeit gelesen. Werte mit kW/kWh/mA/mV in der Kopfzeile werden automatisch umgerechnet.</p><p id="importError" class="form-error" hidden></p><div class="form-actions"><button class="quiet" id="cancelCsv">Abbrechen</button><button class="primary" id="confirmCsv">Daten importieren</button></div>`);
+  openModal('Verlauf importieren',`<p class="muted"><strong>${escapeHtml(result.name)}</strong><br>${num(result.rows)} Zeilen gefunden. Prüfe die Zuordnung, bevor die Daten übernommen werden. SolarHistory-Tagesarchive werden automatisch separat gespeichert; ihre Spaltenzuordnung wird nicht verwendet.${nativeFile?'<br>WattPit-Datei erkannt: Gerätetyp und Datenquelle bleiben erhalten.':''}</p><label class="form-field">Gerätetyp<select id="importKind"><option value="shunt">SmartShunt · Batterie</option><option value="solar">SmartSolar · Solar</option></select></label><div class="mapping-list">${basic.map(mapRow).join('')}<details><summary>Weitere Messwerte</summary>${fields.filter(f=>!basic.includes(f)).map(mapRow).join('')}</details></div><p class="muted" style="margin-top:16px">Zeitangaben ohne Zeitzone werden in der lokalen Telefonzeit gelesen. Werte mit kW/kWh/mA/mV in der Kopfzeile werden automatisch umgerechnet.</p><p id="importError" class="form-error" hidden></p><div class="form-actions"><button class="quiet" id="cancelCsv">Abbrechen</button><button class="primary" id="confirmCsv">Daten importieren</button></div>`);
   $('importKind').value=result.map.solar!=null || /solar|mppt/i.test(result.name)?'solar':'shunt';
-  $('importKind').disabled=nativeFile;
+  const dailyFile=result.headers.includes('Days ago') && result.headers.includes('Yield(Wh)');
+  $('importKind').disabled=nativeFile||dailyFile;
+  if(dailyFile){$('importKind').value='solar';document.querySelector('.mapping-list').hidden=true;}
   fields.forEach(field=>{const select=$('map-'+field);select.value=result.map[field]??-1;const update=()=>{$('example-'+field).textContent=select.value>=0?'Beispiel: '+(result.preview[0]?.[select.value] || 'leer'):'';};select.onchange=update;update();});
   $('cancelCsv').onclick=closeModal;
   $('confirmCsv').onclick=()=>{
@@ -336,7 +345,7 @@ window.onImportPreview = result => {
 };
 window.onImportDone = result => {
   if(currentImport)currentImport.busy=false;closeModal();
-  toast(`${num(result.inserted)} Messpunkte importiert · ${num(result.duplicates)} bereits vorhanden · ${num(result.rejected)} unlesbar.`);
+  toast(`${num(result.inserted)} Datensätze importiert · ${num(result.duplicates)} bereits vorhanden · ${num(result.rejected)} unlesbar.`);
   poll();loadHistory();loadMini(true);
 };
 window.nativeError = result => {
