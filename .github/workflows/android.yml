@@ -1,0 +1,69 @@
+name: Android prüfen und veröffentlichen
+
+on:
+  push:
+    branches: [main, 'publish/*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests, Lint und Android-Build
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WattPit-CI-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Pruefberichte
+          path: |
+            app/build/reports/tests/
+            app/build/reports/lint-results-debug.html
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/publish/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Vorbereitete signierte APK prüfen und Release erstellen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          apk=".release/WattPit-v${version}.apk"
+          test -f "$apk"
+          # The publication commit may attach APK/checksum files only.
+          test -z "$(git diff HEAD^ HEAD --name-only | sed '/^\.release\//d')"
+          tools_dir=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$tools_dir/apksigner" verify "$apk"
+          badging=$("$tools_dir/aapt" dump badging "$apk")
+          [[ "$badging" == *"name='de.wattpit.app'"* ]]
+          [[ "$badging" == *"versionName='${version}'"* ]]
+          sha256sum "$apk" | sed 's|.release/||' > ".release/SHA256SUMS.txt"
+          gh release create "v${version}" "$apk" .release/SHA256SUMS.txt \
+            --target "$(git rev-parse HEAD^)" --title "WattPit ${version}" \
+            --notes-file "docs/releases/${version}.md"

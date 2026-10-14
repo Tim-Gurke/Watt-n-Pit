@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>WattPit</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><svg class="brandmark" viewBox="0 0 48 48" aria-hidden="true"><rect x="1" y="1" width="46" height="46" rx="15" fill="currentColor" opacity=".12"/><path d="M28 9 14 26h11l-3 13 14-19H25z" fill="currentColor"/></svg><div><div class="wordmark">Watt<span>Pit</span><small>0.1.0</small></div><div class="brandline">DEIN ENERGIE-COCKPIT</div></div></div>
+  <button class="iconbutton" id="themeToggle" aria-label="Farbschema wechseln"></button>
+</header>
+<div id="demoBar" class="demo-bar" hidden><span>DEMO · Beispieldaten</span><button id="exitDemo">Demo verlassen</button></div>
+<main>
+<section id="overview" class="page active">
+  <div class="pagehead"><div><p class="eyebrow" id="todayLabel"></p><h1>Energie im Blick.</h1></div><div class="status-chip" id="liveStatus"><i></i><span>Pausiert</span></div></div>
+  <div id="welcome" class="welcome"><div><h2>Einmal einrichten. Alles im Blick.</h2><p>SmartShunt und SmartSolar liefern die Werte. WattPit bringt sie zusammen.</p></div><div class="row"><button class="primary" id="setupFirst">Geräte einrichten</button><button class="quiet" id="demoFirst">Demo ansehen</button></div></div>
+  <div class="dashboard-grid">
+    <article class="card battery-card">
+      <div class="card-heading"><span class="eyebrow">DEIN AKKU</span><span class="source-label">SmartShunt</span></div>
+      <div class="battery-content"><div class="soc-ring"><svg viewBox="0 0 180 180" aria-hidden="true"><circle class="ring-track" cx="90" cy="90" r="77"/><circle id="socArc" class="ring-value" cx="90" cy="90" r="77"/></svg><div class="soc-value"><strong id="socValue">—</strong><span>% geladen</span></div></div><div class="battery-aside"><span class="label">Restlaufzeit</span><strong id="remaining">—</strong><span id="remainingHint" class="muted">Wert vom Shunt</span><div class="small-divider"></div><span class="label">Rechnerisch im Akku</span><strong class="medium" id="remainingAh">— <small>Ah</small></strong></div></div>
+      <div class="card-foot"><span id="batteryState"><i class="dot mint"></i> Noch kein Livewert</span><span id="lastSeen">—</span></div>
+    </article>
+    <div class="power-grid">
+      <article class="card power-card solar-card"><div class="tile-icon orange" id="solarIcon"></div><span class="eyebrow">SOLARLEISTUNG</span><div class="big-number" id="solarValue">— <small>W</small></div><p class="muted">Festmodule · SmartSolar</p><div class="tile-bottom"><strong id="yieldValue">—</strong><span id="solarPhase">Ladephase —</span></div></article>
+      <article class="card power-card"><div class="tile-icon mint" id="batteryIcon"></div><span class="eyebrow">BATTERIEBILANZ</span><div class="big-number" id="powerValue">— <small>W</small></div><p class="muted" id="powerHint">Alle Quellen und Verbraucher</p><div class="tile-bottom"><strong id="powerDirection">Kein Livewert</strong><span>+ Laden · − Entladen</span></div></article>
+    </div>
+  </div>
+  <div class="detail-grid"><article class="card detail"><span class="label">Batteriespannung</span><strong id="voltageValue">— <small>V</small></strong></article><article class="card detail"><span class="label">Batteriestrom</span><strong id="currentValue">— <small>A</small></strong></article><article class="card detail"><span class="label">Entnommen</span><strong id="consumedValue">— <small>Ah</small></strong></article><article class="card detail"><span class="label" id="auxLabel">Temperatur / Zusatz</span><strong id="auxValue">—</strong></article></div>
+  <article class="card mini-history"><div class="section-heading"><div><span class="eyebrow">LETZTE 6 STUNDEN</span><h2>So läuft deine Energie.</h2></div><button class="textbutton" id="openHistory">Verlauf <span>↗</span></button></div><div class="mini-legend"><span><i class="dot orange"></i> Solar</span><span><i class="dot mint"></i> Batterie</span></div><canvas id="miniChart" aria-label="Solarleistung und Batteriebilanz der letzten sechs Stunden"></canvas></article>
+  <div class="info-note"><span class="info-symbol">i</span><p>Das mobile 100-W-Modul fließt über den PWM-Regler in die Batteriebilanz ein. Seine einzelne Solarleistung ist ohne eigenen Messwert nicht sichtbar.</p></div>
+  <button class="record-button" id="overviewRecord"><span id="recordIcon"></span><span id="recordText">Aufzeichnung starten</span></button>
+</section>
+<section id="history" class="page">
+  <div class="pagehead"><div><p class="eyebrow">DEINE DATEN BLEIBEN BEI DIR</p><h1>Der Verlauf.</h1></div><button class="iconbutton" id="historyImport" aria-label="CSV importieren"></button></div>
+  <div class="segments range-segments" id="rangeButtons"><button data-range="today" class="selected">Heute</button><button data-range="yesterday">Gestern</button><button data-range="week">Woche</button><button data-range="month">Monat</button><button data-range="custom">Frei</button></div>
+  <div id="customRange" class="custom-range" hidden><label>Von<input id="rangeFrom" type="datetime-local"></label><label>Bis<input id="rangeTo" type="datetime-local"></label><button class="primary" id="applyRange">Anzeigen</button></div>
+  <div class="metric-chips" id="metricButtons"><button data-metric="power" class="selected">Leistung</button><button data-metric="soc">Akku</button><button data-metric="voltage">Spannung</button><button data-metric="current">Strom</button><button data-metric="yieldWh">Tagesertrag</button></div>
+  <article class="card full-history"><div class="section-heading"><div><h2 id="chartTitle">Solar & Batteriebilanz</h2><p id="chartWindow" class="muted"></p></div><select id="historySource" aria-label="Datenquelle"><option value="all">Alle Daten</option><option value="live">Aufgezeichnet</option><option value="csv">Importiert</option></select></div><div id="chartLegend" class="chart-legend"></div><div class="chart-wrap"><canvas id="historyChart" aria-label="Interaktiver Energieverlauf; mit zwei Fingern zoomen, mit einem Finger verschieben"></canvas><div id="chartTooltip" class="chart-tooltip" hidden></div></div><div class="chart-controls"><div class="zoom-control"><span>Zeit</span><button id="zoomOut" aria-label="Zeitachse verkleinern">−</button><button id="zoomIn" aria-label="Zeitachse vergrößern">+</button></div><button class="quiet" id="openScale">Werteskala</button><button class="textbutton" id="resetChart">Zurücksetzen</button></div></article>
+  <p class="chart-help">Zwei Finger zum Zoomen. Ein Finger zum Verschieben. Antippen zeigt Messwerte. Lange Zeiträume bündeln Werte; die Schattierung zeigt Minimum und Maximum.</p>
+  <div class="row file-actions"><button class="secondary" id="importCsv">CSV importieren</button><button class="quiet" id="exportCsv">Verlauf exportieren</button></div>
+  <div id="historyStats" class="info-note"></div>
+</section>
+<section id="devices" class="page">
+  <div class="pagehead"><div><p class="eyebrow">DIREKT PER BLUETOOTH</p><h1>Deine Geräte.</h1></div><button class="iconbutton" id="addDevice" aria-label="Gerät manuell hinzufügen"></button></div>
+  <div id="deviceCards" class="device-cards"></div>
+  <article class="card discovery"><div class="section-heading"><div><h2>In deiner Nähe</h2><p class="muted" id="scanStatus">Die Suche startet mit der Aufzeichnung.</p></div><button class="secondary" id="scanButton">Suche starten</button></div><div id="foundDevices"></div></article>
+  <article class="card setup-guide"><span class="eyebrow">SO VERBINDEST DU WATTPIT</span><h2>Der Schlüssel steckt in VictronConnect.</h2><ol><li>SmartSolar bzw. SmartShunt in <strong>VictronConnect</strong> öffnen.</li><li>Unter <strong>Einstellungen → ⋮ → Produktinfo</strong> die <strong>Sofortanzeige über Bluetooth</strong> einschalten.</li><li>Bei <strong>Sofortanzeige-Details → Anzeigen</strong> die MAC-Adresse und den <strong>32-stelligen Verschlüsselungsschlüssel</strong> übernehmen.</li><li>Hier das gefundene Gerät wählen, den Schlüssel einfügen und die Aufzeichnung starten.</li></ol><p class="muted">Der Schlüssel ist je Gerät unterschiedlich. Er ist nicht die sechsstellige Bluetooth-PIN. Zum Empfang die aktive Geräteverbindung in VictronConnect verlassen.</p></article>
+</section>
+<section id="settings" class="page">
+  <div class="pagehead"><div><p class="eyebrow">PASST ZU DEINEM SETUP</p><h1>Dein WattPit.</h1></div></div>
+  <article class="card settings-card"><h2>Ansicht</h2><div class="setting-row"><div><strong>Farbschema</strong><p class="muted">Für Sonne und Feierabend.</p></div><div class="segments compact" id="themeButtons"><button data-theme="dark">Dunkel</button><button data-theme="light">Hell</button></div></div></article>
+  <article class="card settings-card"><h2>Akku & Aufzeichnung</h2><label class="setting-row"><div><strong>Batteriekapazität</strong><p class="muted">Für die Ah-Anzeige. Der Ladezustand kommt vom Shunt.</p></div><div class="unit-input"><input id="capacitySetting" type="number" min="1" max="10000" step="1" aria-label="Batteriekapazität"><span>Ah</span></div></label><label class="setting-row"><div><strong>Speicherintervall</strong><p class="muted">Liveanzeige aktualisiert sich unabhängig davon.</p></div><select id="sampleSetting"><option value="5">5 Sekunden</option><option value="10">10 Sekunden</option><option value="30">30 Sekunden</option><option value="60">1 Minute</option></select></label><button class="secondary" id="saveSettings">Einstellungen speichern</button></article>
+  <article class="card settings-card"><h2>Deine Energieanlage</h2><div class="setup-line"><span class="dot orange"></span><div><strong>2 × 100 W fest installiert</strong><p class="muted">Am SmartSolar 75/15</p></div></div><div class="setup-line"><span class="dot mint"></span><div><strong>100 W mobil</strong><p class="muted">Am vorhandenen PWM-Regler, in der Shunt-Bilanz</p></div></div><p class="muted">Alle Ladegeräte und Verbraucher müssen auf der Anlagenseite des Shunts angeschlossen sein, damit die Bilanz vollständig ist.</p></article>
+  <article class="card settings-card"><h2>Lokal. Ohne Konto.</h2><p class="muted">WattPit empfängt deine Geräte direkt. Messwerte und Geräteschlüssel bleiben auf diesem Telefon. Keine Cloud, keine Werbung, keine Internetberechtigung.</p><div class="row"><button class="quiet" id="settingsImport">CSV importieren</button><button class="quiet" id="settingsExport">CSV exportieren</button></div></article>
+  <div class="about"><svg class="brandmark" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 9 14 26h11l-3 13 14-19H25z" fill="currentColor"/></svg><strong>WattPit 0.1.0</strong><p>Dein Energie-Cockpit.</p><button class="textbutton" id="settingsDemo">Demo ansehen</button></div>
+</section>
+</main>
+<nav class="bottom-nav" aria-label="Hauptnavigation"><button data-page="overview" class="active"><span id="navOverview"></span>Übersicht</button><button data-page="history"><span id="navHistory"></span>Verlauf</button><button data-page="devices"><span id="navDevices"></span>Geräte</button><button data-page="settings"><span id="navSettings"></span>Einstellungen</button></nav>
+<div id="modal" class="modal" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="sheet-heading"><h2 id="modalTitle"></h2><button class="iconbutton" id="closeModal" aria-label="Dialog schließen">×</button></div><div id="modalBody"></div></div></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
