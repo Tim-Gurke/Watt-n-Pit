@@ -44,7 +44,7 @@ public final class MonitorService extends Service {
 
     @Override public void onCreate() {
         super.onCreate(); repository = Repository.get(this);
-        NotificationChannel channel = new NotificationChannel(CHANNEL,"WattPit-Aufzeichnung",NotificationManager.IMPORTANCE_LOW);
+        NotificationChannel channel = new NotificationChannel(CHANNEL,"Watt’n’Pit-Aufzeichnung",NotificationManager.IMPORTANCE_LOW);
         channel.setDescription("Lokale Bluetooth-Aufzeichnung deiner Energieanlage");
         getSystemService(NotificationManager.class).createNotificationChannel(channel);
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
@@ -113,7 +113,7 @@ public final class MonitorService extends Service {
         Intent open = new Intent(this,MainActivity.class);
         PendingIntent content = PendingIntent.getActivity(this,0,open,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop = PendingIntent.getService(this,1,new Intent(this,MonitorService.class).setAction("STOP"),PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        return new Notification.Builder(this,CHANNEL).setSmallIcon(R.drawable.ic_bolt).setContentTitle("WattPit zeichnet lokal auf")
+        return new Notification.Builder(this,CHANNEL).setSmallIcon(R.drawable.ic_bolt).setContentTitle("Watt’n’Pit zeichnet lokal auf")
                 .setContentText(repository.status).setContentIntent(content).setOngoing(true)
                 .addAction(new Notification.Action.Builder(null,"Pausieren",stop).build()).build();
     }

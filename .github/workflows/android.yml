@@ -22,11 +22,13 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Dashboard-Berechnungen und Konfiguration prüfen
+        run: node --test tools/dashboard-core.test.cjs
       - name: Tests, Lint und Android-Build
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: WattPit-CI-release
+          name: Watt-n-Pit-CI-release
           path: app/build/outputs/apk/release/app-release-unsigned.apk
       - uses: actions/upload-artifact@v4
         if: always()
@@ -54,16 +56,17 @@ jobs:
           set -euo pipefail
           version=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          apk=".release/WattPit-v${version}.apk"
+          apk=".release/Watt-n-Pit-v${version}.apk"
           test -f "$apk"
           # The publication commit may attach APK/checksum files only.
           test -z "$(git diff HEAD^ HEAD --name-only | sed '/^\.release\//d')"
           tools_dir=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$tools_dir/apksigner" verify "$apk"
+          certificate=$("$tools_dir/apksigner" verify --print-certs "$apk")
+          [[ "$certificate" == *"certificate SHA-256 digest: 0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2"* ]]
           badging=$("$tools_dir/aapt" dump badging "$apk")
           [[ "$badging" == *"name='de.wattpit.app'"* ]]
           [[ "$badging" == *"versionName='${version}'"* ]]
           sha256sum "$apk" | sed 's|.release/||' > ".release/SHA256SUMS.txt"
           gh release create "v${version}" "$apk" .release/SHA256SUMS.txt \
-            --target "$(git rev-parse HEAD^)" --title "WattPit ${version}" \
+            --target "$(git rev-parse HEAD^)" --title "Watt’n’Pit ${version}" \
             --notes-file "docs/releases/${version}.md"

@@ -37,4 +37,31 @@ public class HistoryQueryTest {
         List<Double> imports=values("voltage","csv");assertEquals(3,imports.size());assertTrue(imports.contains(12.8));
         assertEquals(Collections.singletonList(13.2),values("voltage","live"));
     }
+    @Test public void aFutureDeviceArchiveHasPriorityOverCsvButRecordingsStillWin() throws Exception {
+        db.createStatement().execute("INSERT INTO readings VALUES (100000,'shunt','shunt','archive',13.0,-2.1,-27.3,NULL,NULL,NULL),"+
+                "(400000,'shunt','shunt','archive',12.9,-2.3,-29.67,NULL,NULL,NULL)");
+        List<Double> merged=values("voltage","all");
+        assertTrue(merged.contains(13.2));assertTrue(merged.contains(12.9));
+        assertFalse(merged.contains(13.0));assertFalse(merged.contains(12.7));
+        assertEquals(Arrays.asList(13.0,12.9),values("batteryVoltage","archive"));
+    }
+    @Test public void tileStatisticsUseExactSamplesAndTheActualLastValue() throws Exception {
+        HistoryQuery q=HistoryQuery.summary(1,500000,"batteryCurrent","all");
+        try(PreparedStatement s=db.prepareStatement(q.sql)) {
+            for(int i=0;i<q.args.length;i++)s.setString(i+1,q.args[i]);
+            try(ResultSet r=s.executeQuery()){assertTrue(r.next());assertEquals(-2.1,r.getDouble(1),1e-8);assertEquals(-2.2,r.getDouble(2),1e-8);assertEquals(-2,r.getDouble(3),1e-8);assertEquals(2,r.getLong(4));}
+        }
+        q=HistoryQuery.latest(1,500000,"batteryCurrent","all");
+        try(PreparedStatement s=db.prepareStatement(q.sql)) {
+            for(int i=0;i<q.args.length;i++)s.setString(i+1,q.args[i]);
+            try(ResultSet r=s.executeQuery()){assertTrue(r.next());assertEquals(-2.2,r.getDouble(1),1e-8);assertEquals(400000,r.getLong(2));}
+        }
+    }
+    @Test public void calculatedTileValuesRemainSeparatedByDeviceType() throws Exception {
+        db.createStatement().execute("ALTER TABLE readings ADD COLUMN consumed REAL");
+        db.createStatement().execute("UPDATE readings SET soc=50,consumed=-23.6 WHERE origin='live'");
+        assertTrue(values("storedEnergy","all").contains(6.6));
+        assertEquals(Collections.singletonList(23.6),values("consumed","all"));
+        assertEquals(Collections.singletonList(80.0),values("solar","all"));
+    }
 }

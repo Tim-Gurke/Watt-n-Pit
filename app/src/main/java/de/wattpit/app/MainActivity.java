@@ -157,6 +157,20 @@ public final class MainActivity extends Activity {
             try { return new JSONObject().put("points",repository.db.query(from,to,metric,source)).toString(); }
             catch (Exception e) { return "{\"points\":[],\"error\":\"Verlauf konnte nicht geladen werden.\"}"; }
         }
+        @JavascriptInterface public String dashboard() { return repository.prefs.getString("dashboard-v1","{}"); }
+        @JavascriptInterface public String saveDashboard(String json) {
+            try {
+                if(json.length()>128000) throw new IllegalArgumentException("Die Übersicht ist zu groß.");
+                JSONObject config=new JSONObject(json);
+                if(config.getInt("version")!=1 || config.getJSONArray("tiles").length()>64) throw new IllegalArgumentException("Ungültige Übersicht.");
+                if(!repository.prefs.edit().putString("dashboard-v1",config.toString()).commit()) throw new IOException();
+                return "";
+            } catch(Exception e) { return Repository.safeError(e); }
+        }
+        @JavascriptInterface public String dashboardHistory(long from,long to,String metric) {
+            try { return repository.db.dashboardData(from,to,metric).toString(); }
+            catch(Exception e) { return "{\"points\":[],\"summary\":{},\"error\":\"Zeitraum konnte nicht geladen werden.\"}"; }
+        }
         @JavascriptInterface public void start() { runOnUiThread(MainActivity.this::requestStart); }
         @JavascriptInterface public void stop() {
             repository.prefs.edit().putBoolean("recording",false).apply();
@@ -177,7 +191,7 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void chooseExport() {
             runOnUiThread(() -> startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-                    .setType("text/csv").putExtra(Intent.EXTRA_TITLE,"WattPit-Verlauf.csv"),EXPORT));
+                    .setType("text/csv").putExtra(Intent.EXTRA_TITLE,"Watt-n-Pit-Verlauf.csv"),EXPORT));
         }
         @JavascriptInterface public void importCsv(String mapping, String kind) {
             files.execute(() -> {

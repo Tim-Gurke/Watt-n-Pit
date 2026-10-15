@@ -87,6 +87,20 @@ final class HistoryDb extends SQLiteOpenHelper {
         }
     }
 
+    JSONObject dashboardData(long from,long to,String metric) throws Exception {
+        JSONObject summary=new JSONObject();
+        HistoryQuery aggregate=HistoryQuery.summary(from,to,metric,"all");
+        try (Cursor c=getReadableDatabase().rawQuery(aggregate.sql,aggregate.args)) {
+            if(c.moveToFirst()) {
+                for(int i=0;i<3;i++) summary.put(new String[]{"avg","min","max"}[i],c.isNull(i)?JSONObject.NULL:c.getDouble(i));
+                summary.put("n",c.getLong(3));summary.put("lastTime",c.isNull(4)?0:c.getLong(4));
+            }
+        }
+        HistoryQuery last=HistoryQuery.latest(from,to,metric,"all");
+        try (Cursor c=getReadableDatabase().rawQuery(last.sql,last.args)) { summary.put("last",c.moveToFirst()?c.getDouble(0):JSONObject.NULL); }
+        return new JSONObject().put("summary",summary).put("points",query(from,to,metric,"all"));
+    }
+
     Reading last(String device) {
         try (Cursor c = getReadableDatabase().rawQuery("SELECT * FROM readings WHERE device=? ORDER BY ts DESC LIMIT 1", new String[]{device})) {
             return c.moveToFirst() ? fromCursor(c) : null;

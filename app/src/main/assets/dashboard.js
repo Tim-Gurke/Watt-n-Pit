@@ -1,0 +1,267 @@
+(function () {
+  'use strict';
+  const C=window.WattDashboardCore, $=id=>document.getElementById(id);
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const copy=x=>JSON.parse(JSON.stringify(x));
+  const option=(v,label)=>`<option value="${esc(v)}">${esc(label)}</option>`;
+  const field=(label,content)=>`<label class="form-field">${label}${content}</label>`;
+  const select=(id,items)=>`<select id="${id}">${items.map(x=>option(x[0],x[1])).join('')}</select>`;
+  const input=(id,value,extra='')=>`<input id="${id}" value="${esc(value)}" ${extra}>`;
+  const dateInput=t=>{const d=new Date(t);return new Date(t-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
+  const stamp=t=>new Date(t).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const aggregateNames={avg:'Durchschnitt',min:'Minimum',max:'Maximum',last:'Letzter Wert'};
+  class WattDashboard {
+    constructor(adapter) {
+      this.a=adapter;this.board=$('dashboardBoard');this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
+      let stored;
+      try { stored=JSON.parse(adapter.native?.dashboard?adapter.native.dashboard():localStorage.getItem('wattpit-dashboard-v1') || '{}'); } catch (_) { stored={}; }
+      this.config=C.normalize(stored);this.saved=copy(this.config);
+      $('addTile').onclick=()=>this.picker();
+      $('editDashboard').onclick=()=>{this.editing=!this.editing;this.render();};
+      $('resetDashboard').onclick=()=>this.reset();
+      this.observer=new ResizeObserver(()=>{if(!this.drag)this.layout();});this.observer.observe(this.board);
+      this.render();
+    }
+    commit() {
+      this.config=C.normalize(this.config);
+      try {
+        const json=JSON.stringify(this.config);
+        if(this.a.native?.saveDashboard) {const error=this.a.native.saveDashboard(json);if(error)throw new Error(error);}
+        else localStorage.setItem('wattpit-dashboard-v1',json);
+        this.saved=copy(this.config);this.render();return true;
+      } catch(error) {this.config=copy(this.saved);this.render();this.a.toast(error.message || 'Die Übersicht konnte nicht gespeichert werden.');return false;}
+    }
+    clearCache() {this.cache.clear();this.update();}
+    render() {
+      this.profile=this.board.clientWidth>=620?'wide':'compact';
+      this.board.classList.toggle('is-editing',this.editing);
+      $('editDashboard').textContent=this.editing?'Fertig':'Anordnen';
+      $('editDashboard').setAttribute('aria-pressed',String(this.editing));
+      $('layoutHelp').hidden=!this.editing;
+      $('layoutProfile').textContent=this.profile==='wide'?'Breite Ansicht':'Schmale Ansicht';
+      this.board.innerHTML='';this.elements.clear();
+      for (const t of this.config.tiles) {
+        const m=C.CATALOG[t.metric],el=document.createElement('article');
+        el.className='cockpit-tile type-'+t.type;el.dataset.tile=t.id;el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-label',(t.title || m.label)+' anpassen');
+        el.innerHTML=`<div class="tile-head"><span class="tile-label">${esc(t.title || m.label)}</span><button class="tile-menu" aria-label="${esc(t.title || m.label)} bearbeiten">···</button></div><div class="tile-visual"></div><div class="tile-hint"></div><span class="tile-resize" aria-hidden="true"></span>`;
+        el.style.setProperty('--tile-color',t.color);el.style.setProperty('--number-size',t.fontSize+'px');
+        el.style.setProperty('--tile-bg',t.background==='auto'?`color-mix(in srgb,var(--panel) ${t.opacity}%,transparent)`:`${t.background}${Math.round(t.opacity*2.55).toString(16).padStart(2,'0')}`);
+        el.querySelector('.tile-menu').onclick=e=>{e.stopPropagation();this.editor(t.id);};
+        el.onclick=()=>{if(Date.now()-(this.lastDrag || 0)>300)this.editor(t.id);};
+        el.onkeydown=e=>{
+          if(e.key==='Enter' || e.key===' '){e.preventDefault();this.editor(t.id);}
+          if(this.editing && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+            e.preventDefault();const p=t.layouts[this.profile];p.x=C.clamp(p.x+(e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0),0,12-p.w);p.y=Math.max(0,p.y+(e.key==='ArrowUp'?-1:e.key==='ArrowDown'?1:0));this.commit();this.elements.get(t.id)?.focus();
+          }
+        };
+        el.addEventListener('pointerdown',e=>this.pointerDown(e,t));
+        el.addEventListener('pointermove',e=>this.pointerMove(e));
+        el.addEventListener('pointerup',e=>this.pointerEnd(e,false));
+        el.addEventListener('pointercancel',e=>this.pointerEnd(e,true));
+        this.board.append(el);this.elements.set(t.id,el);
+      }
+      $('dashboardEmpty').hidden=!!this.config.tiles.length;
+      this.layout();this.update();
+    }
+    layout() {
+      const profile=this.board.clientWidth>=620?'wide':'compact';
+      if(this.profile!==profile){this.profile=profile;this.render();return;}
+      this.row=this.profile==='wide'?30:26;
+      const width=this.board.clientWidth;
+      for(const t of this.config.tiles){const p=t.layouts[this.profile],el=this.elements.get(t.id);if(!el)continue;
+        el.classList.toggle('short-tile',p.h<=3);
+        Object.assign(el.style,{left:(p.x/12*width+5)+'px',top:(p.y*this.row+5)+'px',width:(p.w/12*width-10)+'px',height:(p.h*this.row-10)+'px'});
+      }
+      this.board.style.height=(this.config.tiles.length?Math.max(...this.config.tiles.map(t=>{const p=t.layouts[this.profile];return p.y+p.h;}))+(this.editing?2:0):0)*this.row+'px';
+      this.fitNumbers();
+    }
+    pointerDown(event,t) {
+      if(!this.editing || event.button!==0 || event.target.closest('button'))return;
+      const el=this.elements.get(t.id),p=t.layouts[this.profile];
+      this.drag={id:t.id,element:el,pointer:event.pointerId,startX:event.clientX,startY:event.clientY,origin:{...p},resize:!!event.target.closest('.tile-resize'),moved:false};
+      el.setPointerCapture(event.pointerId);el.classList.add('is-dragging');
+    }
+    pointerMove(event) {
+      const d=this.drag;if(!d || d.pointer!==event.pointerId)return;
+      const dx=event.clientX-d.startX,dy=event.clientY-d.startY;
+      if(Math.abs(dx)+Math.abs(dy)>5)d.moved=true;
+      if(!d.moved)return;
+      event.preventDefault();const t=this.config.tiles.find(t=>t.id===d.id),p=t.layouts[this.profile],cols=Math.round(dx/(this.board.clientWidth/12)),rows=Math.round(dy/this.row);
+      if(d.resize){p.w=C.clamp(d.origin.w+cols,2,12-d.origin.x);p.h=C.clamp(d.origin.h+rows,2,18);}
+      else{p.x=C.clamp(d.origin.x+cols,0,12-p.w);p.y=C.clamp(d.origin.y+rows,0,1000);}
+      this.layout();
+    }
+    pointerEnd(event,cancelled) {
+      const d=this.drag;if(!d || d.pointer!==event.pointerId)return;
+      this.drag=null;d.element.classList.remove('is-dragging');
+      if(cancelled){this.config.tiles.find(t=>t.id===d.id).layouts[this.profile]=d.origin;this.layout();return;}
+      if(d.moved){this.lastDrag=Date.now();this.commit();}
+    }
+    data(t,window) {
+      if(window.to<=window.from)return {points:[],summary:{}};
+      const backend=C.CATALOG[t.metric].backend || C.CATALOG[t.metric].field;
+      const key=[backend,Math.floor(window.from/10000),Math.floor(window.to/10000),this.a.isDemo()].join(':');
+      if(this.cache.has(key))return this.cache.get(key);
+      let data={points:[],summary:{}};
+      try {
+        if(this.a.isDemo())data=this.demoData(t,window);
+        else if(this.a.native?.dashboardHistory)data=JSON.parse(this.a.native.dashboardHistory(Math.floor(window.from),Math.ceil(window.to),backend));
+        else if(this.a.native?.history){data=JSON.parse(this.a.native.history(Math.floor(window.from),Math.ceil(window.to),backend,'all'));data.summary=this.summary(data.points || []);}
+      } catch(_){data={points:[],summary:{},error:true};}
+      if(this.cache.size>128)this.cache.clear();this.cache.set(key,data);return data;
+    }
+    summary(points) {
+      const valid=points.filter(p=>C.finite(p.v));if(!valid.length)return {};
+      const n=valid.reduce((n,p)=>n+(p.n || 1),0),last=valid[valid.length-1];
+      return {n,avg:valid.reduce((n,p)=>n+p.v*(p.n || 1),0)/n,min:Math.min(...valid.map(p=>p.min??p.v)),max:Math.max(...valid.map(p=>p.max??p.v)),last:last.v,lastTime:last.last || last.t};
+    }
+    demoData(t,window) {
+      const m=C.CATALOG[t.metric],now=Date.now(),step=Math.max(60000,(window.to-window.from)/240),out=[];
+      for(let time=window.from;time<=Math.min(now,window.to);time+=step){
+        const hour=new Date(time).getHours()+new Date(time).getMinutes()/60,solar=Math.max(0,Math.sin((hour-7)/12*Math.PI))*170;
+        const shunt={soc:70+6*Math.sin((hour-9)/24*Math.PI*2),ttg:480,voltage:13+.15*Math.sin(hour/12*Math.PI),current:(solar*.9-32)/13,power:solar*.9-32,consumed:-23.6,temperature:null,aux:null,alarm:0};
+        const reg={solar,voltage:13.08,current:solar/13.08,yieldWh:Math.max(0,Math.min(900,(hour-7)*80)),state:solar>1?3:0,error:0,load:0};
+        let value=t.metric==='remainingWh'?shunt.soc*shunt.voltage/100:t.metric==='remainingAh'?shunt.soc:t.metric==='consumed'?Math.abs(shunt.consumed):(m.kind==='shunt'?shunt:reg)[m.field];
+        if(C.finite(value))out.push({t:time,last:time,kind:m.kind,device:'demo-'+m.kind,origin:'live',v:value,min:value,max:value,n:1});
+      }
+      return {points:out,summary:this.summary(out)};
+    }
+    update() {
+      if(!this.a.getSnapshot)return;
+      const snapshot=this.a.getSnapshot(),shunt=this.a.reading('shunt'),solar=this.a.reading('solar');
+      for(const t of this.config.tiles){
+        const el=this.elements.get(t.id);if(!el)continue;
+        el.style.setProperty('--tile-color',this.paint(t.color,t));
+        const m=C.CATALOG[t.metric],window=C.windowFor(t),data=window?this.data(t,window):null;
+        let value=window?C.historicalValue(t.metric,data.summary?.[t.period.aggregate],snapshot.settings.capacity):C.liveValue(t.metric,shunt,solar,snapshot);
+        value=C.convert(value,t.unit,t.metric);
+        const reading=`<strong class="tile-number">${esc(C.format(value,t))}</strong><span class="tile-unit">${C.finite(value) && !m.status?esc(t.unit):!m.status?esc(t.unit):''}</span>`;
+        const visual=el.querySelector('.tile-visual');
+        if(t.type==='gauge')visual.innerHTML=this.gauge(t,value,reading);
+        else if(t.type==='chart')visual.innerHTML=`<div class="tile-reading chart-reading">${reading}</div>${this.sparkline(t,data?.points || [],window,snapshot.settings.capacity)}`;
+        else visual.innerHTML=`<div class="tile-reading">${reading}</div>`;
+        let hint=window?`${aggregateNames[t.period.aggregate]} · ${this.periodLabel(t)}`:m.kind==='shunt'?'SmartShunt':'SmartSolar';
+        if(!window && t.metric==='remaining' && !C.finite(value))hint=shunt?.current>.03?'Akku wird geladen':'Wert vom SmartShunt';
+        if(!window && t.metric==='solar' && solar?.state!=null)hint=C.PHASES[solar.state] || 'Ladephase '+solar.state;
+        if(!window && t.metric==='power' && C.finite(shunt?.power))hint=shunt.power>.4?'Akku wird geladen':shunt.power<-.4?'Akku wird entladen':'Bilanz ausgeglichen';
+        if(data?.error)hint='Zeitraum nicht verfügbar';
+        el.querySelector('.tile-hint').textContent=hint;
+        el.classList.toggle('no-value',!C.finite(value));
+      }
+      this.fitNumbers();
+    }
+    fitNumbers() {
+      for(const el of this.elements.values()){
+        const number=el.querySelector('.tile-number');if(!number)continue;
+        number.style.fontSize='';const parent=number.closest('.tile-reading') || number.parentElement;
+        const available=parent.clientWidth-(parent.querySelector('.tile-unit')?.offsetWidth || 0)-8;
+        if(number.scrollWidth>available && available>10){const font=parseFloat(getComputedStyle(number).fontSize);number.style.fontSize=Math.max(14,Math.floor(font*available/number.scrollWidth))+'px';}
+      }
+    }
+    periodLabel(t) {
+      const p=t.period;
+      if(p.mode==='today')return 'heute';
+      if(p.mode==='reset')return 'seit '+stamp(p.resetAt);
+      if(p.mode==='custom')return stamp(p.from)+' – '+stamp(p.to);
+      if(p.mode==='live')return 'letzte 6 h';
+      return 'letzte '+p.amount+' '+({min:'min',h:'h',d:'Tage'}[p.unit]);
+    }
+    gauge(t,value,reading) {
+      const min=C.convert(t.min,t.unit,t.metric),max=C.convert(t.max,t.unit,t.metric),percent=C.finite(value)?C.clamp((value-min)/(max-min),0,1):0;
+      const point=angle=>{const r=angle*Math.PI/180;return [80+61*Math.cos(r),80+61*Math.sin(r)];};
+      let paths='';
+      for(let i=0;i<60;i++){
+        const a=point(135+i/60*270),b=point(135+(i+.82)/60*270),f=t.invert?1-i/60:i/60;
+        const tone=t.multicolor?this.blend(f<.5?t.color:t.colorMid,f<.5?t.colorMid:t.colorEnd,f<.5?f*2:(f-.5)*2):t.color;
+        paths+=`<path d="M${a} A61 61 0 0 1 ${b}" stroke="${this.paint(tone,t)}" opacity="${C.finite(value) && i/60<percent?1:.13}"/>`;
+      }
+      const p=point(135+percent*270),arrow=C.finite(value)?`<circle cx="${p[0]}" cy="${p[1]}" r="3.7" fill="var(--text)" stroke="var(--panel)" stroke-width="1.5"/>`:'';
+      return `<div class="tile-gauge"><svg viewBox="0 0 160 150" aria-hidden="true"><g fill="none" stroke-width="6" stroke-linecap="round">${paths}</g>${arrow}</svg><div class="gauge-reading"><strong class="tile-number">${esc(C.format(value,t))}</strong><span class="tile-unit">${esc(t.unit)}</span></div><span class="gauge-min">${esc(this.short(min))}</span><span class="gauge-max">${esc(this.short(max))}</span></div>`;
+    }
+    short(n){return Number(n.toFixed(Math.abs(n)<10?1:0)).toLocaleString('de-DE');}
+    blend(a,b,p){const ca=parseInt(a.slice(1),16),cb=parseInt(b.slice(1),16);return '#'+[16,8,0].map(s=>Math.round(((ca>>s)&255)*(1-p)+((cb>>s)&255)*p).toString(16).padStart(2,'0')).join('');}
+    paint(color,t) {
+      if(t.adaptiveColor===false)return color;
+      const light=document.documentElement.dataset.theme==='light';
+      const background=t.background==='auto'?(light?'#ffffff':'#151d2a'):t.background;
+      const key=[color,background].join(':');this.paintCache=this.paintCache || new Map();
+      if(this.paintCache.has(key))return this.paintCache.get(key);
+      const luminance=hex=>{const rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
+      const bg=luminance(background),target=bg>.4?'#000000':'#ffffff';
+      let result=color;
+      for(let amount=0;amount<=1;amount+=.04){result=this.blend(color,target,Math.min(1,amount));const fg=luminance(result);if((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)>=4.5)break;}
+      this.paintCache.set(key,result);return result;
+    }
+    sparkline(t,points,window,capacity) {
+      if(!window)return '';
+      const series=points.map(p=>({...p,v:C.convert(C.historicalValue(t.metric,p.v,capacity),t.unit,t.metric)})).filter(p=>C.finite(p.v));
+      if(!series.length)return '<div class="tile-chart-empty">Keine gespeicherten Werte</div>';
+      const low=C.convert(t.min,t.unit,t.metric),high=C.convert(t.max,t.unit,t.metric),x=p=>4+(p.t-window.from)/(window.to-window.from)*292,y=p=>58-C.clamp((p.v-low)/(high-low),0,1)*52;
+      let path='',last=null;
+      for(const p of series){const gap=last && (last.device!==p.device || last.origin!==p.origin || p.t-(last.last || last.t)>Math.max(this.a.isDemo()?600001:45000,(window.to-window.from)/600*3));path+=(last&&!gap?'L':'M')+x(p).toFixed(2)+','+y(p).toFixed(2);last=p;}
+      return `<svg class="tile-sparkline" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true"><path d="M4 60H296" stroke="var(--border)"/><path d="${path}" fill="none" stroke="${this.paint(t.color,t)}" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg><div class="tile-chart-range"><span>${esc(this.short(low))}</span><span>${esc(this.short(high))} ${esc(t.unit)}</span></div>`;
+    }
+    picker() {
+      if(this.config.tiles.length>=64){this.a.toast('Bis zu 64 Kacheln sind möglich.');return;}
+      const groups=[...new Set(Object.values(C.CATALOG).map(m=>m.group))];
+      this.a.openModal('Kachel hinzufügen',`${field('Messwert suchen','<input id="tileSearch" type="search" placeholder="Zum Beispiel Restlaufzeit">')}<div class="tile-catalog">${groups.map(group=>`<div class="catalog-group"><h3>${group}</h3>${Object.entries(C.CATALOG).filter(([,m])=>m.group===group).map(([key,m])=>`<button class="metric-option" data-metric="${key}"><i style="background:${m.color}"></i><span>${esc(m.label)}</span><b>+</b></button>`).join('')}</div>`).join('')}</div>`);
+      $('tileSearch').oninput=()=>{const query=$('tileSearch').value.toLocaleLowerCase('de-DE');document.querySelectorAll('.metric-option').forEach(el=>el.hidden=!el.textContent.toLocaleLowerCase('de-DE').includes(query));document.querySelectorAll('.catalog-group').forEach(el=>el.hidden=![...el.querySelectorAll('.metric-option')].some(el=>!el.hidden));};
+      document.querySelectorAll('.metric-option').forEach(el=>el.onclick=()=>this.add(el.dataset.metric));
+    }
+    add(metric,prototype) {
+      const t=prototype?{...copy(prototype),id:C.tile(metric).id}:C.tile(metric);
+      for(const profile of ['compact','wide']){const y=this.config.tiles.length?Math.max(...this.config.tiles.map(t=>t.layouts[profile].y+t.layouts[profile].h)):0;t.layouts[profile]={...t.layouts[profile],x:0,y};}
+      this.config.tiles.push(t);
+      if(this.commit()){this.a.closeModal();requestAnimationFrame(()=>this.elements.get(t.id)?.scrollIntoView({behavior:'smooth',block:'center'}));this.a.toast('Kachel hinzugefügt. Antippen zum Anpassen.');}
+    }
+    editor(id,unsaved) {
+      const original=this.config.tiles.find(t=>t.id===id);if(!original)return;
+      const t=copy(unsaved || original),m=C.CATALOG[t.metric],p=t.layouts[this.profile];let layer='keep';
+      const types=m.status?[['number','Zahlenwert']]:[['number','Zahlenwert'],['gauge','Rundinstrument'],...(!m.liveOnly?[['chart','Verlauf']]:[])];
+      const fields=`<div class="form-grid">${field('Messwert',select('tileMetric',Object.entries(C.CATALOG).map(([key,m])=>[key,m.label])))}${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60" placeholder="'+esc(m.label)+'"'))}${field('Darstellung',select('tileType',types))}${field('Einheit',select('tileUnit',m.units.map(u=>[u,u || 'Ohne Einheit'])))}</div><p class="muted tile-explanation">${esc(m.hint || (m.kind==='shunt'?'Messwert vom SmartShunt.':'Messwert vom SmartSolar.'))}</p>`;
+      const period=`<details open><summary>Wert & Zeitraum</summary><div class="form-grid">${field('Zeitraum',select('tilePeriod',m.liveOnly?[['live','Aktuell']]:[['live','Aktuell'],['last','Letzte …'],['today','Heute'],['reset','Seit Zurücksetzen'],['custom','Freier Zeitraum']]))}${field('Auswertung',select('tileAggregate',m.status?[['last','Letzter Wert']]:Object.entries(aggregateNames)))}</div><div id="tileLastFields" class="form-grid">${field('Anzahl',input('tileAmount',t.period.amount,'type="number" min="1" max="10000"'))}${field('Zeiteinheit',select('tileTimeUnit',[['min','Minuten'],['h','Stunden'],['d','Tage']]))}</div><div id="tileCustomFields" class="form-grid">${field('Von',input('tileFrom',dateInput(t.period.from || Date.now()-86400000),'type="datetime-local"'))}${field('Bis',input('tileTo',dateInput(t.period.to || Date.now()),'type="datetime-local"'))}</div><div id="tileResetFields"><p class="muted" id="tileResetLabel"></p><button class="quiet" id="tileReset">Jetzt zurücksetzen</button></div></details>`;
+      const appearance=`<details><summary>Farben & Schrift</summary><div class="form-grid">${field('Wertfarbe',input('tileColor',t.color,'type="color"'))}${field('Schriftgröße',input('tileFont',t.fontSize,'type="number" min="18" max="64"'))}${field('Nachkommastellen',select('tileDigits',[[0,'Keine'],[1,'Eine'],[2,'Zwei'],[3,'Drei']]))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}${field('Hintergrund',select('tileBackgroundMode',[['auto','Passend zum Farbschema'],['custom','Eigene Farbe']]))}${field('Eigene Hintergrundfarbe',input('tileBackground',t.background==='auto'?'#18303b':t.background,'type="color"'))}</div><label class="check-field"><input type="checkbox" id="tileAdaptiveColor"> Farben an Hell/Dunkel anpassen</label></details>`;
+      const scale=`<details><summary>Skala</summary><div class="form-grid">${field('Minimum',input('tileMin',this.shortInput(C.convert(t.min,t.unit,t.metric)),'type="number" step="any"'))}${field('Maximum',input('tileMax',this.shortInput(C.convert(t.max,t.unit,t.metric)),'type="number" step="any"'))}</div><label class="check-field"><input type="checkbox" id="tileMulticolor"> Mehrfarbiges Rundinstrument</label><div class="form-grid">${field('Mittlere Farbe',input('tileColorMid',t.colorMid,'type="color"'))}${field('Endfarbe',input('tileColorEnd',t.colorEnd,'type="color"'))}</div><label class="check-field"><input type="checkbox" id="tileInvert"> Farbverlauf umkehren</label></details>`;
+      const arrangement=`<details><summary>Größe & Ebene</summary><div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="2" max="12"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="2" max="18"'))}</div><div class="row"><button class="quiet" id="tileBack">Nach hinten</button><button class="quiet" id="tileFront">Nach vorne</button><button class="quiet" id="duplicateTile">Duplizieren</button></div><p class="muted">Gilt für die ${this.profile==='wide'?'breite':'schmale'} Ansicht. Andere Kacheln behalten ihre Position.</p></details>`;
+      this.a.openModal('Kachel anpassen',`<div class="tile-editor">${fields}${period}${appearance}${m.status?'':scale}${arrangement}<p class="form-error" id="tileError" hidden></p><div class="form-actions"><button class="quiet danger-text" id="removeTile">Entfernen</button><button class="primary" id="saveTile">Übernehmen</button></div></div>`);
+      const values={tileMetric:t.metric,tileType:t.type,tileUnit:t.unit,tilePeriod:t.period.mode,tileAggregate:m.status?'last':t.period.aggregate,tileTimeUnit:t.period.unit,tileDigits:t.digits,tileBackgroundMode:t.background==='auto'?'auto':'custom'};
+      for(const [id,value] of Object.entries(values))$(id).value=value;
+      $('tileAdaptiveColor').checked=t.adaptiveColor!==false;
+      if($('tileMulticolor')){$('tileMulticolor').checked=t.multicolor;$('tileInvert').checked=t.invert;}
+      const periodChanged=()=>{const mode=$('tilePeriod').value;$('tileLastFields').hidden=mode!=='last';$('tileCustomFields').hidden=mode!=='custom';$('tileResetFields').hidden=mode!=='reset';$('tileAggregate').disabled=mode==='live';$('tileResetLabel').textContent='Ab '+stamp(t.period.resetAt);};
+      $('tilePeriod').onchange=periodChanged;periodChanged();
+      $('tileReset').onclick=()=>{t.period.resetAt=Date.now();periodChanged();};
+      $('tileType').onchange=()=>{if($('tileType').value!=='number')$('tileHeight').value=Math.max(Number($('tileHeight').value),6);if($('tileType').value==='chart' && $('tilePeriod').value==='live'){$('tilePeriod').value='last';periodChanged();}};
+      let previousUnit=t.unit;
+      $('tileUnit').onchange=()=>{if($('tileMin'))for(const id of ['tileMin','tileMax'])$(id).value=this.shortInput(C.convert(C.unconvert(Number($(id).value),previousUnit,t.metric),$('tileUnit').value,t.metric));previousUnit=$('tileUnit').value;};
+      $('tileMetric').onchange=()=>{const changed=C.tile($('tileMetric').value,id);changed.layouts=copy(t.layouts);changed.title=$('tileTitle').value;this.editor(id,changed);};
+      $('tileBackgroundMode').onchange=()=>{$('tileBackground').disabled=$('tileBackgroundMode').value==='auto';};$('tileBackgroundMode').onchange();
+      $('tileBack').onclick=()=>{layer='back';this.a.toast('Wird hinter die anderen Kacheln gelegt.');};
+      $('tileFront').onclick=()=>{layer='front';this.a.toast('Wird vor die anderen Kacheln gelegt.');};
+      $('duplicateTile').onclick=()=>{if(this.config.tiles.length<64)this.add(t.metric,t);else this.a.toast('Bis zu 64 Kacheln sind möglich.');};
+      $('removeTile').onclick=()=>{this.config.tiles=this.config.tiles.filter(t=>t.id!==id);if(this.commit())this.a.closeModal();};
+      $('saveTile').onclick=()=>{
+        try {
+          t.title=$('tileTitle').value.trim();t.unit=$('tileUnit').value;t.type=$('tileType').value;
+          t.period={...t.period,mode:$('tilePeriod').value,aggregate:$('tileAggregate').value,amount:Number($('tileAmount').value),unit:$('tileTimeUnit').value,from:new Date($('tileFrom').value).getTime(),to:new Date($('tileTo').value).getTime()};
+          if(t.type==='chart' && t.period.mode==='live')t.period.mode='last';
+          if(t.period.mode==='last' && (!C.finite(t.period.amount)||t.period.amount<1||t.period.amount>10000))throw new Error('Bitte einen Zeitraum zwischen 1 und 10.000 wählen.');
+          if(t.period.mode==='custom' && (!C.finite(t.period.from)||!C.finite(t.period.to)||t.period.from>=t.period.to))throw new Error('Bitte einen gültigen Zeitraum wählen.');
+          if($('tileMin')){t.min=C.unconvert(Number($('tileMin').value),t.unit,t.metric);t.max=C.unconvert(Number($('tileMax').value),t.unit,t.metric);if(!C.finite(t.min)||!C.finite(t.max)||t.min>=t.max)throw new Error('Das Skalenmaximum muss größer als das Minimum sein.');t.multicolor=$('tileMulticolor').checked;t.invert=$('tileInvert').checked;t.colorMid=$('tileColorMid').value;t.colorEnd=$('tileColorEnd').value;}
+          t.adaptiveColor=$('tileAdaptiveColor').checked;t.color=$('tileColor').value;t.digits=Number($('tileDigits').value);t.fontSize=Number($('tileFont').value);t.opacity=Number($('tileOpacity').value);t.background=$('tileBackgroundMode').value==='auto'?'auto':$('tileBackground').value;
+          t.layouts[this.profile]={...t.layouts[this.profile],w:Number($('tileWidth').value),h:Number($('tileHeight').value)};
+          t.layouts[this.profile].x=Math.min(t.layouts[this.profile].x,12-t.layouts[this.profile].w);
+          this.config.tiles=this.config.tiles.map(old=>old.id===id?t:old);
+          if(layer!=='keep'){this.config.tiles=this.config.tiles.filter(old=>old.id!==id);if(layer==='front')this.config.tiles.push(t);else this.config.tiles.unshift(t);}
+          if(this.commit()){this.a.closeModal();this.a.toast('Kachel gespeichert.');}
+        } catch(error){$('tileError').hidden=false;$('tileError').textContent=error.message;}
+      };
+    }
+    shortInput(n){return Math.round(n*1e6)/1e6;}
+    reset() {
+      this.a.openModal('Standardübersicht wiederherstellen?',`<p class="muted">Die Kachelanordnung wird durch die schlanke Standardübersicht ersetzt. Geräte und Messdaten bleiben erhalten.</p><div class="form-actions"><button class="quiet" id="keepDashboard">Behalten</button><button class="primary" id="confirmDashboardReset">Wiederherstellen</button></div>`);
+      $('keepDashboard').onclick=()=>this.a.closeModal();$('confirmDashboardReset').onclick=()=>{this.config=C.defaults();if(this.commit())this.a.closeModal();};
+    }
+  }
+  window.WattDashboard=WattDashboard;
+})();

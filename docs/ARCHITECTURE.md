@@ -1,6 +1,6 @@
 # Technische Grundlage
 
-WattPit ist eine lokale Android-App ohne Internetberechtigung. Eine native Java-Schicht liest Bluetooth, verwaltet Schlüssel im Android Keystore und speichert Messwerte in SQLite. Die vollständig mitgelieferte Oberfläche läuft in einer WebView; sie lädt keine externen Bibliotheken, Schriften oder Ressourcen. Fremde Navigation und Dateizugriff außerhalb der App-Assets sind gesperrt.
+Watt’n’Pit ist eine lokale Android-App ohne Internetberechtigung. Eine native Java-Schicht liest Bluetooth, verwaltet Schlüssel im Android Keystore und speichert Messwerte in SQLite. Die vollständig mitgelieferte Oberfläche läuft in einer WebView; sie lädt keine externen Bibliotheken, Schriften oder Ressourcen. Fremde Navigation und Dateizugriff außerhalb der App-Assets sind gesperrt.
 
 ## Geräte und Livewerte
 
@@ -8,17 +8,17 @@ Der BLE-Empfang liest Manufacturer Data mit Victrons Hersteller-ID `0x02e1` und 
 
 Primärquelle: [Victrons Extra manufacturer Data, 14.12.2022](https://communityarchive.victronenergy.com/storage/attachments/extra-manufacturer-data-2022-12-14.pdf). [Offizielle Ankündigung und Schlüsseleinrichtung](https://communityarchive.victronenergy.com/questions/187303/victron-bluetooth-advertising-protocol.html).
 
-In 0.1.0 wird ein SmartSolar und ein SmartShunt eingerichtet. Das Dashboard zeigt nur empfangene Livewerte; nach 45 Sekunden ohne nutzbare Daten bzw. nach dem Pausieren werden Werte als fehlend dargestellt. Gespeicherte Messwerte bleiben im Verlauf. Der Solarstrom des Reglers und der Batteriestrom des Shunts sind unterschiedliche Messgrößen. Verbraucherleistung oder mobile PV-Leistung werden nicht aus ihrer Differenz behauptet.
+Es wird ein SmartSolar und ein SmartShunt eingerichtet. Das Dashboard zeigt nur empfangene Livewerte; nach 45 Sekunden ohne nutzbare Daten bzw. nach dem Pausieren werden Werte als fehlend dargestellt. Gespeicherte Messwerte bleiben im Verlauf. Der Solarstrom des Reglers und der Batteriestrom des Shunts sind unterschiedliche Messgrößen. Verbraucherleistung oder mobile PV-Leistung werden nicht aus ihrer Differenz behauptet.
 
 ## Aufzeichnung und Vorrang
 
-Live-Datensätze tragen `origin=live`. Generische CSV-Dateien tragen `origin=csv`; native WattPit-Backups behalten ihre ursprüngliche Datenquelle. Die Datenbank ignoriert doppelte Kombinationen aus Zeitstempel, Gerät und Quelle.
+Live-Datensätze tragen `origin=live`. Für einen späteren direkten Geräteimport ist `origin=archive` in der Abfrage vorbereitet. Eigene Live-Aufzeichnungen haben Vorrang vor Gerätearchiven, Gerätearchive vor CSV-Werten derselben Messgröße im 45-Sekunden-Fenster. Der Bluetooth-Abruf selbst ist weiterhin eine spätere Ausbaustufe. Generische CSV-Dateien tragen `origin=csv`; native Watt’n’Pit-Backups behalten ihre ursprüngliche Datenquelle. Die Datenbank ignoriert doppelte Kombinationen aus Zeitstempel, Gerät und Quelle.
 
 Die Standardansicht `Alle Daten` bevorzugt eigene Aufzeichnungen **pro Messgröße und Gerätetyp**. Ein importierter Punkt wird in der Standardansicht unterdrückt, wenn ein eigener gültiger Punkt derselben Messgröße innerhalb von 45 Sekunden existiert. Die Importdatei bleibt vollständig gespeichert, explizit auswählbar und exportierbar. Fehlt etwa SOC in einer eigenen Aufzeichnung, wird ein gültiger importierter SOC nicht von einem vorhandenen Spannungswert verdrängt.
 
 Lange Fenster werden in bis zu etwa 600 Zeitabschnitte je Quelle/Gerät gebündelt. Die Linie zeigt den Mittelwert; Minimum/Maximum bleiben als Schattierung sichtbar. Nach dem Zoomen werden die Daten mit höherer Zeitauflösung neu abgefragt. Empfangslücken werden nicht durch pauschale Nullwerte ersetzt.
 
-## Gespeicherte Trends: Grenze von 0.1.0
+## Gespeicherte Trends: spätere Ausbaustufe
 
 Instant Readout enthält keine archivierten Zeitreihen. VictronConnect kann gespeicherte Trends aus kompatiblen Geräten lesen. Der dokumentierte Drittanbieter-GATT-Dienst des SmartShunts ist ebenfalls ein Livewertdienst und kein dokumentierter SmartSolar-Trend-Download.
 
@@ -36,3 +36,12 @@ Java 17, Android SDK 35, Gradle 8.11.1, Android Gradle Plugin 8.9.2. `./gradlew 
 Für eine dauerhaft aktualisierbare Release-APK werden `WATTPIT_KEYSTORE` und `WATTPIT_SIGNING_PASSWORD` außerhalb des Repositorys gesetzt. Der Keystore-Alias lautet `wattpit`. Der private Signaturschlüssel gehört niemals ins Repository. `./gradlew assembleRelease` verwendet ihn, wenn er gesetzt ist.
 
 Die Veröffentlichung verwendet einen temporären `publish/<Version>`-Branch mit einem zusätzlichen Commit, der ausschließlich `.release/`-Dateien enthält. Nach erfolgreichen Tests prüft GitHub Actions die vorbereitete signierte APK, erstellt Prüfsumme und Release und setzt den Release-Tag auf den **vorherigen Quellcode-Commit**. Der Branch kann anschließend gelöscht werden; auf `main` liegen keine APK-Dateien oder Signaturschlüssel. CI-Debug-Artefakte dienen ausschließlich der Entwicklung.
+
+
+## Variable Übersicht ab 0.1.2
+
+`dashboard-core.js` enthält den Werte-Katalog, Einheitenumrechnung, Prüfung gespeicherter Konfigurationen und Zeitfenster. `dashboard.js` rendert die Kacheln und bearbeitet jede Kachel unabhängig. Positionen und Größen werden für schmale und breite Ansichten getrennt gespeichert; Überlappungen verändern keine Nachbarkacheln. Die native Bridge speichert die versionierte Konfiguration unter `dashboard-v1` in den bestehenden privaten App-Einstellungen. App-Kennung, Datenbank und Signatur bleiben beim Namenswechsel unverändert.
+
+Verlaufskacheln verwenden die vorhandenen SQLite-Messwerte. `HistoryQuery.summary` berechnet Durchschnitt, Minimum, Maximum und Anzahl direkt aus den ausgewählten Originalpunkten; `latest` liefert den tatsächlich zuletzt gespeicherten Wert. Die Kurve wird separat in bis zu etwa 600 Abschnitte gebündelt. Zeitfensterabfragen verwenden dieselbe Quellenpriorität wie die große Verlaufsansicht. Fehlende Werte bleiben null, Empfangslücken bleiben in der Kurve sichtbar. Ladezustand × Kapazität liefert rechnerische Ah; zusätzlich mit momentaner Spannung multipliziert ergibt sich eine gekennzeichnete Wh-Näherung. Tageserträge sind Zählerstände und werden nicht über mehrere Tage summiert.
+
+Die Struktur aus Zeitstempel, Gerät, Gerätetyp und Quelle kann später zusätzlich ausgelesene Gerätearchive aufnehmen. Ein Archivzugriff, seine Decodierung und das Fortsetzen unterbrochener Downloads sind keine Bestandteile von 0.1.2.

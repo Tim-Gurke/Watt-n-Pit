@@ -27,6 +27,7 @@ let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastM
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let currentImport = null;
+let dashboard = null;
 
 function toast(message) {
   if (!message || (message === previousToast && Date.now()-previousToastTime < 4000)) return;
@@ -52,12 +53,12 @@ function theme(next,save=true) {
   if (save && native) { const error = native.settings(JSON.stringify({theme:next})); if(error) toast(error); }
   if (save && !native) localStorage.setItem('wattpit-preview-theme',next);
   if (page === 'history') drawHistory();
-  if (page === 'overview') drawMini();
+  if (page === 'overview') {drawMini();dashboard?.update();}
 }
 function setDemo(enabled) {
   demo = enabled; $('demoBar').hidden = !enabled; lastMiniLoad = 0;
   $('settingsDemo').textContent = enabled ? 'Demo verlassen' : 'Demo ansehen';
-  renderOverview(); loadMini(true); if(page==='history') loadHistory();
+  dashboard?.clearCache(); renderOverview(); loadMini(true); if(page==='history') loadHistory();
 }
 function reading(kind) {
   if (demo) return kind === 'shunt' ? {kind, t:Date.now(),soc:76.4,voltage:12.94,current:-2.2,power:-28.468,ttg:480,consumed:-23.6,temperature:null,aux:null,alarm:0}
@@ -71,35 +72,17 @@ function renderOverview() {
   const shunt = reading('shunt'), solar = reading('solar');
   $('todayLabel').textContent = new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'}).toUpperCase();
   $('welcome').hidden = snapshot.devices.length > 0 || demo;
-  const status = $('liveStatus');
-  const any = shunt || solar;
+  const status = $('liveStatus'), any = shunt || solar;
   status.className = 'status-chip' + (demo ? ' warning' : any ? ' live' : snapshot.running ? ' warning' : '');
   status.querySelector('span').textContent = demo ? 'Demo' : any ? 'Live' : snapshot.running ? 'Warte auf Geräte' : 'Pausiert';
-  $('socValue').textContent = num(shunt?.soc,1);
-  $('socArc').style.strokeDashoffset = 484-(shunt?.soc == null ? 0 : shunt.soc/100*484);
-  $('socArc').style.stroke = shunt?.soc != null && shunt.soc < 20 ? 'var(--orange)' : 'var(--mint)';
-  const ttg = shunt?.ttg;
-  $('remaining').innerHTML = ttg == null ? '—' : formatRemaining(ttg);
-  $('remainingHint').textContent = shunt?.current > 0.03 && ttg == null ? 'Akku wird geladen' : 'Wert vom Shunt';
-  $('remainingAh').innerHTML = valueUnit(shunt?.soc == null ? null : shunt.soc/100*snapshot.settings.capacity,'Ah',1);
-  $('solarValue').innerHTML = valueUnit(solar?.solar,'W');
-  $('yieldValue').textContent = solar?.yieldWh == null ? 'Tagesertrag —' : `${num(solar.yieldWh/1000,2)} kWh heute`;
-  const states = {0:'Aus',1:'Niedrige Leistung',2:'Fehler',3:'Bulk',4:'Absorption',5:'Float',6:'Storage',7:'Ausgleichsladung',9:'Invertieren',11:'Stromversorgung',245:'Start',247:'Auto-Ausgleich',252:'Externe Steuerung'};
-  $('solarPhase').textContent = solar?.error ? `Reglerfehler ${solar.error}` : solar?.state == null ? 'Ladephase —' : `Ladephase ${states[solar.state] || solar.state}`;
-  $('powerValue').innerHTML = valueUnit(shunt?.power,'W');
-  const direction = shunt?.current == null ? 'Kein Livewert' : shunt.current > .03 ? 'Akku wird geladen' : shunt.current < -.03 ? 'Akku wird entladen' : 'Bilanz ausgeglichen';
-  $('powerDirection').textContent = direction;
+  const direction = shunt?.current == null ? 'Noch kein Livewert' : shunt.current > .03 ? 'Akku wird geladen' : shunt.current < -.03 ? 'Akku wird entladen' : 'Bilanz ausgeglichen';
   $('batteryState').innerHTML = `<i class="dot ${shunt?.alarm ? 'orange' : 'mint'}"></i>${shunt?.alarm ? `Shunt-Alarm 0x${shunt.alarm.toString(16).toUpperCase()}` : direction}`;
   $('lastSeen').textContent = shunt ? (demo ? 'Beispieldaten' : `Stand ${clock(shunt.t)}`) : 'Kein Empfang';
-  $('voltageValue').innerHTML = valueUnit(shunt?.voltage,'V',2);
-  $('currentValue').innerHTML = valueUnit(shunt?.current,'A',2);
-  $('consumedValue').innerHTML = valueUnit(shunt?.consumed == null ? null : Math.abs(shunt.consumed),'Ah',1);
-  $('auxLabel').textContent = shunt?.temperature != null ? 'Batterietemperatur' : shunt?.aux != null ? 'Zusatzspannung' : 'Temperatur / Zusatz';
-  $('auxValue').innerHTML = shunt?.temperature != null ? valueUnit(shunt.temperature,'°C',1) : shunt?.aux != null ? valueUnit(shunt.aux,'V',2) : '—';
   $('overviewRecord').classList.toggle('active',snapshot.running && !demo);
   $('overviewRecord').disabled = demo;
   $('recordIcon').innerHTML = icon(snapshot.running ? 'pause' : 'play');
   $('recordText').textContent = demo ? 'Demo · keine echten Messwerte' : snapshot.running ? 'Aufzeichnung pausieren' : 'Aufzeichnung starten';
+  dashboard?.update();
 }
 function renderDevices(force=false) {
   const key = JSON.stringify([snapshot.devices.map(d=>({...d,seen:!!d.seen,fresh:snapshot.running && Date.now()-d.seen<45000})),snapshot.found.map(f=>({...f,seen:0})),snapshot.running,snapshot.status]);
@@ -161,7 +144,7 @@ window.handleBack = () => {
 function deviceForm(device={},found=false) {
   const original = found ? '' : device.mac || '';
   openModal(original?'Gerät bearbeiten':'Gerät einrichten',`
-    <p class="muted">Übernimm die Details der Sofortanzeige aus VictronConnect. WattPit speichert den Schlüssel verschlüsselt auf diesem Telefon.</p>
+    <p class="muted">Übernimm die Details der Sofortanzeige aus VictronConnect. Watt’n’Pit speichert den Schlüssel verschlüsselt auf diesem Telefon.</p>
     <label class="form-field">Gerätetyp<select id="deviceKind"><option value="shunt">SmartShunt · Batterie</option><option value="solar">SmartSolar · Solar</option></select></label>
     <label class="form-field">Name<input id="deviceName" maxlength="80" value="${escapeHtml(device.name||'')}" placeholder="z. B. SmartShunt 300 A"></label>
     <label class="form-field">Bluetooth-MAC-Adresse<input id="deviceMac" class="monospace" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="32" value="${escapeHtml(device.mac||'')}" placeholder="AA:BB:CC:DD:EE:FF"></label>
@@ -328,7 +311,7 @@ window.onImportPreview = result => {
   const nativeFile=result.map.kind!=null && result.map.device!=null;
   const fields=Object.keys(mappingLabels),basic=['timestamp','date','clock','voltage','current','soc','power','solar'];
   const mapRow=field=>`<div class="map-row"><label for="map-${field}">${mappingLabels[field]}</label><select id="map-${field}" data-field="${field}"><option value="-1">Nicht vorhanden</option>${result.headers.map((h,i)=>`<option value="${i}">${escapeHtml(h)}</option>`).join('')}</select><div id="example-${field}" class="map-example"></div></div>`;
-  openModal('Verlauf importieren',`<p class="muted"><strong>${escapeHtml(result.name)}</strong><br>${num(result.rows)} Zeilen gefunden. Prüfe die Zuordnung, bevor die Daten übernommen werden. SolarHistory-Tagesarchive werden automatisch separat gespeichert; ihre Spaltenzuordnung wird nicht verwendet.${nativeFile?'<br>WattPit-Datei erkannt: Gerätetyp und Datenquelle bleiben erhalten.':''}</p><label class="form-field">Gerätetyp<select id="importKind"><option value="shunt">SmartShunt · Batterie</option><option value="solar">SmartSolar · Solar</option></select></label><div class="mapping-list">${basic.map(mapRow).join('')}<details><summary>Weitere Messwerte</summary>${fields.filter(f=>!basic.includes(f)).map(mapRow).join('')}</details></div><p class="muted" style="margin-top:16px">Zeitangaben ohne Zeitzone werden in der lokalen Telefonzeit gelesen. Werte mit kW/kWh/mA/mV in der Kopfzeile werden automatisch umgerechnet.</p><p id="importError" class="form-error" hidden></p><div class="form-actions"><button class="quiet" id="cancelCsv">Abbrechen</button><button class="primary" id="confirmCsv">Daten importieren</button></div>`);
+  openModal('Verlauf importieren',`<p class="muted"><strong>${escapeHtml(result.name)}</strong><br>${num(result.rows)} Zeilen gefunden. Prüfe die Zuordnung, bevor die Daten übernommen werden. SolarHistory-Tagesarchive werden automatisch separat gespeichert; ihre Spaltenzuordnung wird nicht verwendet.${nativeFile?'<br>Watt’n’Pit-Datei erkannt: Gerätetyp und Datenquelle bleiben erhalten.':''}</p><label class="form-field">Gerätetyp<select id="importKind"><option value="shunt">SmartShunt · Batterie</option><option value="solar">SmartSolar · Solar</option></select></label><div class="mapping-list">${basic.map(mapRow).join('')}<details><summary>Weitere Messwerte</summary>${fields.filter(f=>!basic.includes(f)).map(mapRow).join('')}</details></div><p class="muted" style="margin-top:16px">Zeitangaben ohne Zeitzone werden in der lokalen Telefonzeit gelesen. Werte mit kW/kWh/mA/mV in der Kopfzeile werden automatisch umgerechnet.</p><p id="importError" class="form-error" hidden></p><div class="form-actions"><button class="quiet" id="cancelCsv">Abbrechen</button><button class="primary" id="confirmCsv">Daten importieren</button></div>`);
   $('importKind').value=result.map.solar!=null || /solar|mppt/i.test(result.name)?'solar':'shunt';
   const dailyFile=result.headers.includes('Days ago') && result.headers.includes('Yield(Wh)');
   $('importKind').disabled=nativeFile||dailyFile;
@@ -346,7 +329,7 @@ window.onImportPreview = result => {
 window.onImportDone = result => {
   if(currentImport)currentImport.busy=false;closeModal();
   toast(`${num(result.inserted)} Datensätze importiert · ${num(result.duplicates)} bereits vorhanden · ${num(result.rejected)} unlesbar.`);
-  poll();loadHistory();loadMini(true);
+  dashboard?.clearCache();poll();loadHistory();loadMini(true);
 };
 window.nativeError = result => {
   if(currentImport){currentImport.busy=false;if($('confirmCsv')){$('confirmCsv').disabled=false;$('cancelCsv').disabled=false;$('confirmCsv').textContent='Daten importieren';$('importError').hidden=false;$('importError').textContent=result.message;}}
@@ -372,8 +355,9 @@ $('resetChart').onclick=()=>{viewFrom=baseFrom;viewTo=baseTo;manualY=null;loadHi
 ['exportCsv','settingsExport'].forEach(id=>$(id).onclick=chooseExport);
 ['capacitySetting','sampleSetting'].forEach(id=>$(id).oninput=()=>settingsDirty=true);
 $('saveSettings').onclick=()=>{const settings={capacity:Number($('capacitySetting').value),sampleSeconds:Number($('sampleSetting').value)};if(!settings.capacity||settings.capacity<=0||settings.capacity>10000){toast('Bitte eine Kapazität zwischen 1 und 10.000 Ah eingeben.');return;}const error=native?native.settings(JSON.stringify(settings)):'';if(error){toast(error);return;}Object.assign(snapshot.settings,settings);settingsDirty=false;toast('Einstellungen gespeichert.');renderOverview();};
-$('solarIcon').innerHTML=icon('solar');$('batteryIcon').innerHTML=icon('battery');$('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus');
+$('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus');
 for(const [id,name] of [['navOverview','overview'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
+dashboard = new window.WattDashboard({native,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 theme(!native?localStorage.getItem('wattpit-preview-theme')||'dark':'dark',false);
 selectRange('today');poll();renderSettings();
 if(new URLSearchParams(location.search).get('demo')==='1')setDemo(true);
