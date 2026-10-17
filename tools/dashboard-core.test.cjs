@@ -140,10 +140,10 @@ test('readable numbers handle shorthand white, custom dark surfaces and transpar
   }
   assert.notEqual(C.readableColor('#e8bb57','#fff','#f4f6f9'),'#ffffff');
 });
-test('the standard overview follows the requested seven-tile arrangement',()=>{
+test('the standard overview follows the eight-tile settings arrangement',()=>{
   const board=C.defaults();
-  assert.deepEqual(board.tiles.filter(t=>t.metric!=='weather').map(t=>t.metric),['soc','solar','dischargeEnergy','solarEnergy','voltage','remaining','power']);
-  assert.deepEqual(board.tiles.filter(t=>t.metric!=='weather').map(t=>t.layouts.compact),[{x:0,y:0,w:6,h:6},{x:6,y:0,w:6,h:5},{x:0,y:6,w:6,h:5},{x:6,y:5,w:6,h:6},{x:0,y:11,w:4,h:4},{x:4,y:11,w:4,h:4},{x:8,y:11,w:4,h:4}]);
+  assert.deepEqual(board.tiles.map(t=>t.metric),['soc','solar','energyBalance','solarEnergy','voltage','power','weather','dischargeEnergy']);
+  assert.deepEqual(board.tiles.map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:6},{x:4,y:0,w:8,h:6},{x:0,y:6,w:6,h:6},{x:6,y:6,w:6,h:6},{x:0,y:12,w:4,h:3},{x:0,y:15,w:4,h:3},{x:0,y:18,w:12,h:4},{x:4,y:12,w:8,h:6}]);
   assert.equal(board.tiles[1].valueMode,'live');assert.equal(board.tiles[1].scaleMode,'auto');
 });
 test('sunrise tile periods survive reload without changing customized layouts or live selection',()=>{
@@ -195,7 +195,7 @@ test('legacy weather blocks become one compact tile without moving existing layo
   const board=C.defaults();board.tiles=board.tiles.filter(t=>t.metric!=='weather');board.blockOrder=['record','weather','tiles','history'];board.tiles[0].layouts.compact={x:3,y:21,w:6,h:6};
   const before=structuredClone(board.tiles),migrated=C.normalize(board),weather=migrated.tiles.at(-1);
   assert.deepEqual(migrated.tiles.slice(0,-1),before);assert.equal(weather.metric,'weather');
-  assert.deepEqual(weather.layouts.compact,{x:0,y:27,w:12,h:4});assert.deepEqual(weather.layouts.wide,{x:0,y:15,w:12,h:4});
+  assert.deepEqual(weather.layouts.compact,{x:0,y:27,w:12,h:4});assert.deepEqual(weather.layouts.wide,{x:0,y:25,w:12,h:4});
   assert.deepEqual(migrated.blockOrder,['record','tiles','history']);assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(migrated))),migrated);
   assert.equal(C.windowFor(weather),null);
 });
