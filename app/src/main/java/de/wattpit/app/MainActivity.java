@@ -26,6 +26,9 @@ public final class MainActivity extends Activity {
     private final ExecutorService files = Executors.newSingleThreadExecutor();
     private CsvCodec.Table pendingImport;
     private boolean pendingStart;
+    private String pendingArchive;
+    private long stoppedAt;
+    private boolean entered;
     private static final int PERMISSIONS = 11, BLUETOOTH = 12, IMPORT = 20, EXPORT = 21;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -41,6 +44,7 @@ public final class MainActivity extends Activity {
         web.getSettings().setAllowFileAccessFromFileURLs(false);
         web.getSettings().setAllowUniversalAccessFromFileURLs(false);
         web.getSettings().setDomStorageEnabled(true);
+        web.getSettings().setBlockNetworkLoads(true);
         web.getSettings().setTextZoom(100);
         web.getSettings().setSupportZoom(false);
         web.setWebViewClient(new WebViewClient() {
@@ -56,12 +60,36 @@ public final class MainActivity extends Activity {
         setContentView(web);
         applyTheme(repository.prefs.getString("theme","dark"));
         web.loadUrl("file:///android_asset/index.html");
-        if (repository.prefs.getBoolean("recording",false) && !repository.running) web.postDelayed(this::requestStart,800);
+        WeatherClient.refresh(repository,false);
+
     }
 
+    @Override protected void onStart(){
+        super.onStart();WeatherClient.refresh(repository,false);
+        if(!entered||stoppedAt>0&&SystemClock.elapsedRealtime()-stoppedAt>30000){
+            entered=true;web.postDelayed(()->{
+                if(isFinishing()||isDestroyed()||pendingStart)return;
+                try{
+                    if(repository.configs().length()>0&&!repositoryArchiveActive())pendingArchive="AUTO";
+                    if(pendingArchive!=null||repository.prefs.getBoolean("recording",false)&&!repository.running)requestStart();
+                }catch(Exception ignored){}
+            },800);
+        }
+    }
+    @Override protected void onStop(){stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
     private void applyTheme(String theme) {
         boolean light = theme.equals("light");
-        int color = light ? Color.rgb(244,246,249) : Color.rgb(13,18,27);
+        String palette=repository.prefs.getString("palette","classic");
+        String background;
+        switch(palette){
+            case "blue":background=light?"#f2f6fb":"#101620";break;
+            case "green":background=light?"#f3f7f1":"#111914";break;
+            case "turquoise":background=light?"#f0f7f7":"#0e191c";break;
+            case "orange":background=light?"#faf5ef":"#1c1612";break;
+            case "neutral":background=light?"#f5f6f7":"#151719";break;
+            default:background=light?"#f4f6f9":"#0d121b";
+        }
+        int color=Color.parseColor(background);if(web!=null)web.setBackgroundColor(color);
         getWindow().setStatusBarColor(color); getWindow().setNavigationBarColor(color);
         int flags = light ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0;
         getWindow().getDecorView().setSystemUiVisibility(flags);
@@ -93,13 +121,16 @@ public final class MainActivity extends Activity {
         boolean allowed = Build.VERSION.SDK_INT >= 31 ? checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
                 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
                 : checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
-        if (!allowed) { repository.message("Bitte die Bluetooth-Berechtigung in den Android-App-Einstellungen erlauben."); return; }
+        if (!allowed) { pendingStart=false;pendingArchive=null;repository.message("Bitte die Bluetooth-Berechtigung in den Android-App-Einstellungen erlauben."); return; }
         BluetoothManager manager = getSystemService(BluetoothManager.class);
         BluetoothAdapter adapter = manager == null ? null : manager.getAdapter();
         if (adapter == null) { repository.message("Dieses Gerät unterstützt kein Bluetooth LE. Verlauf und Demo sind weiterhin verfügbar."); return; }
         if (!adapter.isEnabled()) { pendingStart = true; startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),BLUETOOTH); return; }
         pendingStart = false;
-        try { startForegroundService(new Intent(this,MonitorService.class)); }
+        try {
+            if(pendingArchive!=null){String mac=pendingArchive;pendingArchive=null;if(repository.prefs.getBoolean("recording",false)&&!repository.running)startForegroundService(new Intent(this,MonitorService.class));startForegroundService(new Intent(this,ArchiveService.class).putExtra("mac",mac));}
+            else startForegroundService(new Intent(this,MonitorService.class));
+        }
         catch (IllegalStateException | SecurityException e) { repository.message("Bitte die App öffnen, um die Aufzeichnung zu starten."); }
     }
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
@@ -111,7 +142,7 @@ public final class MainActivity extends Activity {
         super.onActivityResult(requestCode,resultCode,data);
         if (requestCode == BLUETOOTH) {
             if (resultCode == RESULT_OK) startAfterPermissions();
-            else { pendingStart = false; repository.message("Bluetooth wurde nicht eingeschaltet."); }
+            else { pendingStart = false; pendingArchive=null; repository.message("Bluetooth wurde nicht eingeschaltet."); }
             return;
         }
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
@@ -151,6 +182,7 @@ public final class MainActivity extends Activity {
         } catch (Exception ignored) { return "CSV-Datei"; }
     }
 
+    private boolean repositoryArchiveActive(){try{return repository.snapshot().optJSONObject("archive").optBoolean("active");}catch(Exception e){return false;}}
     final class Bridge {
         @JavascriptInterface public String snapshot() { try { return repository.snapshot().toString(); } catch (Exception e) { return "{}"; } }
         @JavascriptInterface public String history(long from, long to, String metric, String source) {
@@ -171,6 +203,11 @@ public final class MainActivity extends Activity {
             try { return repository.db.dashboardData(from,to,metric).toString(); }
             catch(Exception e) { return "{\"points\":[],\"summary\":{},\"error\":\"Zeitraum konnte nicht geladen werden.\"}"; }
         }
+        @JavascriptInterface public void searchWeather(String query){files.execute(()->{try{call("onWeatherSearch",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onWeatherSearch",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte Verbindung prüfen und erneut suchen."));}catch(JSONException ignored){}}});}
+        @JavascriptInterface public String weatherPlace(String json){try{WeatherClient.place(repository,new JSONObject(json));return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public void refreshWeather(){WeatherClient.refresh(repository,true);}
+        @JavascriptInterface public void importArchive(String mac) {runOnUiThread(()->{if(repositoryArchiveActive()){repository.message("Ein Archivimport läuft bereits.");return;}pendingArchive=mac;requestStart();});}
+        @JavascriptInterface public void cancelArchive(){runOnUiThread(()->startService(new Intent(MainActivity.this,ArchiveService.class).setAction("CANCEL")));}
         @JavascriptInterface public void start() { runOnUiThread(MainActivity.this::requestStart); }
         @JavascriptInterface public void stop() {
             repository.prefs.edit().putBoolean("recording",false).apply();

@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import de.wattpit.app.core.CsvCodec;
 import de.wattpit.app.core.Reading;
 import de.wattpit.app.core.HistoryQuery;
+import de.wattpit.app.core.ArchiveMerge;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.*;
@@ -15,22 +16,79 @@ import java.time.ZoneId;
 import java.util.*;
 
 final class HistoryDb extends SQLiteOpenHelper {
-    private static final String[] NUMBERS = {"voltage","current","power","soc","solar","yieldWh","ttg","consumed","temperature","aux","load","state","error","alarm"};
-    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 2); setWriteAheadLoggingEnabled(true); }
+    private static final String[] NUMBERS = {"voltage","current","power","soc","solar","yieldWh","ttg","consumed","temperature","aux","load","state","error","alarm","pvVoltage","auxRaw"};
+    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 3); setWriteAheadLoggingEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE readings (ts INTEGER NOT NULL, device TEXT NOT NULL, kind TEXT NOT NULL, origin TEXT NOT NULL, " +
                 "voltage REAL, current REAL, power REAL, soc REAL, solar REAL, yieldWh REAL, ttg REAL, consumed REAL, temperature REAL, aux REAL, load REAL, " +
-                "state INTEGER, error INTEGER, alarm INTEGER, UNIQUE(ts,device,origin))");
+                "state INTEGER, error INTEGER, alarm INTEGER, pvVoltage REAL, auxRaw REAL, period INTEGER NOT NULL DEFAULT 0, UNIQUE(ts,device,origin))");
         db.execSQL("CREATE INDEX history_window ON readings(ts,kind,origin)");
         db.execSQL("CREATE INDEX history_device ON readings(device,ts)");
         createDaily(db);
+        createArchives(db);
     }
-    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { if (oldVersion < 2) createDaily(db); }
+    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { if (oldVersion < 2) createDaily(db); if(oldVersion<3){db.execSQL("ALTER TABLE readings ADD COLUMN period INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE readings ADD COLUMN pvVoltage REAL");db.execSQL("ALTER TABLE readings ADD COLUMN auxRaw REAL");createArchives(db);} }
 
+    private static void createArchives(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE device_daily(device TEXT NOT NULL,day TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(device,day))");
+        db.execSQL("CREATE TABLE archive_coverage(device TEXT NOT NULL,channel INTEGER NOT NULL,period INTEGER NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,PRIMARY KEY(device,channel,period,start))");
+        db.execSQL("CREATE TABLE device_history(device TEXT PRIMARY KEY,payload TEXT NOT NULL)");
+    }
+    synchronized boolean covered(String device,int channel,int period,long from,long to){
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT 1 FROM archive_coverage WHERE device=? AND channel=? AND period=? AND start<=? AND end>=? LIMIT 1",new String[]{device,""+channel,""+period,""+from,""+to})){return c.moveToFirst();}
+    }
+    synchronized void cover(String device,int channel,int period,long from,long to){
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        String where="device=? AND channel=? AND period=? AND start<=? AND end>=?";
+        String[] args={device,""+channel,""+period,""+(to+period*1000L),""+(from-period*1000L)};
+        try {
+            try(Cursor c=db.rawQuery("SELECT MIN(start),MAX(end) FROM archive_coverage WHERE "+where,args)){if(c.moveToFirst()&&!c.isNull(0)){from=Math.min(from,c.getLong(0));to=Math.max(to,c.getLong(1));}}
+            db.delete("archive_coverage",where,args);ContentValues v=new ContentValues();v.put("device",device);v.put("channel",channel);v.put("period",period);v.put("start",from);v.put("end",to);db.insertOrThrow("archive_coverage",null,v);db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
+    }
+    synchronized void archiveDaily(String device,String day,JSONObject payload) {
+        ContentValues v=new ContentValues();v.put("device",device);v.put("day",day);v.put("payload",payload.toString());
+        getWritableDatabase().insertWithOnConflict("device_daily",null,v,SQLiteDatabase.CONFLICT_REPLACE);
+    }
+    synchronized void archiveHistory(String device,JSONObject payload) {
+        ContentValues v=new ContentValues();v.put("device",device);v.put("payload",payload.toString());
+        getWritableDatabase().insertWithOnConflict("device_history",null,v,SQLiteDatabase.CONFLICT_REPLACE);
+    }
+    JSONArray histories() throws Exception {
+        JSONArray out=new JSONArray();try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM device_history",null)){while(c.moveToNext())out.put(new JSONObject(c.getString(0)));}return out;
+    }
+    /** A channel block is atomic. Complementary fields merge; finer values win at the same instant. */
+    synchronized int archiveBlock(String device,String kind,String field,List<long[]> times,List<Double> numbers) {
+        if(!Arrays.asList(NUMBERS).contains(field))throw new IllegalArgumentException("Unbekannter Archivwert.");
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();int changed=0;
+        try {for(int i=0;i<times.size();i++){
+            long[] t=times.get(i);Double value=numbers.get(i);if(value==null)continue;
+            ArchiveMerge match=ArchiveMerge.existing(field,device,kind,t[0],(int)t[1],value);
+            try(Cursor c=db.rawQuery(match.sql,match.args)){if(c.moveToFirst())continue;}
+            ContentValues v=new ContentValues();v.put(field,value);
+            String[] key={String.valueOf(t[0]),device};
+            boolean exists;int period=0;Double old=null;
+            try(Cursor c=db.rawQuery("SELECT period,"+field+" FROM readings WHERE ts=? AND device=? AND origin='archive'",key)){
+                exists=c.moveToFirst();if(exists){period=c.getInt(0);if(!c.isNull(1))old=c.getDouble(1);}
+            }
+            if(exists){
+                if(old!=null&&(period<t[1]||Double.compare(old,value)==0))continue;
+                v.put("period",period==0?t[1]:Math.min(period,t[1]));db.update("readings",v,"ts=? AND device=? AND origin='archive'",key);
+            } else {v.put("ts",t[0]);v.put("device",device);v.put("kind",kind);v.put("origin","archive");v.put("period",t[1]);db.insertOrThrow("readings",null,v);}
+            changed++;
+        }
+        // Power is derived only from fields at the same sample time.
+        if(kind.equals("shunt")&&!times.isEmpty()&&(field.equals("voltage")||field.equals("current"))){
+            long from=Long.MAX_VALUE,to=Long.MIN_VALUE;for(long[] t:times){from=Math.min(from,t[0]);to=Math.max(to,t[0]);}
+            db.execSQL("UPDATE readings SET power=voltage*current WHERE device=? AND origin='archive' AND ts BETWEEN ? AND ? AND voltage IS NOT NULL AND current IS NOT NULL AND (power IS NULL OR power!=voltage*current)",new Object[]{device,from,to});
+        }
+        db.setTransactionSuccessful();return changed;
+        }finally{db.endTransaction();}
+    }
     private static void createDaily(SQLiteDatabase db) { db.execSQL("CREATE TABLE IF NOT EXISTS solar_daily(day TEXT PRIMARY KEY, payload TEXT NOT NULL)"); }
     JSONArray daily() throws Exception {
         JSONArray out = new JSONArray();
-        try (Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM solar_daily ORDER BY day DESC",null)) { while(c.moveToNext()) out.put(new JSONObject(c.getString(0))); }
+        try (Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM (SELECT day,payload FROM solar_daily WHERE day NOT IN (SELECT day FROM device_daily) UNION ALL SELECT day,payload FROM device_daily) ORDER BY day DESC",null)) { while(c.moveToNext()) out.put(new JSONObject(c.getString(0))); }
         return out;
     }
     private int[] importDaily(CsvCodec.Table table) {
@@ -54,7 +112,7 @@ final class HistoryDb extends SQLiteOpenHelper {
 
     boolean insert(Reading r) {
         ContentValues v = new ContentValues();
-        v.put("ts", r.timestamp); v.put("device", r.device); v.put("kind", r.kind); v.put("origin", r.origin);
+        v.put("ts", r.timestamp); v.put("device", r.device); v.put("kind", r.kind); v.put("origin", r.origin);v.put("period",r.period);
         Object[] values = values(r);
         for (int i = 0; i < NUMBERS.length; i++) {
             Object value = values[i];
@@ -73,7 +131,7 @@ final class HistoryDb extends SQLiteOpenHelper {
                 JSONObject p = new JSONObject();
                 p.put("t", c.getLong(0)); p.put("last", c.getLong(1)); p.put("device", c.getString(2));
                 p.put("kind", c.getString(3)); p.put("origin", c.getString(4)); p.put("v", c.getDouble(5));
-                p.put("min", c.getDouble(6)); p.put("max", c.getDouble(7)); p.put("n", c.getLong(8));
+                p.put("period", c.getLong(9)); p.put("min", c.getDouble(6)); p.put("max", c.getDouble(7)); p.put("n", c.getLong(8));
                 result.put(p);
             }
         }
@@ -102,7 +160,7 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
 
     Reading last(String device) {
-        try (Cursor c = getReadableDatabase().rawQuery("SELECT * FROM readings WHERE device=? ORDER BY ts DESC LIMIT 1", new String[]{device})) {
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT * FROM readings WHERE device=? AND origin='live' ORDER BY ts DESC LIMIT 1", new String[]{device})) {
             return c.moveToFirst() ? fromCursor(c) : null;
         }
     }
@@ -135,13 +193,13 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
 
     private static Object[] values(Reading r) {
-        return new Object[]{r.voltage,r.current,r.power,r.soc,r.solar,r.yieldWh,r.ttg,r.consumed,r.temperature,r.aux,r.load,r.state,r.error,r.alarm};
+        return new Object[]{r.voltage,r.current,r.power,r.soc,r.solar,r.yieldWh,r.ttg,r.consumed,r.temperature,r.aux,r.load,r.state,r.error,r.alarm,r.pvVoltage,r.auxRaw};
     }
     static JSONObject json(Reading r) throws Exception {
         JSONObject out = new JSONObject().put("t", r.timestamp).put("device", r.device).put("kind", r.kind).put("origin", r.origin);
         Object[] values = values(r);
         for (int i = 0; i < NUMBERS.length; i++) out.put(NUMBERS[i], values[i] == null ? JSONObject.NULL : values[i]);
-        return out;
+        out.put("period",r.period);return out;
     }
     private static Reading fromCursor(Cursor c) {
         Reading r = new Reading();
@@ -152,6 +210,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         r.solar = number(c,"solar"); r.yieldWh = number(c,"yieldWh"); r.ttg = number(c,"ttg"); r.consumed = number(c,"consumed");
         r.temperature = number(c,"temperature"); r.aux = number(c,"aux"); r.load = number(c,"load");
         r.state = integer(c,"state"); r.error = integer(c,"error"); r.alarm = integer(c,"alarm");
+        r.pvVoltage=number(c,"pvVoltage");r.auxRaw=number(c,"auxRaw");r.period=c.getInt(c.getColumnIndexOrThrow("period"));
         return r;
     }
     private static Double number(Cursor c, String name) { int i = c.getColumnIndexOrThrow(name); return c.isNull(i) ? null : c.getDouble(i); }

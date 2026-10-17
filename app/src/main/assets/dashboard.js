@@ -182,8 +182,9 @@
     blend(a,b,p){const ca=parseInt(a.slice(1),16),cb=parseInt(b.slice(1),16);return '#'+[16,8,0].map(s=>Math.round(((ca>>s)&255)*(1-p)+((cb>>s)&255)*p).toString(16).padStart(2,'0')).join('');}
     paint(color,t) {
       if(t.adaptiveColor===false)return color;
-      const light=document.documentElement.dataset.theme==='light';
-      const background=t.background==='auto'?(light?'#ffffff':'#151d2a'):t.background;
+      const css=getComputedStyle(document.documentElement);
+      if(color===C.CATALOG[t.metric]?.color){const tone=['solar','yieldWh','solarVoltage','solarCurrent','pvVoltage','state','error'].includes(t.metric)?'--orange':['temperature','aux','load'].includes(t.metric)?'--blue':'--mint';color=css.getPropertyValue(tone).trim()||color;}
+      const background=t.background==='auto'?css.getPropertyValue('--panel').trim():t.background;
       const key=[color,background].join(':');this.paintCache=this.paintCache || new Map();
       if(this.paintCache.has(key))return this.paintCache.get(key);
       const luminance=hex=>{const rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
@@ -198,7 +199,7 @@
       if(!series.length)return '<div class="tile-chart-empty">Keine gespeicherten Werte</div>';
       const low=C.convert(t.min,t.unit,t.metric),high=C.convert(t.max,t.unit,t.metric),x=p=>4+(p.t-window.from)/(window.to-window.from)*292,y=p=>58-C.clamp((p.v-low)/(high-low),0,1)*52;
       let path='',last=null;
-      for(const p of series){const gap=last && (last.device!==p.device || last.origin!==p.origin || p.t-(last.last || last.t)>Math.max(this.a.isDemo()?600001:45000,(window.to-window.from)/600*3));path+=(last&&!gap?'L':'M')+x(p).toFixed(2)+','+y(p).toFixed(2);last=p;}
+      for(const p of series){const gap=last && (last.device!==p.device || last.origin!==p.origin || p.t-(last.last || last.t)>Math.max(this.a.isDemo()?600001:45000,(p.period||0)*1500,(window.to-window.from)/600*3));path+=(last&&!gap?'L':'M')+x(p).toFixed(2)+','+y(p).toFixed(2);last=p;}
       return `<svg class="tile-sparkline" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true"><path d="M4 60H296" stroke="var(--border)"/><path d="${path}" fill="none" stroke="${this.paint(t.color,t)}" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg><div class="tile-chart-range"><span>${esc(this.short(low))}</span><span>${esc(this.short(high))} ${esc(t.unit)}</span></div>`;
     }
     picker() {

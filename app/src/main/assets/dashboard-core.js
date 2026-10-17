@@ -19,6 +19,8 @@
     alarm:        {label:'Shunt-Alarm', group:'Akku', kind:'shunt', field:'alarm', units:['Code'], min:0, max:255, digits:0, color:'#e8bb57', status:true},
     solar:        {label:'Solarleistung', group:'Solar', kind:'solar', field:'solar', units:['W','kW'], min:0, max:300, digits:0, color:'#e8bb57'},
     yieldWh:      {label:'Solarertrag heute', group:'Solar', kind:'solar', field:'yieldWh', units:['kWh','Wh'], min:0, max:2000, digits:2, color:'#e8bb57'},
+    pvVoltage: {label:'PV-Eingangsspannung',group:'Solar',kind:'solar',field:'pvVoltage',backend:'pvVoltage',units:['V','mV'],min:0,max:75,digits:2,color:'#efb468',hint:'Spannung am Solareingang des Reglers; aus dem Gerätearchiv.'},
+    solarTemperature: {label:'Batterietemperatur am Regler',group:'Solar',kind:'solar',field:'temperature',backend:'solarTemperature',units:['°C'],min:-20,max:60,digits:1,color:'#81baf4',hint:'Nur mit vorhandenem Temperatursensor; aus dem Gerätearchiv.'},
     solarVoltage: {label:'Regler-Batteriespannung', group:'Solar', kind:'solar', field:'voltage', units:['V','mV'], min:10, max:15, digits:2, color:'#81baf4', hint:'Batterieseitige Spannung am SmartSolar; keine PV-Eingangsspannung.'},
     solarCurrent: {label:'Solar-Ladestrom', group:'Solar', kind:'solar', field:'current', units:['A','mA'], min:0, max:20, digits:2, color:'#e8bb57'},
     load:         {label:'Lastausgang-Strom', group:'Solar', kind:'solar', field:'load', units:['A','mA'], min:0, max:20, digits:2, color:'#e8bb57'},
