@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.0.0** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.0.0/Watt-n-Pit-v1.0.0.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.1.0** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.1.0/Watt-n-Pit-v1.1.0.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -87,6 +87,16 @@ Batterieentnahme erscheint standardmäßig **negativ**. Eine Kurve unter null ze
 
 Der Vergleich beschreibt weder den Gesamtverbrauch noch die Änderung der gespeicherten Akkuenergie. Die bisherige **Batteriebilanz in W** zeigt weiterhin die aktuelle Lade- bzw. Entladeleistung am Shunt. Fehlende Ertrags- oder Entnahmewerte werden nicht als null eingesetzt. Zwischen bekannten Kurvenpunkten werden die Zeitpunkte angeglichen; Aufzeichnungslücken bleiben unterbrochen.
 
+### Den Vergleich als Kachel auf die Übersicht legen
+
+Unter **+ Kachel → Energie → Ertrag − Entnahme** hinzufügen. Die neue Kachel erscheint am Ende der Übersicht; unter **Anordnen** lässt sie sich an die gewünschte Stelle ziehen. Vorhandene Kacheln behalten ihre Position.
+
+![Die Vergleichskachel mit berechnetem Wert, Kurve und automatischer Skala](images/energy-tile.png)
+
+Durch Antippen **Zahlenwert** oder **Verlauf**, **Wh** oder **kWh** sowie den Zeitraum wählen. Möglich sind beispielsweise **Heute**, **Seit Sonnenaufgang**, **Letzte …** und ein freier Zeitraum. Beide Ausgangswerte werden für dasselbe Fenster berechnet. Im Verlauf ist die automatische Skala voreingestellt; feste Grenzen und Vorzeichenumkehr sind ebenfalls möglich.
+
+Fehlt einer der beiden Werte, zeigt die Kachel **—** und den Hinweis, dass Ertrag und Entnahme benötigt werden. Eine gemessene Null wird als **0,00** angezeigt. Größe, Position, Darstellung, Einheit und Zeitraum sind Bestandteil der Einstellungssicherung. Die zeitliche Erfassung wird im ergänzenden Hinweis getrennt für Solar und Batterie geführt.
+
 **Batterieentnahme ist kein Gesamtverbrauch.** Solarstrom, der direkt einen Verbraucher versorgt, muss nicht aus dem Akku entnommen werden. Ein weiterer Regler kann die Batteriebilanz beeinflussen, ohne seinen eigenen Solarertrag separat zu melden. Der grobe Tageszähler des SmartSolar bleibt als **Solarertrag heute** zusätzlich auswählbar.
 
 ## 6. Den Verlauf untersuchen
@@ -111,7 +121,7 @@ Die Wetterkachel liegt im selben Raster wie die Messkacheln. **Anordnen** macht 
 
 *Einstellungen → Deine Solaranlage → Bearbeiten: Modulgruppen beschreiben und ihre Messwertquelle zuordnen. Die gezeigten Angaben sind frei erfunden.*
 
-Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.0.0 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
+Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.1.0 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
 
 ## 8. Einstellungen und Messdaten sichern
 

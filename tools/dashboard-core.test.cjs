@@ -246,3 +246,14 @@ test('energy totals from different selected windows cannot be compared',()=>{
   battery.summary.from=5;assert.deepEqual(C.energyBalance(solar,battery),{points:[],summary:{last:null}});
   battery.summary.from=0;battery.summary.to=25;assert.equal(C.energyBalance(solar,battery).summary.last,null);
 });
+
+test('the comparison tile renders signed totals and keeps zero, units and automatic chart bounds meaningful',()=>{
+  const t=C.normalize({tiles:[C.tile('energyBalance')]}).tiles[0],snapshot={settings:{capacity:100}};
+  for(const value of [-30,0,40,null])assert.equal(C.displayValue(t,{last:value},null,null,snapshot),value);
+  const points=[{v:-30,min:-30,max:-30},{v:40,min:40,max:40}],range=C.chartRange(t,points);
+  assert.ok(range.min<-30&&range.max>40);t.unit='kWh';
+  assert.equal(C.convert(C.displayValue(t,{last:-30},null,null,snapshot),t.unit,t.metric),-.03);
+  assert.equal(C.chartRange(t,points).min,range.min/1000);assert.equal(C.chartRange(t,points).max,range.max/1000);
+  t.valueMode='live';t.period.mode='live';const restored=C.normalize({tiles:[t]}).tiles[0];
+  assert.equal(C.usesLiveValue(restored),false);assert.equal(restored.period.mode,'today');
+});

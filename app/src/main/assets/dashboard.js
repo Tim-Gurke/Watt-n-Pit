@@ -117,7 +117,12 @@
       if(this.cache.has(key))return this.cache.get(key);
       let data={points:[],summary:{}};
       try {
-        if(this.a.isDemo())data=this.demoData(t,window);
+        if(C.CATALOG[t.metric].comparison){
+          const sources=this.a.isDemo()?{solar:this.demoData({...t,metric:'solarEnergy'},window),battery:this.demoData({...t,metric:'dischargeEnergy'},window)}:this.a.native?.energyHistory?JSON.parse(this.a.native.energyHistory(Math.floor(window.from),Math.ceil(window.to),'all')):null;
+          if(!sources||sources.error)throw new Error('Energiewerte nicht verfügbar.');
+          data={...C.energyBalance(sources.solar,sources.battery),coverageSources:{solar:sources.solar?.summary?.coverage,battery:sources.battery?.summary?.coverage}};
+        }
+        else if(this.a.isDemo())data=this.demoData(t,window);
         else if(this.a.native?.dashboardHistory)data=JSON.parse(this.a.native.dashboardHistory(Math.floor(window.from),Math.ceil(window.to),backend));
         else if(this.a.native?.history){data=JSON.parse(this.a.native.history(Math.floor(window.from),Math.ceil(window.to),backend,'all'));data.summary=this.summary(data.points || []);}
       } catch(_){data={points:[],summary:{},error:true};}
@@ -167,9 +172,11 @@
         if(!window && t.metric==='solar' && solar?.state!=null)hint=C.PHASES[solar.state] || 'Ladephase '+solar.state;
         if(!window && t.metric==='power' && C.finite(shunt?.power))hint=shunt.power>.4?'Akku wird geladen':shunt.power<-.4?'Akku wird entladen':'Bilanz ausgeglichen';
         if(m.energy&&!data?.error)hint=t.period.mode==='sunrise'?`${this.periodLabel(t,window)} · ${Math.floor((data?.summary?.coverage||0)*100)} %`:`Berechnet · ${this.periodLabel(t,window)} · ${Math.floor((data?.summary?.coverage||0)*100)} % erfasst`;
+        if(m.comparison&&!data?.error)hint=`${C.finite(data?.summary?.last)?'Berechnet':'Ertrag und Entnahme nötig'} · ${this.periodLabel(t,window)}`;
         if(t.type==='chart'&&C.usesLiveValue(t))hint=`${C.finite(value)?'Aktuell':'Kein Livewert'} · ${data?.error?'Verlauf nicht verfügbar':(t.period.mode==='sunrise'?'':'Verlauf: ')+this.periodLabel(t,window)}`;
         else if(data?.error)hint='Zeitraum nicht verfügbar';
-        const hintElement=el.querySelector('.tile-hint');hintElement.textContent=hint;hintElement.title=[window?.note||'',m.energy?Math.floor((data?.summary?.coverage||0)*100)+' % des Zeitraums erfasst':''].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
+        const coverage=m.comparison?['solar','battery'].map(key=>`${key==='solar'?'Solar':'Batterie'}: ${C.finite(data?.coverageSources?.[key])?Math.floor(C.clamp(data.coverageSources[key],0,1)*100)+' % der Zeit erfasst':'nicht verfügbar'}`).join(' · '):m.energy?Math.floor((data?.summary?.coverage||0)*100)+' % des Zeitraums erfasst':'';
+        const hintElement=el.querySelector('.tile-hint');hintElement.textContent=hint;hintElement.title=[window?.note||'',coverage].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
         el.classList.toggle('no-value',!C.finite(value));
       }
       if(visibilityChanged)this.layout();else this.fitNumbers();
@@ -208,7 +215,7 @@
     paint(color,t,text=false) {
       if(t.adaptiveColor===false&&!text)return color;
       const css=getComputedStyle(document.documentElement);
-      if(t.adaptiveColor!==false&&color===C.CATALOG[t.metric]?.color){const tone=['solar','yieldWh','solarEnergy','solarVoltage','solarCurrent','pvVoltage','state','error'].includes(t.metric)?'--orange':['temperature','aux','load'].includes(t.metric)?'--blue':'--mint';color=css.getPropertyValue(tone).trim()||color;}
+      if(t.adaptiveColor!==false&&color===C.CATALOG[t.metric]?.color){const tone=['solar','yieldWh','solarEnergy','solarVoltage','solarCurrent','pvVoltage','state','error'].includes(t.metric)?'--orange':['energyBalance','temperature','aux','load'].includes(t.metric)?'--blue':'--mint';color=css.getPropertyValue(tone).trim()||color;}
       const background=t.background==='auto'?css.getPropertyValue('--panel').trim():t.background;
       const page=css.getPropertyValue('--bg').trim(),target=text?7:4.5,key=[color,background,page,t.opacity,target].join(':');this.paintCache=this.paintCache || new Map();
       if(this.paintCache.has(key))return this.paintCache.get(key);
