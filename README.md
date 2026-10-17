@@ -4,10 +4,14 @@
 
 [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · [Einrichtung](#einrichtung) · [CSV-Import](docs/CSV-IMPORT.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
-## Version 0.1.2
+## Version 0.1.3
 
 - SmartSolar 75/15 und SmartShunt 300 A gleichzeitig über Bluetooth-Sofortanzeige.
-- Luftige Standardübersicht mit sieben Kacheln; 22 Mess- und Zusatzwerte stehen optional bereit.
+- Automatischer Gerätearchiv-Import beim App-Start, je Gerät nacheinander; Fortschritt und Abbruch unter Geräte.
+- Abgleich pro Gerät, Messgröße und Zeitpunkt mit Aufzeichnungen, CSV und früheren Archivimporten. Feinere Daten haben Vorrang; fehlende Kanäle werden ergänzt.
+- Sechs fertige Farbdesigns: Klassisch, Blau, Grün, Türkis, Orange und Neutral, jeweils hell und dunkel.
+- Optionale 14-Tage-Wetterzeile: pro Tag ein Symbol und Sonnenstunden; manuelle Ortswahl ohne GPS.
+- Luftige Standardübersicht mit sieben Kacheln; 24 Mess- und Zusatzwerte stehen optional bereit.
 - Kacheln hinzufügen, antippen und anpassen, frei verschieben, skalieren und überlappen; getrennte Anordnungen für schmale und breite Ansichten.
 - Zahlenwert, Rundinstrument oder kleiner Verlauf mit individuell gespeicherten Einheiten, Farben, Skalen, Schriftgrößen, Hintergrund und Deckkraft.
 - Restlaufzeit wahlweise in Stunden, Tagen, Minuten oder Sekunden; W/kW, Wh/kWh und weitere passende Einheiten.
@@ -22,7 +26,7 @@
 - Dunkles und helles Farbschema, Hoch- und Querformat.
 - Deutlich gekennzeichnete Demo ohne Speicherung erfundener Messwerte.
 
-Kein Konto, keine Cloud, keine Werbung. Die App besitzt **keine Internetberechtigung**. Geräteschlüssel werden mit dem Android Keystore verschlüsselt gespeichert; Messdaten bleiben lokal.
+Kein Konto, keine Werbung. Energiedaten und Geräteschlüssel bleiben auf dem Telefon. Nur die optionale Wetterfunktion nutzt Internet: Suchtext bzw. Ortskoordinaten gehen per HTTPS an Open-Meteo. Wetterdaten: Open-Meteo (CC BY 4.0), Orte: GeoNames. Geräteschlüssel werden mit dem Android Keystore verschlüsselt gespeichert; Messdaten bleiben lokal.
 
 ## Ansichten
 
@@ -64,9 +68,11 @@ Positiver Batteriestrom bedeutet Laden, negativer Batteriestrom Entladen. Restla
 
 ## Stand und offene Aufgaben
 
-0.1.2 ist eine Testversion. Decoder, CSV-Verarbeitung, Android-Lint, APK-Build und die Oberfläche sind automatisiert geprüft. **Die Prüfung an echten Victron-Geräten steht noch aus.**
+0.1.3 ist eine Testversion. Der Java-Archivdecoder wurde mit einer privaten realen Bluetooth-Aufzeichnung gegen die unabhängige Offline-Auswertung abgeglichen (28.079 Einträge einschließlich fehlender Werte). Protokoll-, SQL-Abgleich- und CSV-Tests, Android-Lint und APK-Build sind automatisiert geprüft. **Die aktive GATT-Verbindung, Android-Kopplung und der automatische Import müssen noch an den realen Geräten geprüft werden.**
 
-**Direktes automatisches Nachladen gespeicherter Gerätetrends ist noch nicht implementiert.** Die offene Sofortanzeige überträgt Livewerte und keine archivierten Zeitreihen. Ein belastbar verifizierter Archivzugriff ist für eine spätere Ausbaustufe vorgemerkt. Ziel: Beim nächsten Empfang fehlende Zeitbereiche automatisch holen, eigene Aufzeichnungen priorisieren und unterbrochene Downloads fortsetzen. CSV-Import ist bereits verfügbar. Fehlende Vergangenheit wird nicht aus aktuellen Werten erfunden.
+Beim App-Start bzw. nach mehr als 30 Sekunden im Hintergrund beginnt ein kurzer Importlauf für die eingerichteten Geräte. Bluetooth muss eingeschaltet und VictronConnect getrennt sein. Android kann beim ersten Mal die sechsstellige Geräte-PIN anfordern. Die 32-stelligen Sofortanzeige-Schlüssel und diese PIN sind verschieden. Bereits gelesene Bereiche werden gespeichert; erneutes Starten ergänzt Lücken und erzeugt keine doppelten Archivpunkte. Abbrüche behalten alle schon abgeschlossenen Blöcke. Außerhalb der Reichweite endet der Lauf mit einem Hinweis; ein neuer Versuch erfolgt beim nächsten App-Start oder über „Gerätearchiv ergänzen“.
+
+Die Archivkanäle und Speicherauflösungen werden vom Gerät abgefragt. Bisher sind SmartSolar und SmartShunt am Mitschnitt geprüft. Weitere Victron-Geräte sind damit **nicht pauschal bestätigt**. Nicht unterstützte Kanäle werden übersprungen, fehlende Werte bleiben leer. Ohne sicheren Zeitanker werden keine geratenen historischen Zeitstempel gespeichert. Die App löscht keine Gerätetrends und ändert keine Ladeeinstellungen.
 
 In dieser Version lässt sich je ein SmartSolar und ein SmartShunt einrichten. Eine lang laufende Aufzeichnung kann unter aggressiven Android-Energiespareinstellungen eingeschränkt werden; bei Bedarf die Hintergrundnutzung für Watt’n’Pit erlauben.
 
@@ -87,4 +93,4 @@ Für die Oberflächenprüfung: `node tools/ui-smoke.cjs` (Playwright erforderlic
 MIT-Lizenz. Unabhängiges Projekt, kein offizielles Victron-Produkt.
 
 ## Tagesarchiv
-Victron SolarHistory.csv wird getrennt von Livewerten gespeichert und im Verlauf als Tageswerttabelle angezeigt. Der automatische Bluetooth-Archivabruf bleibt offen.
+Victron SolarHistory.csv wird getrennt von Livewerten gespeichert und im Verlauf als Tageswerttabelle angezeigt. Der Bluetooth-Import speichert zusätzlich bis zu 31 Solar-Tagesdatensätze und Shunt-Gesamtwerte getrennt von den Zeitreihen. Tagesdaten werden nach dem aktuellen Telefondatum zugeordnet; historische Zeitreihen verwenden die gespeicherten Gerätezeitanker. Die App lädt keine privaten Beispielmessungen vor.

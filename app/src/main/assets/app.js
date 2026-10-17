@@ -27,7 +27,7 @@ let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastM
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let currentImport = null;
-let dashboard = null;
+let dashboard = null, extras = null;
 
 function toast(message) {
   if (!message || (message === previousToast && Date.now()-previousToastTime < 4000)) return;
@@ -41,6 +41,7 @@ function showPage(next) {
   document.querySelectorAll('.bottom-nav button').forEach(el => el.classList.toggle('active',el.dataset.page===page));
   window.scrollTo(0,0);
   if (page === 'history') loadHistory();
+  extras?.render();
   if (page === 'overview') loadMini(true);
   if (page === 'devices') renderDevices(true);
   if (page === 'settings') renderSettings();
@@ -90,7 +91,7 @@ function renderDevices(force=false) {
   deviceRenderKey = key;
   $('deviceCards').innerHTML = snapshot.devices.length ? snapshot.devices.map(d => {
     const fresh = snapshot.running && !d.error && d.seen && Date.now()-d.seen<45000;
-    return `<article class="card device-card"><div class="device-title"><div class="device-type"><div class="tile-icon ${d.kind==='solar'?'orange':'mint'}">${icon(d.kind==='solar'?'solar':'battery')}</div><div><h2>${escapeHtml(d.name)}</h2><p class="muted">${d.kind==='solar'?'Solarladeregler':'Batteriewächter'}${d.rssi != null ? ` · ${d.rssi} dBm` : ''}</p></div></div><button class="textbutton edit-device" data-mac="${escapeHtml(d.mac)}">Bearbeiten</button></div><div class="device-meta"><code>${escapeHtml(d.mac)}</code><span class="${fresh?'mint':''}">${fresh?'● Live':'○ Kein Liveempfang'}</span></div>${d.error?`<p class="device-error">${escapeHtml(d.error)}</p>`:''}</article>`;
+    return `<article class="card device-card"><div class="device-title"><div class="device-type"><div class="tile-icon ${d.kind==='solar'?'orange':'mint'}">${icon(d.kind==='solar'?'solar':'battery')}</div><div><h2>${escapeHtml(d.name)}</h2><p class="muted">${d.kind==='solar'?'Solarladeregler':'Batteriewächter'}${d.rssi != null ? ` · ${d.rssi} dBm` : ''}</p></div></div><button class="textbutton edit-device" data-mac="${escapeHtml(d.mac)}">Bearbeiten</button></div><div class="device-meta"><code>${escapeHtml(d.mac)}</code><span class="${fresh?'mint':''}">${fresh?'● Live':'○ Kein Liveempfang'}</span></div>${d.error?`<p class="device-error">${escapeHtml(d.error)}</p>`:''}<button class="quiet archive-import" ${snapshot.archive?.active||demo?'disabled':''} data-mac="${escapeHtml(d.mac)}">Gerätearchiv ergänzen</button></article>`;
   }).join('') : '<div class="empty-devices"><h2>Platz für deine Energieanlage.</h2><p>Starte die Suche oder füge SmartSolar und SmartShunt manuell hinzu.</p></div>';
   $('deviceCards').querySelectorAll('.edit-device').forEach(b => b.onclick = () => deviceForm(snapshot.devices.find(d => d.mac===b.dataset.mac)));
   $('scanStatus').textContent = snapshot.running ? snapshot.status : 'Die Suche startet mit der Aufzeichnung.';
@@ -112,6 +113,7 @@ function poll() {
       if (document.documentElement.dataset.theme !== snapshot.settings.theme) theme(snapshot.settings.theme,false);
     } catch (error) { console.error('Snapshot unavailable',error); }
   }
+  extras?.render();
   if (page === 'overview') { renderOverview(); loadMini(); }
   if (page === 'devices') renderDevices();
   if (page === 'settings') renderSettings();
@@ -221,7 +223,7 @@ function seriesOf(data) {
 }
 function seriesLabel(s) {
   const name=snapshot.devices.find(d=>d.mac===s.device)?.name || (s.kind==='solar'?'SmartSolar':'SmartShunt');
-  return name + (s.origin==='csv'?' · CSV':'');
+  return name + (s.origin==='csv'?' · CSV':s.origin==='archive'?' · Archiv':'');
 }
 function canvasChart(canvas,data,from,to,chosen,mini=false) {
   const bounds=canvas.getBoundingClientRect(), width=Math.max(1,bounds.width),height=bounds.height;
@@ -253,7 +255,7 @@ function canvasChart(canvas,data,from,to,chosen,mini=false) {
   for(const s of series){
     const color=s.kind==='solar'?orange:mint;
     const bucket=(to-from)/600;
-    const gapLimit=Math.max(bucket*3,s.origin==='csv'?45*60000:45000);
+    const gapLimit=Math.max(bucket*3,s.origin==='csv'?45*60000:45000,...s.points.map(p=>(p.period||0)*1500));
     const segments=[];let segment=[];
     for(const p of s.points){if(segment.length && p.t-segment[segment.length-1].last>gapLimit){segments.push(segment);segment=[];}segment.push(p);}if(segment.length)segments.push(segment);
     for(const segment of segments){
@@ -292,7 +294,7 @@ $('historyChart').addEventListener('pointermove',event=>{
 });
 function releasePointer(event){
   if(!pointers.has(event.pointerId))return;
-  if(pointers.size===1&&dragDistance<6&&scale){const px=event.clientX-$('historyChart').getBoundingClientRect().left;const time=viewFrom+(px-scale.left)/scale.plotW*(viewTo-viewFrom);const nearest=[...points].sort((a,b)=>Math.abs(a.t-time)-Math.abs(b.t-time))[0];if(nearest){selectedPoint=nearest;const nearby=points.filter(p=>Math.abs(p.t-nearest.t)<Math.max(1000,(viewTo-viewFrom)/500));$('chartTooltip').innerHTML=`<strong>${date(nearest.t)} ${clock(nearest.t)}</strong><br>${nearby.slice(0,4).map(p=>`${escapeHtml(seriesLabel(p))}: ${num(p.v,metric==='voltage'||metric==='current'?2:1)} ${metrics[metric].unit}${p.n>1?`<br><span class="muted">Ø aus ${p.n} Werten · ${num(p.min,1)}–${num(p.max,1)} ${metrics[metric].unit}</span>`:''}`).join('<br>')}`;$('chartTooltip').hidden=false;drawHistory();}}
+  if(pointers.size===1&&dragDistance<6&&scale){const px=event.clientX-$('historyChart').getBoundingClientRect().left;const time=viewFrom+(px-scale.left)/scale.plotW*(viewTo-viewFrom);const nearest=[...points].sort((a,b)=>Math.abs(a.t-time)-Math.abs(b.t-time))[0];if(nearest){selectedPoint=nearest;const nearby=points.filter(p=>Math.abs(p.t-nearest.t)<Math.max(1000,(viewTo-viewFrom)/500));$('chartTooltip').innerHTML=`<strong>${date(nearest.t)} ${clock(nearest.t)}</strong><br>${nearby.slice(0,4).map(p=>`${escapeHtml(seriesLabel(p))}: ${num(p.v,metric==='voltage'||metric==='current'?2:1)} ${metrics[metric].unit}${p.period?`<br><span class="muted">Archivauflösung ${num(p.period)} s</span>`:''}${p.n>1?`<br><span class="muted">Ø aus ${p.n} Werten · ${num(p.min,1)}–${num(p.max,1)} ${metrics[metric].unit}</span>`:''}`).join('<br>')}`;$('chartTooltip').hidden=false;drawHistory();}}
   pointers.delete(event.pointerId);gesture=null;
 }
 $('historyChart').addEventListener('pointerup',releasePointer);
@@ -305,7 +307,7 @@ function renderDaily() {
 }
 function chooseImport(){if(native)native.chooseImport();else toast('CSV-Dateien werden in der Android-App importiert.');}
 function chooseExport(){if(native)native.chooseExport();else toast('Der Export ist in der Android-App verfügbar.');}
-const mappingLabels={timestamp:'Datum & Zeit',date:'Datum separat',clock:'Zeit separat',voltage:'Batteriespannung',current:'Batteriestrom',power:'Batterieleistung',soc:'Ladezustand / SOC',solar:'Solarleistung',yieldWh:'Tagesertrag',ttg:'Restlaufzeit',consumed:'Entnommene Ah',temperature:'Temperatur',aux:'Zusatzspannung',load:'Laststrom',state:'Ladephase (Code)',error:'Fehlercode',alarm:'Alarm (Bitmaske)'};
+const mappingLabels={pvVoltage:'PV-Eingangsspannung',auxRaw:'Zusatzeingang (Rohwert)',period:'Archivauflösung (Sekunden)',timestamp:'Datum & Zeit',date:'Datum separat',clock:'Zeit separat',voltage:'Batteriespannung',current:'Batteriestrom',power:'Batterieleistung',soc:'Ladezustand / SOC',solar:'Solarleistung',yieldWh:'Tagesertrag',ttg:'Restlaufzeit',consumed:'Entnommene Ah',temperature:'Temperatur',aux:'Zusatzspannung',load:'Laststrom',state:'Ladephase (Code)',error:'Fehlercode',alarm:'Alarm (Bitmaske)'};
 window.onImportPreview = result => {
   currentImport={...result,busy:false};
   const nativeFile=result.map.kind!=null && result.map.device!=null;
@@ -358,6 +360,7 @@ $('saveSettings').onclick=()=>{const settings={capacity:Number($('capacitySettin
 $('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus');
 for(const [id,name] of [['navOverview','overview'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
 dashboard = new window.WattDashboard({native,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
+extras = new window.WattExtras({native,getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
 theme(!native?localStorage.getItem('wattpit-preview-theme')||'dark':'dark',false);
 selectRange('today');poll();renderSettings();
 if(new URLSearchParams(location.search).get('demo')==='1')setDemo(true);

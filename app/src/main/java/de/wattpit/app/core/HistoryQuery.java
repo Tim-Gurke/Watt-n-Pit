@@ -13,7 +13,7 @@ public final class HistoryQuery {
         List<String> args=new ArrayList<>(selection.args);
         args.add(String.valueOf(bucket));
         String field=selection.field;
-        String sql="SELECT MIN(ts) t,MAX(ts) last,device,kind,origin,AVG("+field+") v,MIN("+field+") lo,MAX("+field+") hi,COUNT(*) n "+
+        String sql="SELECT MIN(ts) t,MAX(ts) last,device,kind,origin,AVG("+field+") v,MIN("+field+") lo,MAX("+field+") hi,COUNT(*) n,MAX(period) resolution "+
                 "FROM readings WHERE "+selection.where+" GROUP BY (ts / ?),device,kind,origin ORDER BY t";
         return new HistoryQuery(sql,args);
     }
@@ -40,6 +40,8 @@ public final class HistoryQuery {
             case "soc":field="soc";kind="shunt";break;
             case "voltage":field="voltage";break;
             case "batteryVoltage":field="voltage";kind="shunt";break;
+            case "pvVoltage":field="pvVoltage";kind="solar";break;
+            case "solarTemperature":field="temperature";kind="solar";break;
             case "solarVoltage":field="voltage";kind="solar";break;
             case "current":field="current";break;
             case "batteryCurrent":field="current";kind="shunt";break;
@@ -66,9 +68,9 @@ public final class HistoryQuery {
             else if (metric.equals("consumed")) liveField="ABS(l.consumed)";
             else if (metric.equals("storedEnergy")) liveField="l.soc*l.voltage/100.0";
             else liveField="l."+field;
-            where+=" AND (origin='live' OR NOT EXISTS (SELECT 1 FROM readings l WHERE l.kind=readings.kind "+
-                    "AND (l.origin='live' OR (readings.origin='csv' AND l.origin='archive')) "+
-                    "AND l.ts BETWEEN readings.ts-45000 AND readings.ts+45000 AND ("+liveField+") IS NOT NULL))";
+            where+=" AND (origin='live' OR NOT EXISTS (SELECT 1 FROM readings l WHERE l.kind=readings.kind AND (l.device=readings.device OR readings.origin='csv') "+
+                    "AND (l.origin='live' OR (readings.origin='csv' AND l.origin='archive') OR (readings.origin='archive' AND l.origin='archive' AND l.period<readings.period AND l.period>0)) "+
+                    "AND l.ts BETWEEN readings.ts-MAX(45000,readings.period*500) AND readings.ts+MAX(45000,readings.period*500) AND ("+liveField+") IS NOT NULL))";
         }
         return new Selection(field,where,args);
     }

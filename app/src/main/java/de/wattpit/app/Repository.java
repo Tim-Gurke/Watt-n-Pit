@@ -26,6 +26,10 @@ final class Repository {
     private String event = "";
     private Repository(Context context) { prefs = context.getSharedPreferences("wattpit", Context.MODE_PRIVATE); db = new HistoryDb(context); }
 
+    private JSONObject archive=new JSONObject();
+    synchronized void archiveState(String mac,boolean active,String text,int done,int total){
+        try{archive=new JSONObject().put("mac",mac).put("active",active).put("text",text).put("done",done).put("total",total).put("updated",System.currentTimeMillis());}catch(JSONException ignored){}
+    }
     synchronized JSONArray configs() throws JSONException { return new JSONArray(prefs.getString("devices", "[]")); }
     synchronized void message(String text) { event = text; eventId++; }
 
@@ -111,8 +115,9 @@ final class Repository {
         }
         if (now - statsTime > 30_000) { cachedStats = db.stats(); statsTime = now; }
         return new JSONObject().put("running",running).put("status",status).put("devices",devices).put("found",discovery)
-                .put("readings",readings).put("stats",cachedStats).put("solarDaily",db.daily()).put("event",event).put("eventId",eventId)
+                .put("archive",archive).put("deviceHistory",db.histories()).put("weatherError",prefs.getString("weatherError","")).put("weather",new JSONObject(prefs.getString("weatherCache","{}"))).put("readings",readings).put("stats",cachedStats).put("solarDaily",db.daily()).put("event",event).put("eventId",eventId)
                 .put("settings",new JSONObject().put("theme",prefs.getString("theme","dark"))
+                    .put("palette",prefs.getString("palette","classic")).put("weatherPlace",new JSONObject(prefs.getString("weatherPlace","{}")))
                     .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10)));
     }
     synchronized void invalidateStats() { statsTime = 0; }
@@ -122,7 +127,9 @@ final class Repository {
         int seconds = settings.optInt("sampleSeconds",prefs.getInt("sampleSeconds",10));
         if ((!theme.equals("light") && !theme.equals("dark")) || capacity <= 0 || capacity > 10000 || seconds < 5 || seconds > 60)
             throw new IllegalArgumentException("Bitte gültige Einstellungen eingeben.");
-        prefs.edit().putString("theme",theme).putFloat("capacity",(float)capacity).putInt("sampleSeconds",seconds).apply();
+        String palette=settings.optString("palette",prefs.getString("palette","classic"));
+        if(!Arrays.asList("classic","blue","green","turquoise","orange","neutral").contains(palette))throw new IllegalArgumentException("Unbekanntes Farbdesign.");
+        prefs.edit().putString("palette",palette).putString("theme",theme).putFloat("capacity",(float)capacity).putInt("sampleSeconds",seconds).apply();
     }
     static String safeError(Exception e) {
         if (e instanceof IllegalArgumentException) return e.getMessage();

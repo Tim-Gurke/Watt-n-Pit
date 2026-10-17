@@ -1,6 +1,6 @@
 # Technische Grundlage
 
-Watt’n’Pit ist eine lokale Android-App ohne Internetberechtigung. Eine native Java-Schicht liest Bluetooth, verwaltet Schlüssel im Android Keystore und speichert Messwerte in SQLite. Die vollständig mitgelieferte Oberfläche läuft in einer WebView; sie lädt keine externen Bibliotheken, Schriften oder Ressourcen. Fremde Navigation und Dateizugriff außerhalb der App-Assets sind gesperrt.
+Watt’n’Pit ist eine Android-App mit lokaler Energie-Datenhaltung. Nur die optionale Wetterfunktion nutzt Internet. Eine native Java-Schicht liest Bluetooth, verwaltet Schlüssel im Android Keystore und speichert Messwerte in SQLite. Die vollständig mitgelieferte Oberfläche läuft in einer WebView; sie lädt keine externen Bibliotheken, Schriften oder Ressourcen. Fremde Navigation und Dateizugriff außerhalb der App-Assets sind gesperrt.
 
 ## Geräte und Livewerte
 
@@ -12,22 +12,35 @@ Es wird ein SmartSolar und ein SmartShunt eingerichtet. Das Dashboard zeigt nur 
 
 ## Aufzeichnung und Vorrang
 
-Live-Datensätze tragen `origin=live`. Für einen späteren direkten Geräteimport ist `origin=archive` in der Abfrage vorbereitet. Eigene Live-Aufzeichnungen haben Vorrang vor Gerätearchiven, Gerätearchive vor CSV-Werten derselben Messgröße im 45-Sekunden-Fenster. Der Bluetooth-Abruf selbst ist weiterhin eine spätere Ausbaustufe. Generische CSV-Dateien tragen `origin=csv`; native Watt’n’Pit-Backups behalten ihre ursprüngliche Datenquelle. Die Datenbank ignoriert doppelte Kombinationen aus Zeitstempel, Gerät und Quelle.
+Live-Datensätze tragen `origin=live`, Gerätearchive `origin=archive`, generische CSV-Daten `origin=csv`. Native Backups behalten ihre Quelle und die Archivauflösung. Die Datenbank ignoriert doppelte Kombinationen aus Zeitstempel, Gerät und Quelle. Bei Archivblöcken werden ergänzende Felder zusammengeführt; feinere vorhandene Werte werden nicht durch gröbere ersetzt.
 
-Die Standardansicht `Alle Daten` bevorzugt eigene Aufzeichnungen **pro Messgröße und Gerätetyp**. Ein importierter Punkt wird in der Standardansicht unterdrückt, wenn ein eigener gültiger Punkt derselben Messgröße innerhalb von 45 Sekunden existiert. Die Importdatei bleibt vollständig gespeichert, explizit auswählbar und exportierbar. Fehlt etwa SOC in einer eigenen Aufzeichnung, wird ein gültiger importierter SOC nicht von einem vorhandenen Spannungswert verdrängt.
+Vor dem Speichern gleicht `ArchiveMerge` jede Messgröße mit dem gesamten lokalen Bestand ab. Livewerte desselben Geräts innerhalb maximal 45 Sekunden (bei kurzen Archivintervallen entsprechend enger) haben Vorrang. CSV ohne bekannte Auflösung gilt nur bei praktisch gleichem Zeitpunkt und Zahlenwert als bereits vorhanden. Generische CSV-Gerätekennungen werden dem eingerichteten Gerätetyp zugeordnet; es ist weiterhin nur ein Gerät je Typ konfigurierbar. Fehlende Kanäle bleiben ergänzbar. Identische Zahlen an verschiedenen Zeitpunkten bleiben eigenständige Messpunkte.
+
+`Alle Daten` bevorzugt Aufzeichnungen pro Messgröße und Gerät sowie feinere Archivpunkte in überlappenden Bereichen; Gerätearchive haben Vorrang vor CSV. Die Rohquellen sind getrennt auswählbar und exportierbar. `period` bewahrt die Archivauflösung in Sekunden und steuert die Darstellung von Datenlücken.
 
 Lange Fenster werden in bis zu etwa 600 Zeitabschnitte je Quelle/Gerät gebündelt. Die Linie zeigt den Mittelwert; Minimum/Maximum bleiben als Schattierung sichtbar. Nach dem Zoomen werden die Daten mit höherer Zeitauflösung neu abgefragt. Empfangslücken werden nicht durch pauschale Nullwerte ersetzt.
 
-## Gespeicherte Trends: spätere Ausbaustufe
+## Gespeicherte Trends ab 0.1.3
 
-Instant Readout enthält keine archivierten Zeitreihen. VictronConnect kann gespeicherte Trends aus kompatiblen Geräten lesen. Der dokumentierte Drittanbieter-GATT-Dienst des SmartShunts ist ebenfalls ein Livewertdienst und kein dokumentierter SmartSolar-Trend-Download.
+`ArchiveService` ist ein zeitlich begrenzter Foreground-Service. Er verbindet eingerichtete Geräte seriell über Android GATT und die UUID-Familie `306b0001…0004`. Android verwaltet die Bluetooth-PIN/Kopplung; der Sofortanzeige-Schlüssel ist dafür kein Ersatz. Operationen sind serialisiert, begrenzt und abbrechbar. Eine aktive VictronConnect-Verbindung muss vorher getrennt werden. Nach einem Verbindungsabbruch bleiben bestätigte Blöcke erhalten; erneuter App-Start oder manueller Abruf setzt den Abgleich fort.
 
-- [Gespeicherte Trends im VictronConnect-Handbuch](https://www.victronenergy.de/media/pg/VictronConnect_app/de/stored-trends---instant-readout.html)
-- [Offizieller Drittanbieter-GATT-Dienst](https://communityarchive.victronenergy.com/questions/93919/victron-bluetooth-ble-protocol-publication.html)
+`ArchiveCodec` liest definite CBOR-Registerantworten samt fragmentierten Notifications. Statusantworten werden nicht als Daten interpretiert. EC5D meldet die Kanalregister, EC4A–EC59 Auflösungen und Zeitreferenzen; EC5B liefert Trendblöcke mit Kanal, Gerätezeit, Anzahl und Intervall, neueste Werte zuerst. Bekannte Feldtypen definieren Breite, Vorzeichen, Skalierung und Fehlwert. Unbekannte Kanäle werden übersprungen. Zusatzeingänge unbekannter Betriebsart bleiben Rohwerte. PV-Eingangsspannung ist getrennt von der batteriebezogenen Reglerspannung.
 
-Ein direkter automatischer Archivabruf ist deshalb kein funktionierendes Feature dieser Version. Der nächste Entwicklungsschritt braucht eine dokumentierte oder anhand echter Kommunikation verifizierte Abrufsequenz samt Zeitstempeln, Datenlayout und Firmware-Kompatibilität. Ohne diese Grundlage werden keine vermuteten GATT-Schreibbefehle an Ladegeräte gesendet.
+Die Zeitzuordnung verwendet bestätigte gespeicherte EC5F/EC63-Anker innerhalb der EC64-Neustartgrenzen. Vorgeschlagene, aber nicht bestätigte Uhrzeiten werden nicht übernommen. Ohne sicheren Anker wird der betroffene Wert nicht importiert. EC5C (Archiv löschen), Gerätezeit- und Ladekonfigurationsschreibzugriffe sind nicht freigegeben. Schreibzugriffe betreffen nur die Transportinitialisierung, Session-Keepalive und die allowlist-geprüften Abfragen EC5B, EC63 und EC64.
 
-Ziel des späteren Backfill-Ablaufs: Bei Empfang Datenabdeckung prüfen, nur fehlende Bereiche anfordern, eigene Werte unverändert priorisieren, Gerätedaten mit eigener Quellenkennung einfügen, geprüften Fortschritt je Gerät speichern und nach Verbindungsabbruch fortsetzen. Fehlende Daten der Vergangenheit sind vom fehlenden aktuellen Bluetooth-Empfang zu unterscheiden.
+SQLite-Version 3 ergänzt Auflösung, PV-Spannung, Zusatz-Rohwert, Geräte-Tagesdaten, Shunt-Gesamtwerte und `archive_coverage`. Vollständig gelesene Bereiche werden je Gerät, Kanalregister und Auflösung zusammengeführt. Erst nach bestätigter Speicherung eines Blocks wird seine Abdeckung gespeichert. Neue bzw. noch veränderliche Randwerte werden erneut geprüft; bereits abgedeckte ältere Bereiche können ohne erneuten Download übersprungen werden. Import und Aufzeichnung bleiben eigenständige Quellen. Keine privaten Messdaten oder Kopplungsdaten liegen im Repository oder APK.
+
+Die Implementierung ist an einer privaten Aufzeichnung von klassischem SmartSolar und SmartShunt gegengeprüft. Aktives GATT, Pairing und die automatische Importfolge sind noch am Gerät zu testen. Andere Modellfamilien sind nicht allein wegen der Marke kompatibel.
+
+- [Victron: gespeicherte Trends](https://www.victronenergy.de/media/pg/VictronConnect_app/de/stored-trends---instant-readout.html)
+- [Offizielles MPPT-Registerprotokoll für Tagesdaten](https://www.victronenergy.com/upload/documents/BlueSolar-HEX-protocol.pdf)
+- [CBOR RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)
+
+## Wetter und Farbdesigns
+
+`WeatherClient` ist der einzige Netzwerkpfad. Nur feste HTTPS-Hosts von Open-Meteo sind erlaubt, Redirects sind gesperrt, Antworten und Wartezeiten begrenzt. Ein gewählter Ort aktiviert die Funktion; sie ist standardmäßig aus. Suchtext wird an die Geocoding-API gesendet, Koordinaten an die Forecast-API. Abgerufen werden ausschließlich täglicher Wettercode und Sonnenscheindauer für 14 Tage (`timezone=auto`). Sekunden werden in Sonnenstunden umgerechnet; fehlende Daten bleiben leer. Der Cache wird bei App-Start nach sechs Stunden erneuert und bei Netzfehlern weiter angezeigt. Ortswechsel und Ausschalten verwerfen den alten Ortscache; veraltete Antworten überschreiben keine neue Auswahl. Die WebView bleibt vollständig lokal und darf selbst keine Netzverbindungen öffnen.
+
+`extras.css` definiert sechs vollständige Paletten in hell und dunkel. Automatische Kachelfarben folgen der Palette und werden auf ausreichenden Textkontrast angepasst. Gespeicherte individuelle Farben und Positionen bleiben bestehen.
 
 ## Bauen und signieren
 
@@ -44,4 +57,4 @@ Die Veröffentlichung verwendet einen temporären `publish/<Version>`-Branch mit
 
 Verlaufskacheln verwenden die vorhandenen SQLite-Messwerte. `HistoryQuery.summary` berechnet Durchschnitt, Minimum, Maximum und Anzahl direkt aus den ausgewählten Originalpunkten; `latest` liefert den tatsächlich zuletzt gespeicherten Wert. Die Kurve wird separat in bis zu etwa 600 Abschnitte gebündelt. Zeitfensterabfragen verwenden dieselbe Quellenpriorität wie die große Verlaufsansicht. Fehlende Werte bleiben null, Empfangslücken bleiben in der Kurve sichtbar. Ladezustand × Kapazität liefert rechnerische Ah; zusätzlich mit momentaner Spannung multipliziert ergibt sich eine gekennzeichnete Wh-Näherung. Tageserträge sind Zählerstände und werden nicht über mehrere Tage summiert.
 
-Die Struktur aus Zeitstempel, Gerät, Gerätetyp und Quelle kann später zusätzlich ausgelesene Gerätearchive aufnehmen. Ein Archivzugriff, seine Decodierung und das Fortsetzen unterbrochener Downloads sind keine Bestandteile von 0.1.2.
+Die Dashboard-Konfiguration bleibt mit 0.1.2 kompatibel; zusätzliche Messgrößen verändern die gespeicherte Anordnung nicht.

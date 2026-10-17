@@ -33,4 +33,9 @@ public class CsvCodecTest {
     }
     @Test(expected=IllegalArgumentException.class) public void rejectsMalformedQuotes() { CsvCodec.parse("timestamp;voltage\n\"broken;13.2"); }
     @Test(expected=IllegalArgumentException.class) public void rejectsInvalidDateInsteadOfSilentlyShiftingIt() { CsvCodec.parseTime("31.02.2026 12:00",ZoneId.of("UTC")); }
+    @Test public void archiveBackupRetainsResolutionAndPvVoltage(){
+        Reading original=new Reading();original.timestamp=1700000000000L;original.device="TEST";original.kind="solar";original.origin="archive";original.period=1800;original.pvVoltage=18.9;original.auxRaw=123.0;
+        CsvCodec.Table table=CsvCodec.parse(CsvCodec.EXPORT_HEADER+"\n"+CsvCodec.exportRow(original));Reading restored=CsvCodec.reading(table,table.rows.get(0),CsvCodec.guess(table.headers),"solar",ZoneId.of("UTC"));
+        assertEquals("archive",restored.origin);assertEquals(1800,restored.period);assertEquals(original.pvVoltage,restored.pvVoltage);assertEquals(original.auxRaw,restored.auxRaw);
+    }
 }

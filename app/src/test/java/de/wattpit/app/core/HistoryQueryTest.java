@@ -14,6 +14,7 @@ public class HistoryQueryTest {
                 "(100000,'csv:shunt','shunt','csv',12.8,-3.0,-38.4,72.0,NULL,NULL),"+
                 "(100000,'csv:solar','solar','csv',13.3,5.0,66.5,NULL,80.0,600.0),"+
                 "(400000,'csv:shunt','shunt','csv',12.7,-2.2,-27.94,71.0,NULL,NULL)");
+        db.createStatement().execute("ALTER TABLE readings ADD COLUMN period INTEGER NOT NULL DEFAULT 0");
     }
     @After public void close() throws Exception { db.close(); }
     private List<Double> values(String metric,String source) throws Exception {
@@ -38,7 +39,7 @@ public class HistoryQueryTest {
         assertEquals(Collections.singletonList(13.2),values("voltage","live"));
     }
     @Test public void aFutureDeviceArchiveHasPriorityOverCsvButRecordingsStillWin() throws Exception {
-        db.createStatement().execute("INSERT INTO readings VALUES (100000,'shunt','shunt','archive',13.0,-2.1,-27.3,NULL,NULL,NULL),"+
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,voltage,current,power,soc,solar,yieldWh) VALUES (100000,'shunt','shunt','archive',13.0,-2.1,-27.3,NULL,NULL,NULL),"+
                 "(400000,'shunt','shunt','archive',12.9,-2.3,-29.67,NULL,NULL,NULL)");
         List<Double> merged=values("voltage","all");
         assertTrue(merged.contains(13.2));assertTrue(merged.contains(12.9));
@@ -63,5 +64,10 @@ public class HistoryQueryTest {
         assertTrue(values("storedEnergy","all").contains(6.6));
         assertEquals(Collections.singletonList(23.6),values("consumed","all"));
         assertEquals(Collections.singletonList(80.0),values("solar","all"));
+    }
+    @Test public void finerArchivesWinWithoutSuppressingAnotherDevice() throws Exception {
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,voltage,period) VALUES (200000,'A','shunt','archive',12.5,1800),(200100,'A','shunt','archive',12.8,30),(200000,'B','shunt','archive',13.5,1800)");
+        List<Double> merged=values("batteryVoltage","all");assertTrue(merged.contains(12.8));assertFalse(merged.contains(12.5));assertTrue(merged.contains(13.5));
+        assertTrue(values("batteryVoltage","archive").contains(12.65));
     }
 }
