@@ -11,7 +11,7 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><div><div class="wordmark">Watt<span class="wordmark-n">’n’</span><span>Pit</span><small>0.1.5</small></div><div class="brandline">DEIN ENERGIE-COCKPIT</div></div></div>
+  <div class="brand"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><div><div class="wordmark">Watt<span class="wordmark-n">’n’</span><span>Pit</span><small>0.1.6</small></div><div class="brandline">DEIN ENERGIE-COCKPIT</div></div></div>
   <button class="iconbutton" id="themeToggle" aria-label="Farbschema wechseln"></button>
 </header>
 <div id="demoBar" class="demo-bar" hidden><span>DEMO · Beispieldaten</span><button id="exitDemo">Demo verlassen</button></div>
@@ -57,7 +57,7 @@
   <article class="card settings-card"><h2>Akku & Aufzeichnung</h2><label class="setting-row"><div><strong>Batteriekapazität</strong><p class="muted">Für die Ah-Anzeige. Der Ladezustand kommt vom Shunt.</p></div><div class="unit-input"><input id="capacitySetting" type="number" min="1" max="10000" step="1" aria-label="Batteriekapazität"><span>Ah</span></div></label><label class="setting-row"><div><strong>Speicherintervall</strong><p class="muted">Liveanzeige aktualisiert sich unabhängig davon.</p></div><select id="sampleSetting"><option value="5">5 Sekunden</option><option value="10">10 Sekunden</option><option value="30">30 Sekunden</option><option value="60">1 Minute</option></select></label><button class="secondary" id="saveSettings">Einstellungen speichern</button></article>
   <article class="card settings-card"><div class="section-heading"><div><h2>Deine Solaranlage</h2><p id="equipmentTotal" class="muted"></p></div><button id="editEquipment" class="textbutton">Bearbeiten</button></div><div id="equipmentGroups"></div><p class="muted equipment-disclaimer">Hier beschreibst du deine Module und Regler. Die Angaben ändern keine Geräteparameter. Livewerte kommen weiterhin vom jeweiligen Messgerät.</p></article>
   <article class="card settings-card"><h2>Lokal. Ohne Konto.</h2><p class="muted">Watt’n’Pit empfängt deine Geräte direkt. Messwerte und Geräteschlüssel bleiben auf diesem Telefon. Kein Konto, keine Werbung. Nur die optionale Ortssuche und Wettervorschau nutzen Internet: Suchtext bzw. Ortskoordinaten gehen an Open-Meteo. Energiedaten und Geräteschlüssel werden nicht übertragen.</p><div class="row"><button class="quiet" id="settingsImport">CSV importieren</button><button class="quiet" id="settingsExport">CSV exportieren</button></div></article>
-  <div class="about"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><strong>Watt’n’Pit 0.1.5</strong><p>Dein Energie-Cockpit.</p><button class="textbutton" id="settingsDemo">Demo ansehen</button></div>
+  <div class="about"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><strong>Watt’n’Pit 0.1.6</strong><p>Dein Energie-Cockpit.</p><button class="textbutton" id="settingsDemo">Demo ansehen</button></div>
 </section>
 </main>
 <nav class="bottom-nav" aria-label="Hauptnavigation"><button data-page="overview" class="active"><span id="navOverview"></span>Übersicht</button><button data-page="history"><span id="navHistory"></span>Verlauf</button><button data-page="devices"><span id="navDevices"></span>Geräte</button><button data-page="settings"><span id="navSettings"></span>Einstellungen</button></nav>

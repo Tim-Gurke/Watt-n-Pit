@@ -4,7 +4,7 @@
 
 [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · [Einrichtung](#einrichtung) · [CSV-Import](docs/CSV-IMPORT.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
-## Version 0.1.5
+## Version 0.1.6
 
 - SmartSolar 75/15 und SmartShunt 300 A gleichzeitig über Bluetooth-Sofortanzeige.
 - Automatischer Gerätearchiv-Import beim App-Start, je Gerät nacheinander; Fortschritt und Abbruch unter Geräte. Android-Kopplung wird vor dem GATT-Aufbau geprüft; vorhandene Kopplungen benötigen keine neue PIN-Abfrage.
@@ -15,6 +15,7 @@
 - Sechs fertige Farbdesigns: Klassisch, Blau, Grün, Türkis, Orange und Neutral, jeweils hell und dunkel.
 - Optionale 14-Tage-Wetterzeile: pro Tag ein Symbol und Sonnenstunden; manuelle Ortswahl ohne GPS.
 - Luftige Standardübersicht mit sieben Kacheln; 24 Mess- und Zusatzwerte stehen optional bereit.
+- Optionale automatische Skala je Verlaufskachel: bisherige Messwerte im gewählten Zeitraum bestimmen die Grenzen. Kleine Solarleistungen, Spannungsänderungen und negative Batteriebilanzen bleiben erkennbar.
 - Kacheln hinzufügen, antippen und anpassen, frei verschieben, skalieren und überlappen; getrennte Anordnungen für schmale und breite Ansichten.
 - Zahlenwert, Rundinstrument oder kleiner Verlauf mit individuell gespeicherten Einheiten, Farben, Skalen, Schriftgrößen, Hintergrund und Deckkraft.
 - Restlaufzeit wahlweise in Stunden, Tagen, Minuten oder Sekunden; W/kW, Wh/kWh und weitere passende Einheiten.
@@ -72,7 +73,7 @@ Positiver Batteriestrom bedeutet Laden, negativer Batteriestrom Entladen. Restla
 
 ## Stand und offene Aufgaben
 
-0.1.5 ist eine Testversion. Der Java-Archivdecoder wurde mit einer privaten realen Bluetooth-Aufzeichnung gegen die unabhängige Offline-Auswertung abgeglichen (28.079 Einträge einschließlich fehlender Werte). Protokoll-, SQL-Abgleich- und CSV-Tests, Android-Lint und APK-Build sind automatisiert geprüft. **Der erste Gerätetest mit 0.1.3 zeigte einen fehlgeschlagenen Archivaufbau trotz funktionierender Sofortanzeige. 0.1.5 ergänzt die im Mitschnitt bestätigten Sitzungskontexte 0, 1 und 3 samt Antwortprüfung, frühzeitige Android-Kopplung und die MTU-Aushandlung. Der korrigierte Ablauf muss am realen Gerät erneut getestet werden.**
+Der Archivimport beider Geräte und die Anzeige im Verlauf wurden mit 0.1.5 an einer realen SmartSolar-/SmartShunt-Anlage erfolgreich bestätigt. Der Java-Decoder wurde zusätzlich mit einer privaten Bluetooth-Aufzeichnung gegen die unabhängige Offline-Auswertung abgeglichen (28.079 Einträge einschließlich fehlender Werte). Protokoll-, SQL-Abgleich- und CSV-Tests, Android-Lint und APK-Build sind automatisiert geprüft. 0.1.6 ergänzt die optionale automatische Skala für numerische Verlaufskacheln; sie wird mit Berechnungs- und Browserprüfungen abgesichert.
 
 Beim App-Start bzw. nach mehr als 30 Sekunden im Hintergrund beginnt ein kurzer Importlauf für die eingerichteten Geräte. Bluetooth muss eingeschaltet und VictronConnect getrennt sein. Android kann beim ersten Mal die sechsstellige Geräte-PIN anfordern. Die 32-stelligen Sofortanzeige-Schlüssel und diese PIN sind verschieden. Bereits gelesene Bereiche werden gespeichert; erneutes Starten ergänzt Lücken und erzeugt keine doppelten Archivpunkte. Abbrüche behalten alle schon abgeschlossenen Blöcke. Außerhalb der Reichweite endet der Lauf mit einem Hinweis; ein neuer Versuch erfolgt beim nächsten App-Start oder über „Gerätearchiv ergänzen“.
 
@@ -90,7 +91,7 @@ Voraussetzungen: Java 17 und Android SDK 35.
 
 Die APK liegt unter `app/build/outputs/apk/debug/app-debug.apk`. Die öffentlich bereitgestellte Release-APK wird getrennt mit einem dauerhaften privaten Signaturschlüssel signiert. Die Signatur bleibt für spätere Updates erhalten.
 
-Die Einheiten- und Konfigurationstests laufen mit `node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs`. Zusätzliche UI-Prüfungen: `node tools/extras-smoke.cjs` und `node tools/equipment-smoke.cjs` (Playwright).
+Die Einheiten- und Konfigurationstests laufen mit `node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs`. Zusätzliche Skalenprüfung: `node tools/dashboard-scale-smoke.cjs`. Weitere UI-Prüfungen: `node tools/extras-smoke.cjs` und `node tools/equipment-smoke.cjs` (Playwright).
 
 Für die Oberflächenprüfung: `node tools/ui-smoke.cjs` (Playwright erforderlich; startet einen lokalen Asset-Server selbst). Die App selbst nutzt keine npm-Abhängigkeiten.
 

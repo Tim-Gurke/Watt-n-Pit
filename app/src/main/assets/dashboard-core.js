@@ -70,7 +70,7 @@
   function tile(metric,id) {
     const m=CATALOG[metric] || CATALOG.soc;
     return {id:id || 'tile-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),metric:CATALOG[metric]?metric:'soc',title:'',unit:m.units[0],type:metric==='soc'?'gauge':'number',
-      digits:m.digits,fontSize:32,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,min:m.min,max:m.max,background:'auto',opacity:100,
+      digits:m.digits,fontSize:32,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,min:m.min,max:m.max,scaleMode:'fixed',background:'auto',opacity:100,
       period:{mode:'live',amount:6,unit:'h',aggregate:'avg',resetAt:Date.now(),from:0,to:0},layouts:{compact:position({}),wide:position({},true)}};
   }
   function normalizeTile(input,seen) {
@@ -85,6 +85,7 @@
     result.multicolor=!!input.multicolor;result.invert=!!input.invert;result.adaptiveColor=input.adaptiveColor!==false;
     result.min=numeric(input.min,m.min,-1e9,1e9);result.max=numeric(input.max,m.max,-1e9,1e9);
     if(result.max<=result.min){result.min=m.min;result.max=m.max;}
+    result.scaleMode=input.scaleMode==='auto'?'auto':'fixed';
     result.opacity=numeric(input.opacity,100,0,100);result.background=input.background==='auto'?'auto':color(input.background,'auto');
     const p=input.period || {};
     result.period={mode:!m.liveOnly && ['live','last','today','reset','custom'].includes(p.mode)?p.mode:'live',amount:numeric(p.amount,6,1,10000),unit:['min','h','d'].includes(p.unit)?p.unit:'h',
@@ -140,5 +141,28 @@
     if(t.metric==='alarm')return Number(value)===0?'Kein Alarm':'0x'+Number(value).toString(16).toUpperCase();
     return Number(value).toLocaleString('de-DE',{minimumFractionDigits:t.digits,maximumFractionDigits:t.digits});
   }
-  return {CATALOG,PHASES,finite,clamp,color,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,format};
+  /** Uses actual extrema, including peaks hidden by chart buckets; manual bounds remain stored. */
+  function chartRange(t,points=[],capacity=100,summary={}) {
+    const fixed={min:convert(t.min,t.unit,t.metric),max:convert(t.max,t.unit,t.metric),auto:false};
+    if(t.scaleMode!=='auto')return fixed;
+    const values=[summary.min,summary.max,...points.flatMap(p=>[p.min,p.max,p.v])].filter(finite).map(v=>historicalValue(t.metric,v,capacity));
+    if(!values.length)return fixed;
+    const dataLow=Math.min(...values),dataHigh=Math.max(...values);
+    const upper=v=>{const step=10**(Math.floor(Math.log10(v))-1);return Number((Math.ceil(v/step-1e-9)*step).toPrecision(12));};
+    let low,high;
+    if(['solar','yieldWh','solarCurrent','load','remaining','remainingAh','remainingWh','consumed','power','current'].includes(t.metric)){
+      low=dataLow<0?-upper(-dataLow*1.1):0;high=dataHigh>0?upper(dataHigh*1.1):dataLow<0?0:1;
+    }else{
+      const span=dataHigh-dataLow||Math.max(Math.abs(dataHigh)*.02,.1),step=10**(Math.floor(Math.log10(span))-1),pad=span*.1;
+      low=Number((Math.floor((dataLow-pad)/step+1e-9)*step).toPrecision(12));high=Number((Math.ceil((dataHigh+pad)/step-1e-9)*step).toPrecision(12));
+      if(dataLow>=0&&CATALOG[t.metric].min>=0)low=Math.max(0,low);
+      if(t.metric==='soc'&&dataLow>=0&&dataHigh<=100)high=Math.min(100,high);
+    }
+    return {min:convert(low,t.unit,t.metric),max:convert(high,t.unit,t.metric),auto:true};
+  }
+  function axisLabel(value,span){
+    const digits=Math.max(0,Math.min(8,1-Math.floor(Math.log10(Math.abs(span)||1))));
+    return Number(value).toLocaleString('de-DE',{maximumFractionDigits:digits});
+  }
+  return {CATALOG,PHASES,finite,clamp,color,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,format,chartRange,axisLabel};
 });
