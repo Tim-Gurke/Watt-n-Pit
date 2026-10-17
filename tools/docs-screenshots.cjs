@@ -38,5 +38,5 @@ const path=require('node:path');
  const comparison=page.locator('.cockpit-tile').last();await comparison.click();await page.locator('summary').filter({hasText:/^Größe & Ebene$/}).click();await page.locator('#tileWidth').fill('12');await page.locator('#saveTile').click();
  assert.equal(await comparison.locator('.tile-sparkline').count(),1);await comparison.screenshot({path:path.join(output,'energy-tile.png'),animations:'disabled'});console.log('energy-tile.png');
  assert.equal(errors.length,0,errors.join('\n'));await browser.close();
- console.log('Documentation screenshots generated from 1.1.0 assets with fictional values, location and device identifiers.');
+ console.log('Documentation screenshots generated from 1.1.1 assets with fictional values, location and device identifiers.');
 })().catch(error=>{console.error(error);process.exit(1);});

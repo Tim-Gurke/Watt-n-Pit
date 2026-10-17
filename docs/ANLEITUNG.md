@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.1.0** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.1.0/Watt-n-Pit-v1.1.0.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.1.1** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.1.1/Watt-n-Pit-v1.1.1.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -39,9 +39,11 @@ Falls nichts ankommt: Bluetooth und Reichweite prüfen, VictronConnect vom Gerä
 
 *Sieben Messkacheln und die kompakte Wetterkachel bilden den Standard. Werte, Farben, Größe und Position lassen sich anpassen.*
 
-Auf schmalen Bildschirmen stehen Ladezustand und Solarleistung oben. Darunter folgen negative Batterieentnahme und berechneter Solarertrag; die Dreierreihe zeigt Batteriespannung, Restlaufzeit in Stunden und Batteriebilanz. Das Wetter liegt flach über die gesamte Breite. Anschließend folgen Verlauf und Start/Pause.
+Auf schmalen Bildschirmen stehen der schmale Ladezustand und die breitere Solarleistung oben. Darunter folgen „Ertrag − Entnahme“ und berechneter Solarertrag nebeneinander. Batteriespannung und die mit „Aktuell“ beschriftete Batteriebilanz stehen links übereinander; rechts liegt die größere negative Batterieentnahme. Das Wetter liegt flach über die gesamte Breite. Anschließend folgen Verlauf und Start/Pause. Der Appkopf und „Energie im Blick“ benötigen weniger Höhe.
 
-Solarleistung und berechneter Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. Die Batterieentnahme bezieht sich auf **heute ab Mitternacht**. Die drei Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
+Die Restlaufzeit kann über **+ Kachel → Akku → Restlaufzeit** ergänzt werden; Stunden sind weiterhin die voreingestellte Einheit.
+
+Solarleistung und berechneter Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. „Ertrag − Entnahme“ und Batterieentnahme beziehen sich auf **heute ab Mitternacht**. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
 
 **+ Kachel** öffnet die Auswahl. Neue Kacheln erscheinen am Ende des Rasters. Eine Messkachel antippen, um Beschriftung, Einheit, Darstellung und Zeitraum zu ändern. Als Darstellung stehen je nach Messgröße Zahl, Rundinstrument oder Verlauf zur Wahl.
 
@@ -121,7 +123,7 @@ Die Wetterkachel liegt im selben Raster wie die Messkacheln. **Anordnen** macht 
 
 *Einstellungen → Deine Solaranlage → Bearbeiten: Modulgruppen beschreiben und ihre Messwertquelle zuordnen. Die gezeigten Angaben sind frei erfunden.*
 
-Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.1.0 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
+Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.1.1 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
 
 ## 8. Einstellungen und Messdaten sichern
 

@@ -114,10 +114,10 @@
     return result;
   }
   function defaults() {
-    const ids=['soc','solar','dischargeEnergy','solarEnergy','voltage','remaining','power','weather'];
+    const ids=['soc','solar','energyBalance','solarEnergy','voltage','power','weather','dischargeEnergy'];
     const layouts={
-      compact:[[0,0,6,6],[6,0,6,5],[0,6,6,5],[6,5,6,6],[0,11,4,4],[4,11,4,4],[8,11,4,4],[0,15,12,4]],
-      wide:[[0,0,4,6],[4,3,4,3],[0,9,4,6],[8,0,4,3],[0,6,6,3],[4,0,4,3],[8,3,4,3],[0,15,12,4]]
+      compact:[[0,0,4,6],[4,0,8,6],[0,6,6,6],[6,6,6,6],[0,12,4,3],[0,15,4,3],[0,18,12,4],[4,12,8,6]],
+      wide:[[0,0,4,6],[4,3,4,3],[0,9,4,6],[8,0,4,3],[0,6,6,3],[8,3,4,3],[0,15,12,4],[0,19,4,6]]
     };
     return {version:1,dischargeSignVersion:1,blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
       const t=tile(id,'default-'+id);
@@ -125,6 +125,7 @@
       if(id==='soc'){t.fontSize=20;t.scaleMode='auto';}
       if(id==='solar'){t.type='chart';t.scaleMode='auto';t.valueMode='live';t.period.mode='sunrise';}
       if(id==='solarEnergy')t.period.mode='sunrise';
+      if(id==='power')t.title='Aktuell';
       return t;
     })};
   }
