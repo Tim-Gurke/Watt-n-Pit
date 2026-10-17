@@ -27,7 +27,7 @@ let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastM
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let currentImport = null, lastHistoryRevision=-1;
-let dashboard = null, extras = null, equipment = null;
+let dashboard = null, extras = null, equipment = null, configuration = null;
 
 function toast(message) {
   if (!message || (message === previousToast && Date.now()-previousToastTime < 4000)) return;
@@ -389,6 +389,11 @@ for(const [id,name] of [['navOverview','overview'],['navHistory','history'],['na
 dashboard = new window.WattDashboard({native,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
 extras = new window.WattExtras({native,getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
+configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,dashboard,equipment,openModal,closeModal,toast,applied:backup=>{
+  settingsDirty=false;poll();
+  dashboard.config=window.WattDashboardCore.normalize(backup.dashboard);dashboard.saved=JSON.parse(JSON.stringify(dashboard.config));dashboard.cache.clear();
+  theme(snapshot.settings.theme,false);extras.palette(snapshot.settings.palette||'classic',false);equipment.key='';equipment.render();dashboard.render();renderSettings();loadMini(true);
+}});
 theme(!native?localStorage.getItem('wattpit-preview-theme')||'dark':'dark',false);
 selectRange('today');poll();renderSettings();
 if(new URLSearchParams(location.search).get('demo')==='1')setDemo(true);

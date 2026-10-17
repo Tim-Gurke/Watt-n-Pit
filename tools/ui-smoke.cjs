@@ -131,7 +131,7 @@ const http = require('node:http');
   });
   await local.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
   assert.equal(await local.locator('[data-tile="default-soc"] .tile-number').textContent(),'76,4','local asset page cannot access the bridge');
-  assert.equal(await local.locator('[data-tile="default-current"] .tile-number').textContent(),'0,00','zero is displayed as missing');
+  assert.equal(await local.locator('[data-tile="default-power"] .tile-number').textContent(),'0','zero is displayed as missing');
   await local.evaluate(()=>window.mock.readings[0].t=Date.now()-46000);await local.waitForTimeout(2200);
   assert.equal(await local.locator('[data-tile="default-soc"] .tile-number').textContent(),'—','stale device readings remain live');
   await local.evaluate(()=>{window.mock.readings[0].t=Date.now();window.mock.running=false;});await local.waitForTimeout(2200);

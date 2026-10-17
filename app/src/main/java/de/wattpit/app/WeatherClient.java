@@ -39,10 +39,13 @@ final class WeatherClient {
     }
     static void place(Repository repository,JSONObject input) throws Exception {
         if(input.optBoolean("off")){repository.prefs.edit().remove("weatherPlace").remove("weatherCache").remove("weatherError").apply();return;}
+        JSONObject p=checkedPlace(input);
+        repository.prefs.edit().putString("weatherPlace",p.toString()).remove("weatherCache").remove("weatherError").apply();refresh(repository,true);
+    }
+    static JSONObject checkedPlace(JSONObject input)throws Exception{
         double lat=input.getDouble("latitude"),lon=input.getDouble("longitude");String name=input.getString("name").trim();
         if(!Double.isFinite(lat)||!Double.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180||name.isEmpty()||name.length()>180)throw new IllegalArgumentException("Ungültiger Wetterort.");
-        JSONObject p=new JSONObject().put("latitude",lat).put("longitude",lon).put("name",name);
-        repository.prefs.edit().putString("weatherPlace",p.toString()).remove("weatherCache").remove("weatherError").apply();refresh(repository,true);
+        return new JSONObject().put("latitude",lat).put("longitude",lon).put("name",name);
     }
     static void refresh(Repository repository,boolean force){
         String place=repository.prefs.getString("weatherPlace","");if(place.isEmpty()||!BUSY.compareAndSet(false,true))return;

@@ -14,7 +14,7 @@
     })};
   }
   function totals(input){return (input?.groups||[]).reduce((t,g)=>({watts:t.watts+g.count*g.watts,modules:t.modules+g.count}),{watts:0,modules:0});}
-  const core={normalize,totals};if(typeof module==='object'&&module.exports)module.exports=core;
+  const core={normalize,totals};root.WattEquipmentCore=core;if(typeof module==='object'&&module.exports)module.exports=core;
   if(typeof window==='undefined')return;
   const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const num=n=>Number(n).toLocaleString('de-DE',{maximumFractionDigits:1});

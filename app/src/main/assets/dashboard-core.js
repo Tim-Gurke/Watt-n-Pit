@@ -83,7 +83,7 @@
   function tile(metric,id) {
     const m=CATALOG[metric] || CATALOG.soc;
     return {id:id || 'tile-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),metric:CATALOG[metric]?metric:'soc',title:'',unit:m.units[0],type:m.energy?'chart':metric==='soc'?'gauge':'number',
-      digits:m.digits,fontSize:32,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,min:m.min,max:m.max,scaleMode:m.energy?'auto':'fixed',valueMode:'history',background:'auto',opacity:100,
+      digits:m.digits,fontSize:32,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,reverseSign:false,min:m.min,max:m.max,scaleMode:m.energy?'auto':'fixed',valueMode:'history',background:'auto',opacity:100,
       period:{mode:m.energy?'today':'live',amount:6,unit:'h',aggregate:m.energy?'last':'avg',resetAt:Date.now(),from:0,to:0},layouts:{compact:position({h:m.energy?6:3}),wide:position({h:m.energy?6:3},true)}};
   }
   function normalizeTile(input,seen) {
@@ -100,9 +100,10 @@
     if(result.max<=result.min){result.min=m.min;result.max=m.max;}
     result.scaleMode=input.scaleMode==='auto'?'auto':'fixed';
     result.valueMode=input.valueMode==='live'?'live':'history';
+    result.reverseSign=!!m.energy&&input.reverseSign===true;
     result.opacity=numeric(input.opacity,100,0,100);result.background=input.background==='auto'?'auto':color(input.background,'auto');
     const p=input.period || {};
-    result.period={mode:!m.liveOnly && ['live','last','today','reset','custom'].includes(p.mode)?p.mode:'live',amount:numeric(p.amount,6,1,10000),unit:['min','h','d'].includes(p.unit)?p.unit:'h',
+    result.period={mode:!m.liveOnly && ['live','last','today','sunrise','reset','custom'].includes(p.mode)?p.mode:'live',amount:numeric(p.amount,6,1,10000),unit:['min','h','d'].includes(p.unit)?p.unit:'h',
       aggregate:['last','avg','min','max'].includes(p.aggregate)?p.aggregate:'avg',resetAt:numeric(p.resetAt,Date.now(),0,9e15),from:numeric(p.from,0,0,9e15),to:numeric(p.to,0,0,9e15)};
     if(m.status)result.period.aggregate='last';
     if(m.energy){result.valueMode='history';result.period.aggregate='last';if(result.period.mode==='live')result.period.mode='today';}
@@ -110,10 +111,15 @@
     return result;
   }
   function defaults() {
-    const ids=['soc','remaining','yieldWh','solar','power','voltage','current'];
-    const compact=[[0,0,6,6],[6,0,6,3],[6,3,6,3],[0,6,6,4],[6,6,6,4],[0,10,6,3],[6,10,6,3]];
-    const wide=[[0,0,4,6],[4,0,4,3],[8,0,4,3],[4,3,4,3],[8,3,4,3],[0,6,6,3],[6,6,6,3]];
-    return {version:1,blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{const t=tile(id,'default-'+id);for(const [profile,list] of [['compact',compact],['wide',wide]]) {const [x,y,w,h]=list[i];t.layouts[profile]={x,y,w,h};}return t;})};
+    const ids=['soc','solar','dischargeEnergy','solarEnergy','voltage','remaining','power'];
+    const layout=[[0,0,6,6],[6,0,6,5],[0,6,6,5],[6,5,6,6],[0,11,4,4],[4,11,4,4],[8,11,4,4]];
+    return {version:1,blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
+      const t=tile(id,'default-'+id),[x,y,w,h]=layout[i];
+      for(const profile of ['compact','wide'])t.layouts[profile]={x,y,w,h};
+      if(id==='soc')t.fontSize=20;
+      if(id==='solar'){t.type='chart';t.scaleMode='auto';t.valueMode='live';t.period.mode='today';}
+      return t;
+    })};
   }
   function normalize(input) {
     if (!input || !Array.isArray(input.tiles)) return defaults();
@@ -121,9 +127,10 @@
     const order=Array.isArray(input.blockOrder)?input.blockOrder.filter(k=>BLOCK_ORDER.includes(k)):[];
     return {version:1,blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles:input.tiles.slice(0,64).map(t=>normalizeTile(t,seen)).filter(Boolean)};
   }
-  function windowFor(t,now=Date.now()) {
+  function windowFor(t,now=Date.now(),weather={}) {
     const p=t.period;
     if(p.mode==='live' && t.type!=='chart') return null;
+    if(p.mode==='sunrise')return miniWindow('sunrise',weather,now);
     let from,to=now;
     if(p.mode==='today'){const d=new Date(now);d.setHours(0,0,0,0);from=d.getTime();}
     else if(p.mode==='reset')from=p.resetAt;
@@ -151,8 +158,13 @@
     return (metric==='remainingAh'?Number(value)/100:metric==='remainingWh'?Number(value):Number(value))*(['remainingAh','remainingWh'].includes(metric)?capacity:1);
   }
   function usesLiveValue(t) { return !CATALOG[t.metric].energy&&(t.type==='chart'?t.valueMode==='live':t.period.mode==='live'); }
+  function signedValue(t,value) { return finite(value)?Number(value)===0?0:Number(value)*(CATALOG[t.metric].energy&&t.reverseSign?-1:1):null; }
+  function fixedRange(t) {
+    const min=convert(t.min,t.unit,t.metric),max=convert(t.max,t.unit,t.metric);
+    return CATALOG[t.metric].energy&&t.reverseSign?{min:signedValue(t,max),max:signedValue(t,min)}:{min,max};
+  }
   function displayValue(t,summary,shunt,solar,snapshot) {
-    return usesLiveValue(t)?liveValue(t.metric,shunt,solar,snapshot):historicalValue(t.metric,summary?.[t.period.aggregate],snapshot.settings.capacity);
+    return signedValue(t,usesLiveValue(t)?liveValue(t.metric,shunt,solar,snapshot):historicalValue(t.metric,summary?.[t.period.aggregate],snapshot.settings.capacity));
   }
   function format(value,t) {
     if(!finite(value))return '—';
@@ -163,9 +175,9 @@
   }
   /** Uses actual extrema, including peaks hidden by chart buckets; manual bounds remain stored. */
   function chartRange(t,points=[],capacity=100,summary={}) {
-    const fixed={min:convert(t.min,t.unit,t.metric),max:convert(t.max,t.unit,t.metric),auto:false};
+    const fixed={...fixedRange(t),auto:false};
     if(t.scaleMode!=='auto')return fixed;
-    const values=[summary.min,summary.max,...points.flatMap(p=>[p.min,p.max,p.v])].filter(finite).map(v=>historicalValue(t.metric,v,capacity));
+    const values=[summary.min,summary.max,...points.flatMap(p=>[p.min,p.max,p.v])].filter(finite).map(v=>signedValue(t,historicalValue(t.metric,v,capacity)));
     if(!values.length)return fixed;
     const dataLow=Math.min(...values),dataHigh=Math.max(...values);
     const upper=v=>{const step=10**(Math.floor(Math.log10(v))-1);return Number((Math.ceil(v/step-1e-9)*step).toPrecision(12));};
@@ -199,5 +211,5 @@
     }catch(_){}
     return {...today,note:'Heute: Sonnenaufgang nicht verfügbar. Wetterort wählen oder Wetter aktualisieren.'};
   }
-  return {CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,displayValue,format,chartRange,axisLabel,miniWindow};
+  return {CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow};
 });

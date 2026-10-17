@@ -140,3 +140,53 @@ test('readable numbers handle shorthand white, custom dark surfaces and transpar
   }
   assert.notEqual(C.readableColor('#e8bb57','#fff','#f4f6f9'),'#ffffff');
 });
+test('the standard overview follows the requested seven-tile arrangement',()=>{
+  const board=C.defaults();
+  assert.deepEqual(board.tiles.map(t=>t.metric),['soc','solar','dischargeEnergy','solarEnergy','voltage','remaining','power']);
+  assert.deepEqual(board.tiles.map(t=>t.layouts.compact),[{x:0,y:0,w:6,h:6},{x:6,y:0,w:6,h:5},{x:0,y:6,w:6,h:5},{x:6,y:5,w:6,h:6},{x:0,y:11,w:4,h:4},{x:4,y:11,w:4,h:4},{x:8,y:11,w:4,h:4}]);
+  assert.equal(board.tiles[1].valueMode,'live');assert.equal(board.tiles[1].scaleMode,'auto');
+});
+test('sunrise tile periods survive reload without changing customized layouts or live selection',()=>{
+  const board=C.defaults();board.blockOrder=['history','tiles','weather','record'];board.tiles[0].layouts.compact={x:2,y:17,w:8,h:6};
+  for(const tile of board.tiles.filter(t=>['solar','solarEnergy','dischargeEnergy'].includes(t.metric)))tile.period.mode='sunrise';
+  const saved=C.normalize(JSON.parse(JSON.stringify(board)));
+  assert.deepEqual(saved,board);
+});
+test('power and calculated-energy tiles query the same sunrise boundary as the mini chart',()=>{
+  const now=Date.parse('2026-10-17T11:00:00Z'),rise=Date.parse('2026-10-17T05:48:00Z'),weather={timezone:'Europe/Berlin',days:[{day:'2026-10-17',sunrise:rise}]};
+  for(const metric of ['solar','solarEnergy','dischargeEnergy']){
+    const tile=C.tile(metric);tile.period.mode='sunrise';const w=C.windowFor(tile,now,weather);
+    assert.equal(w.from,rise);assert.equal(w.to,now);assert.equal(w.label,'Seit Sonnenaufgang');
+  }
+});
+test('a missing sunrise never silently becomes a live tile or uses yesterday',()=>{
+  const tile=C.tile('solarEnergy');tile.period.mode='sunrise';const now=Date.parse('2026-10-18T11:00:00Z');
+  const weather={timezone:'Europe/Berlin',days:[{day:'2026-10-17',sunrise:Date.parse('2026-10-17T05:48:00Z')}]},w=C.windowFor(tile,now,weather);
+  assert.equal(w.label,'Heute');assert.equal(w.from,new Date(new Date(now).setHours(0,0,0,0)).getTime());assert.match(w.note,/nicht verfügbar/);
+  assert.equal(C.usesLiveValue(tile),false);assert.equal(tile.period.mode,'sunrise');
+});
+
+test('reversed energy totals and charts retain zero and unavailable values without changing source data',()=>{
+  const snapshot={settings:{capacity:100}},points=[{v:0,min:0,max:0},{v:5,min:3,max:5}];
+  for(const metric of ['solarEnergy','dischargeEnergy']){
+    const t=C.tile(metric);t.reverseSign=true;
+    assert.equal(C.displayValue(t,{last:5},null,null,snapshot),-5);
+    assert.equal(C.displayValue(t,{last:0},null,null,snapshot),0);
+    assert.equal(C.displayValue(t,{last:null},null,null,snapshot),null);
+    assert.equal(C.signedValue(t,null),null);
+    assert.deepEqual(C.chartRange(t,points,100,{min:0,max:5}),{min:-5.5,max:0,auto:true});
+    assert.ok(C.chartRange(t,[{v:0}],100,{min:0,max:0}).max>C.chartRange(t,[{v:0}],100,{min:0,max:0}).min);
+    t.unit='kWh';assert.deepEqual(C.chartRange(t,points,100,{min:0,max:5}),{min:-.0055,max:0,auto:true});
+  }
+  assert.deepEqual(points,[{v:0,min:0,max:0},{v:5,min:3,max:5}]);
+});
+test('sign reversal survives reload and reflects fixed bounds while existing and non-energy tiles keep their values',()=>{
+  const t=C.tile('dischargeEnergy');t.reverseSign=true;t.unit='kWh';t.scaleMode='fixed';
+  const restored=C.normalize(JSON.parse(JSON.stringify({tiles:[t]}))).tiles[0];
+  assert.equal(restored.reverseSign,true);assert.deepEqual(C.fixedRange(restored),{min:-2,max:0});
+  assert.deepEqual(C.chartRange(restored,[{v:5}]),{min:-2,max:0,auto:false});
+  assert.equal(restored.min,0);assert.equal(restored.max,2000);
+  delete t.reverseSign;assert.equal(C.normalize({tiles:[t]}).tiles[0].reverseSign,false);
+  const current=C.tile('current');current.reverseSign=true;
+  const unchanged=C.normalize({tiles:[current]}).tiles[0];assert.equal(unchanged.reverseSign,false);assert.equal(C.signedValue(unchanged,-8.4),-8.4);
+});

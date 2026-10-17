@@ -40,7 +40,7 @@ final class Repository {
         JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));all.put(kind,result);prefs.edit().putString("archiveDiagnostics",all.toString()).apply();
     }
     synchronized String diagnosticText()throws JSONException{
-        JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));StringBuilder text=new StringBuilder("Watt’n’Pit 0.1.7 · Archivdiagnose\n");
+        JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));StringBuilder text=new StringBuilder("Watt’n’Pit 0.1.8 · Archivdiagnose\n");
         for(String kind:new String[]{"solar","shunt"}){
             JSONObject d=all.optJSONObject(kind);if(d==null)continue;text.append(kind.equals("solar")?"\nSolarladeregler\n":"\nBatteriewächter\n");
             text.append(d.optString("result")).append('\n');JSONArray lines=d.optJSONArray("steps");if(lines!=null)for(int i=0;i<lines.length();i++)text.append("· ").append(lines.getString(i)).append('\n');
@@ -80,6 +80,10 @@ final class Repository {
     }
     synchronized JSONObject equipment()throws JSONException{return new JSONObject(prefs.getString("equipment-v1","{\"version\":1,\"groups\":[]}"));}
     synchronized void saveEquipment(JSONObject input)throws Exception{
+        JSONObject result=checkedEquipment(input);
+        if(!prefs.edit().putString("equipment-v1",result.toString()).commit())throw new java.io.IOException();
+    }
+    static JSONObject checkedEquipment(JSONObject input)throws Exception{
         if(input.optInt("version")!=1)throw new IllegalArgumentException("Unbekannte Anlagenkonfiguration.");
         JSONArray rows=input.getJSONArray("groups");List<SolarEquipment.Group> groups=new ArrayList<>();
         if(rows.length()>32)throw new IllegalArgumentException("Bis zu 32 Solargruppen sind möglich.");
@@ -89,8 +93,7 @@ final class Repository {
         }
         SolarEquipment setup=new SolarEquipment(groups);JSONArray clean=new JSONArray();
         for(SolarEquipment.Group g:setup.groups)clean.put(new JSONObject().put("id",g.id).put("label",g.label).put("count",g.count).put("watts",g.watts).put("placement",g.placement).put("controller",g.controller).put("measurement",g.measurement));
-        JSONObject result=new JSONObject().put("version",1).put("groups",clean).put("ratedWatts",setup.ratedWatts());
-        if(!prefs.edit().putString("equipment-v1",result.toString()).commit())throw new java.io.IOException();
+        return new JSONObject().put("version",1).put("groups",clean).put("ratedWatts",setup.ratedWatts());
     }
     synchronized void removeDevice(String mac) throws Exception {
         JSONArray updated = new JSONArray(), list = configs();
@@ -160,17 +163,30 @@ final class Repository {
                     .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10)));
     }
     synchronized void invalidateStats() { statsTime = 0;historyRevision++; }
-    void saveSettings(JSONObject settings) throws Exception {
+    void saveSettings(JSONObject settings) throws Exception { settingsEditor(settings).apply(); }
+    private SharedPreferences.Editor settingsEditor(JSONObject settings) throws Exception {
         String theme = settings.optString("theme",prefs.getString("theme","dark"));
         double capacity = settings.optDouble("capacity",prefs.getFloat("capacity",100f));
         int seconds = settings.optInt("sampleSeconds",prefs.getInt("sampleSeconds",10));
-        if ((!theme.equals("light") && !theme.equals("dark")) || capacity <= 0 || capacity > 10000 || seconds < 5 || seconds > 60)
+        if ((!theme.equals("light") && !theme.equals("dark")) || !Double.isFinite(capacity) || capacity <= 0 || capacity > 10000 || seconds < 5 || seconds > 60)
             throw new IllegalArgumentException("Bitte gültige Einstellungen eingeben.");
         String palette=settings.optString("palette",prefs.getString("palette","classic"));
         if(!Arrays.asList("classic","blue","green","turquoise","orange","neutral").contains(palette))throw new IllegalArgumentException("Unbekanntes Farbdesign.");
         String miniRange=settings.optString("miniRange",prefs.getString("miniRange","sunrise"));
         if(!Arrays.asList("sunrise","today","last6h").contains(miniRange))throw new IllegalArgumentException("Unbekannter Übersichtszeitraum.");
-        prefs.edit().putString("miniRange",miniRange).putString("palette",palette).putString("theme",theme).putFloat("capacity",(float)capacity).putInt("sampleSeconds",seconds).apply();
+        return prefs.edit().putString("miniRange",miniRange).putString("palette",palette).putString("theme",theme).putFloat("capacity",(float)capacity).putInt("sampleSeconds",seconds);
+    }
+    synchronized boolean importConfiguration(String json)throws Exception{
+        JSONObject backup=ConfigurationBackup.normalize(json),place=backup.getJSONObject("weatherPlace");
+        String weather=place.length()==0?"":place.toString();
+        boolean changed=!weather.equals(prefs.getString("weatherPlace",""));
+        SharedPreferences.Editor edit=settingsEditor(backup.getJSONObject("settings"))
+            .putString("dashboard-v1",backup.getJSONObject("dashboard").toString())
+            .putString("equipment-v1",backup.getJSONObject("equipment").toString());
+        if(weather.isEmpty())edit.remove("weatherPlace");else edit.putString("weatherPlace",weather);
+        if(changed)edit.remove("weatherCache").remove("weatherError");
+        if(!edit.commit())throw new java.io.IOException();
+        return changed;
     }
     static String safeError(Exception e) {
         if (e instanceof IllegalArgumentException) return e.getMessage();

@@ -9,3 +9,5 @@
 
 .overview-order{border:1px solid var(--border);border-radius:16px;padding:14px;margin:0 0 20px}.overview-order>p{font-size:11px;color:var(--muted);margin-bottom:8px}.overview-order-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}.overview-order-row>span{flex:1}.overview-order-row button{min-height:36px;padding:5px 13px}[data-overview-block="history"],[data-overview-block="record"]{margin-bottom:20px}
 html[data-theme="light"]{--muted:#485c72;--faint:#53667c}html[data-theme="light"] .tile-number{font-weight:650}html[data-theme="light"] .tile-unit{font-size:12px;font-weight:550}html[data-theme="light"] .tile-hint{font-size:10px}html[data-theme="light"] .tile-chart-range,html[data-theme="light"] .gauge-min,html[data-theme="light"] .gauge-max{font-size:9px}
+
+.tile-hint.period-sunrise{white-space:normal;line-height:1.3;overflow-wrap:anywhere}

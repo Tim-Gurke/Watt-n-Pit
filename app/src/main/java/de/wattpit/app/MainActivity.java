@@ -25,15 +25,19 @@ public final class MainActivity extends Activity {
     private Repository repository;
     private final ExecutorService files = Executors.newSingleThreadExecutor();
     private CsvCodec.Table pendingImport;
+    private volatile String pendingSettingsExport;
+    private boolean pageReady;
+    private JSONObject pendingSettingsPreview;
     private boolean pendingStart;
     private String pendingArchive;
     private long stoppedAt;
     private boolean entered;
-    private static final int PERMISSIONS = 11, BLUETOOTH = 12, IMPORT = 20, EXPORT = 21;
+    private static final int PERMISSIONS = 11, BLUETOOTH = 12, IMPORT = 20, EXPORT = 21, IMPORT_SETTINGS = 22, EXPORT_SETTINGS = 23;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if(savedInstanceState!=null)pendingSettingsExport=savedInstanceState.getString("pendingSettingsExport");
         repository = Repository.get(this);
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(13,18,27));
@@ -48,6 +52,10 @@ public final class MainActivity extends Activity {
         web.getSettings().setTextZoom(100);
         web.getSettings().setSupportZoom(false);
         web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view,String url){
+                pageReady=true;
+                if(pendingSettingsPreview!=null){JSONObject result=pendingSettingsPreview;pendingSettingsPreview=null;call("onSettingsImportPreview",result);}
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
@@ -64,6 +72,10 @@ public final class MainActivity extends Activity {
 
     }
 
+    @Override protected void onSaveInstanceState(Bundle state){
+        if(pendingSettingsExport!=null)state.putString("pendingSettingsExport",pendingSettingsExport);
+        super.onSaveInstanceState(state);
+    }
     @Override protected void onStart(){
         super.onStart();WeatherClient.refresh(repository,false);
         if(!entered||stoppedAt>0&&SystemClock.elapsedRealtime()-stoppedAt>30000){
@@ -145,6 +157,7 @@ public final class MainActivity extends Activity {
             else { pendingStart = false; pendingArchive=null; repository.message("Bluetooth wurde nicht eingeschaltet."); }
             return;
         }
+        if(requestCode==EXPORT_SETTINGS&&resultCode!=RESULT_OK)pendingSettingsExport=null;
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         if (requestCode == IMPORT) files.execute(() -> {
@@ -175,6 +188,27 @@ public final class MainActivity extends Activity {
                 repository.db.exportTo(output); repository.message("Verlauf als CSV gespeichert.");
             } catch (Exception e) { error(e); }
         });
+        if(requestCode==IMPORT_SETTINGS)files.execute(()->{
+            try(InputStream input=getContentResolver().openInputStream(uri);ByteArrayOutputStream buffer=new ByteArrayOutputStream()){
+                if(input==null)throw new IOException();byte[] block=new byte[8192];int n;
+                while((n=input.read(block))!=-1){buffer.write(block,0,n);if(buffer.size()>ConfigurationBackup.MAX_BYTES)throw new IllegalArgumentException("Die Einstellungsdatei darf höchstens 256 KB groß sein.");}
+                String json=StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(buffer.toByteArray())).toString();
+                if(json.startsWith("\uFEFF"))json=json.substring(1);
+                JSONObject backup=ConfigurationBackup.normalize(json);
+                JSONObject result=new JSONObject().put("backup",backup).put("name",displayName(uri));
+                runOnUiThread(()->{if(pageReady)call("onSettingsImportPreview",result);else pendingSettingsPreview=result;});
+            }catch(Exception e){error(e instanceof JSONException?new IllegalArgumentException("Keine gültige Watt’n’Pit-Einstellungsdatei."):e);}
+        });
+        if(requestCode==EXPORT_SETTINGS){
+            final String json=pendingSettingsExport;pendingSettingsExport=null;
+            files.execute(()->{
+                if(json==null){error(new IllegalArgumentException("Bitte die Einstellungssicherung erneut starten."));return;}
+                try(OutputStream output=getContentResolver().openOutputStream(uri,"wt")){
+                    if(output==null)throw new IOException();output.write(json.getBytes(StandardCharsets.UTF_8));
+                    repository.message("Einstellungen als JSON gespeichert.");
+                }catch(Exception e){error(e);}
+            });
+        }
     }
     private String displayName(Uri uri) {
         try (android.database.Cursor c = getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)) {
@@ -228,6 +262,16 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String settings(String json) {
             try { JSONObject s = new JSONObject(json); repository.saveSettings(s); runOnUiThread(() -> applyTheme(s.optString("theme",repository.prefs.getString("theme","dark")))); return ""; }
             catch (Exception e) { return Repository.safeError(e); }
+        }
+        @JavascriptInterface public String chooseSettingsExport(String json){
+            try{JSONObject clean=ConfigurationBackup.normalize(json);pendingSettingsExport=clean.toString(2);if(pendingSettingsExport.getBytes(StandardCharsets.UTF_8).length>ConfigurationBackup.MAX_BYTES)pendingSettingsExport=clean.toString();
+                runOnUiThread(()->{try{startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"Watt-n-Pit-Einstellungen.json"),EXPORT_SETTINGS);}catch(Exception e){pendingSettingsExport=null;error(e);}});return "";
+            }catch(Exception e){pendingSettingsExport=null;return Repository.safeError(e);}
+        }
+        @JavascriptInterface public void chooseSettingsImport(){runOnUiThread(()->{try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),IMPORT_SETTINGS);}catch(Exception e){error(e);}});}
+        @JavascriptInterface public String importSettings(String json){
+            try{boolean weatherChanged=repository.importConfiguration(json);runOnUiThread(()->applyTheme(repository.prefs.getString("theme","dark")));if(weatherChanged)WeatherClient.refresh(repository,true);return "";}
+            catch(Exception e){return Repository.safeError(e);}
         }
         @JavascriptInterface public void chooseImport() {
             runOnUiThread(() -> startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),IMPORT));
