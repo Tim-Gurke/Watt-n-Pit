@@ -29,7 +29,7 @@ const path=require('node:path');
  assert.match(await page.locator('#tileSunriseHint').textContent(),/07:45/);await screenshot('tile-sunrise.png');await page.locator('#closeModal').click();
  await page.setViewportSize({width:390,height:1100});await page.locator('[data-page="history"]').click();await screenshot('history-dark.png');
  await page.locator('#themeToggle').click();await screenshot('history-light.png');await page.locator('#themeToggle').click();
- await page.locator('[data-metric="energy"]').click();assert.ok(await page.evaluate(()=>points.some(p=>p.kind==='shunt'&&p.v<0)));await screenshot('energy-history.png');
+ await page.locator('[data-metric="energy"]').click();assert.ok(await page.evaluate(()=>points.some(p=>p.kind==='shunt'&&p.v<0)));assert.equal(await page.locator('#chartLegend span').count(),3);assert.match(await page.locator('#energyNote').textContent(),/Ertrag − Entnahme:/);await screenshot('energy-history.png');
  await page.locator('[data-page="devices"]').click();await page.setViewportSize({width:390,height:1000});await screenshot('devices-archive.png');
  assert.equal(await page.locator('#deviceCards').getByText('DEMO-SOLAR',{exact:true}).count(),1);
  await page.locator('[data-page="settings"]').click();const backupCard=page.locator('#settings .settings-card').filter({has:page.locator('#exportConfiguration')});await backupCard.scrollIntoViewIfNeeded();await backupCard.screenshot({path:path.join(output,'settings-backup.png'),animations:'disabled'});console.log('settings-backup.png');

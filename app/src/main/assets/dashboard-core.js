@@ -141,6 +141,35 @@
     if(input.dischargeSignVersion!==1)for(const t of tiles)if(t.metric==='dischargeEnergy')t.reverseSign=true;
     return {version:1,dischargeSignVersion:1,blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles};
   }
+  // Compare the two calculated cumulative curves at common timestamps only.
+  // Missing coverage stays a break; neither source is extended outside its data.
+  function energyBalance(solar={},battery={}) {
+    solar=solar||{};battery=battery||{};
+    const empty={points:[],summary:{last:null}};
+    for(const key of ['from','to'])if(finite(solar.summary?.[key])&&finite(battery.summary?.[key])&&Number(solar.summary[key])!==Number(battery.summary[key]))return empty;
+    const prepare=series=>{
+      const out=[];
+      for(const p of [...(Array.isArray(series.points)?series.points:[])].filter(p=>p&&finite(p.t)).sort((a,b)=>a.t-b.t)){
+        const point={t:Number(p.t),v:finite(p.v)&&Number(p.v)>=0?Number(p.v):null,gap:!!p.gap};
+        if(out.length&&out[out.length-1].t===point.t){point.gap=point.gap||out[out.length-1].gap;out[out.length-1]=point;}else out.push(point);
+      }return out;
+    };
+    const a=prepare(solar),b=prepare(battery);
+    const at=(series,t)=>{
+      let lo=0,hi=series.length;
+      while(lo<hi){const mid=(lo+hi)>>1;if(series[mid].t<t)lo=mid+1;else hi=mid;}
+      const right=series[lo];if(right?.t===t)return right.v==null?null:right;
+      const left=series[lo-1];
+      return left&&right&&!right.gap&&left.v!=null&&right.v!=null?{v:left.v+(right.v-left.v)*(t-left.t)/(right.t-left.t),gap:false}:null;
+    };
+    const times=[...new Set([...a,...b].map(p=>p.t))].sort((a,b)=>a-b),points=[];
+    let gap=true;
+    for(const t of times){const x=at(a,t),y=at(b,t);if(!x||!y){gap=true;continue;}
+      const v=x.v-y.v||0;points.push({t,last:t,v,min:v,max:v,n:1,gap:gap||x.gap||y.gap,kind:'balance',device:'calculated-balance',origin:'calculated'});gap=false;
+    }
+    const x=solar.summary?.last,y=battery.summary?.last;
+    return {points,summary:{last:finite(x)&&finite(y)&&x>=0&&y>=0?Number(x)-Number(y)||0:null}};
+  }
   function windowFor(t,now=Date.now(),weather={}) {
     if(CATALOG[t.metric].widget)return null;
     const p=t.period;
@@ -226,5 +255,5 @@
     }catch(_){}
     return {...today,note:'Heute: Sonnenaufgang nicht verfügbar. Wetterort wählen oder Wetter aktualisieren.'};
   }
-  return {CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow};
+  return {CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,energyBalance,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow};
 });

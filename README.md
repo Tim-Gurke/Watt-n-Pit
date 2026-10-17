@@ -25,6 +25,7 @@ Solarleistung und berechneter Solarertrag beginnen standardmäßig **seit Sonnen
 - **Eigene Übersicht:** Kacheln hinzufügen, ziehen, vergrößern und überlappen. Zahlen, Rundinstrumente oder Verlauf wählen; Einheiten, Farben, Schrift und Zeiträume anpassen. Schmale und breite Ansichten haben eigene Anordnungen.
 - **Erkennbare Kurven:** Optionale automatische Skalen folgen den bisherigen Messwerten. Die große Livezahl bleibt vom Kurvenzeitraum unabhängig; „Seit Sonnenaufgang“ ist je Kachel wählbar.
 - **Berechnete Energie:** Solarertrag und Batterieentnahme aus erfassten Leistungspunkten, mit sichtbarer zeitlicher Abdeckung. Batterieentnahme erscheint direkt negativ, auch im Energieverlauf.
+- **Ertrag und Entnahme vergleichen:** Unter „Verlauf → Energie berechnet“ ergänzt eine einblendbare dritte Kurve den Wert „Ertrag − Entnahme“ in Wh. Antippen zeigt die drei Werte am gewählten Zeitpunkt.
 - **Kompaktes Wetter:** 14 Tage mit je einem Symbol und erwarteten Sonnenstunden, seitlich wischbar. Die Wetterkachel lässt sich zwischen den Messkacheln anordnen.
 - **Passend zum Setup:** Solarkreise mit Modulanzahl, Nennleistung, Montage, Regler und Messwertquelle hinterlegen. Sechs Farbdesigns, jeweils hell und dunkel.
 - **Sichern und übertragen:** Einstellungen samt Anordnungen und Wetterort als JSON exportieren und mit Vorschau importieren. Messdaten getrennt als CSV sichern oder einlesen.
@@ -57,6 +58,8 @@ Die sechsstellige Bluetooth-PIN für die Android-Kopplung ist **ein anderer Code
 
 *Berechnete Werte entstehen ausschließlich aus vorhandenen Leistungspunkten. Unbeobachtete Zeiträume werden nicht hochgerechnet.*
 
+**Ertrag − Entnahme:** Solarertrag abzüglich der aus dem Akku entnommenen Energie im selben ausgewählten Zeitraum. Die blaue gestrichelte Vergleichskurve lässt sich ein- und ausblenden. Sie beschreibt weder den Gesamtverbrauch noch die Änderung der gespeicherten Akkuenergie; dafür müssten auch Ladeenergie und weitere Quellen berücksichtigt werden. Fehlt eine Messreihe, erscheint kein erfundener Nullwert.
+
 ## Lokal und mit optionalem Wetter
 
 Aufzeichnung, Gerätearchive und CSV-Daten werden lokal zusammengeführt. Geräteschlüssel werden mit dem Android Keystore verschlüsselt gespeichert. Die Einstellungssicherung enthält **keine Geräteadressen, PINs, Schlüssel oder Messdaten**; ihr Wetterort ist Bestandteil der Konfiguration.
@@ -69,7 +72,7 @@ SmartSolar 75/15 mit Bluetooth und SmartShunt 300 A wurden an realer Hardware er
 
 Die App ändert keine Ladeparameter und löscht keine Gerätetrends. Temperatur und Zusatzspannung benötigen einen entsprechend eingerichteten Geräteeingang. Eine lang laufende Aufzeichnung kann durch Android-Energiespareinstellungen begrenzt werden.
 
-Automatisierte Prüfung: **59 JVM-Tests, 39 Node-Tests**, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen und Farbdesigns. Die Android-Dateiauswahl für Einstellungssicherungen ist zusätzlich am Gerät zu bestätigen. [Versionshinweise](docs/releases/1.0.0.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
+Automatisierte Prüfung: **59 JVM-Tests, 44 Node-Tests**, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen, Energiekurven und Farbdesigns. Die Android-Dateiauswahl für Einstellungssicherungen ist zusätzlich am Gerät zu bestätigen. [Versionshinweise](docs/releases/1.0.0.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
 ## Entwicklung
 

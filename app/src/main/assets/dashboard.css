@@ -18,3 +18,7 @@ html[data-theme="light"]{--muted:#485c72;--faint:#53667c}html[data-theme="light"
 .short-tile.type-chart .tile-number{font-size:min(var(--number-size),18px)}
 .short-tile.type-chart .tile-sparkline{height:0;min-height:0;flex:1 1 0;margin-top:2px}
 .short-tile.type-chart .tile-chart-range{flex:none;font-size:7px;line-height:1.1;margin-bottom:0}
+
+.energy-toggle{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text);margin:9px 0}
+.energy-toggle input{width:18px;height:18px;min-height:18px;accent-color:var(--blue)}
+.chart-legend .dot.blue{background:var(--blue)}

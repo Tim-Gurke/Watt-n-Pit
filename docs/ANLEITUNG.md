@@ -81,7 +81,11 @@ Batterieentnahme erscheint standardmäßig **negativ**. Eine Kurve unter null ze
 
 ![Berechneter Solarertrag oberhalb und Batterieentnahme unterhalb von null](images/energy-history.png)
 
-*Verlauf → Energie berechnet: positiver Solarertrag und negative Batterieentnahme. Die Prozentangaben beziehen sich auf die erfasste Zeit.*
+*Verlauf → Energie berechnet: positiver Solarertrag, negative Batterieentnahme und die blaue gestrichelte Kurve „Ertrag − Entnahme“. Die Prozentangaben beziehen sich auf die erfasste Zeit.*
+
+**Ertrag − Entnahme** ist der Solarertrag abzüglich der Batterieentnahme im selben ausgewählten Zeitraum. Zum Beispiel ergeben 40 Wh Ertrag und 70 Wh Entnahme den Vergleichswert **−30 Wh**. Unter **Kurve „Ertrag − Entnahme“ anzeigen** lässt sich die dritte Kurve ein- und ausblenden. Der Zahlenwert steht über dem Diagramm; Antippen des Diagramms zeigt die drei Werte am gewählten Zeitpunkt mit zwei Nachkommastellen.
+
+Der Vergleich beschreibt weder den Gesamtverbrauch noch die Änderung der gespeicherten Akkuenergie. Die bisherige **Batteriebilanz in W** zeigt weiterhin die aktuelle Lade- bzw. Entladeleistung am Shunt. Fehlende Ertrags- oder Entnahmewerte werden nicht als null eingesetzt. Zwischen bekannten Kurvenpunkten werden die Zeitpunkte angeglichen; Aufzeichnungslücken bleiben unterbrochen.
 
 **Batterieentnahme ist kein Gesamtverbrauch.** Solarstrom, der direkt einen Verbraucher versorgt, muss nicht aus dem Akku entnommen werden. Ein weiterer Regler kann die Batteriebilanz beeinflussen, ohne seinen eigenen Solarertrag separat zu melden. Der grobe Tageszähler des SmartSolar bleibt als **Solarertrag heute** zusätzlich auswählbar.
 
