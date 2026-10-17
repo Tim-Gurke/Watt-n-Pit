@@ -10,6 +10,7 @@ window.WattExtras=class {
     document.getElementById('weatherQuery').onkeydown=e=>{if(e.key==='Enter')this.search();};
     document.getElementById('weatherOff').onclick=()=>this.place({off:true});
     document.getElementById('weatherRefresh').onclick=()=>{if(a.native)a.native.refreshWeather();else a.toast('Wetter ist in der Android-App verfügbar.');};
+    document.getElementById('copyArchiveDiagnostics').onclick=()=>{if(!a.native?.copyArchiveDiagnostics){a.toast('Diagnose kopieren ist in der Android-App verfügbar.');return;}const error=a.native.copyArchiveDiagnostics();a.toast(error||'Diagnose ohne private Gerätedaten kopiert.');};
     document.getElementById('archiveCancel').onclick=()=>a.native?.cancelArchive();
     document.getElementById('deviceCards').addEventListener('click',e=>{const b=e.target.closest('.archive-import');if(!b)return;if(a.isDemo()){a.toast('Demo liest keine Geräte aus.');return;}if(a.native)a.native.importArchive(b.dataset.mac);else a.toast('Gerätearchive werden in der Android-App gelesen.');});
     window.onWeatherSearch=result=>{
@@ -55,6 +56,8 @@ window.WattExtras=class {
     const weatherKey=JSON.stringify([valid,today]);
     if(this.weatherKey!==weatherKey){this.weatherKey=weatherKey;document.getElementById('weatherDays').innerHTML=valid.length?valid.map(d=>{const date=new Date(d.day+'T12:00:00');return `<div class="weather-day"><time datetime="${e(d.day)}">${e(date.toLocaleDateString('de-DE',{weekday:'short'}))}<small>${e(date.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}))}</small></time>${this.symbol(d.code)}<span>${d.hours==null?'—':Number(d.hours).toLocaleString('de-DE',{maximumFractionDigits:1})} h</span></div>`;}).join(''):'<p class="muted">Vorschau wird geladen. Zum Abrufen Internet einschalten.</p>';}
     document.getElementById('weatherNote').textContent=s.weatherError|| (weather.updated?'Stand '+new Date(weather.updated).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' · Sonnenstunden':'Sonnenstunden · 14 Tage');
+    const reports=s.archiveDiagnostics||{};document.getElementById('archiveDetails').hidden=!Object.keys(reports).length;
+    document.getElementById('archiveDiagnosticText').textContent=Object.entries(reports).map(([kind,r])=>(kind==='solar'?'Solarladeregler':'Batteriewächter')+'\n'+(r.result||'')+'\n'+(r.steps||[]).join('\n')).join('\n\n');
     const archive=s.archive||{};document.getElementById('archiveStatus').hidden=!archive.text;
     document.getElementById('archiveText').textContent=archive.text||'';document.getElementById('archiveCancel').hidden=!archive.active;
     const progress=document.getElementById('archiveProgress');progress.hidden=!archive.active;if(archive.total>0){progress.max=archive.total;progress.value=Math.min(archive.done,archive.total);}else progress.removeAttribute('value');

@@ -27,7 +27,7 @@ let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastM
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let currentImport = null;
-let dashboard = null, extras = null;
+let dashboard = null, extras = null, equipment = null;
 
 function toast(message) {
   if (!message || (message === previousToast && Date.now()-previousToastTime < 4000)) return;
@@ -41,7 +41,7 @@ function showPage(next) {
   document.querySelectorAll('.bottom-nav button').forEach(el => el.classList.toggle('active',el.dataset.page===page));
   window.scrollTo(0,0);
   if (page === 'history') loadHistory();
-  extras?.render();
+  extras?.render();equipment?.render();
   if (page === 'overview') loadMini(true);
   if (page === 'devices') renderDevices(true);
   if (page === 'settings') renderSettings();
@@ -91,7 +91,7 @@ function renderDevices(force=false) {
   deviceRenderKey = key;
   $('deviceCards').innerHTML = snapshot.devices.length ? snapshot.devices.map(d => {
     const fresh = snapshot.running && !d.error && d.seen && Date.now()-d.seen<45000;
-    return `<article class="card device-card"><div class="device-title"><div class="device-type"><div class="tile-icon ${d.kind==='solar'?'orange':'mint'}">${icon(d.kind==='solar'?'solar':'battery')}</div><div><h2>${escapeHtml(d.name)}</h2><p class="muted">${d.kind==='solar'?'Solarladeregler':'Batteriewächter'}${d.rssi != null ? ` · ${d.rssi} dBm` : ''}</p></div></div><button class="textbutton edit-device" data-mac="${escapeHtml(d.mac)}">Bearbeiten</button></div><div class="device-meta"><code>${escapeHtml(d.mac)}</code><span class="${fresh?'mint':''}">${fresh?'● Live':'○ Kein Liveempfang'}</span></div>${d.error?`<p class="device-error">${escapeHtml(d.error)}</p>`:''}<button class="quiet archive-import" ${snapshot.archive?.active||demo?'disabled':''} data-mac="${escapeHtml(d.mac)}">Gerätearchiv ergänzen</button></article>`;
+    return `<article class="card device-card"><div class="device-title"><div class="device-type"><div class="tile-icon ${d.kind==='solar'?'orange':'mint'}">${icon(d.kind==='solar'?'solar':'battery')}</div><div><h2>${escapeHtml(d.name)}</h2><p class="muted">${d.kind==='solar'?'Solarladeregler':'Batteriewächter'}${d.rssi != null ? ` · ${d.rssi} dBm` : ''}</p></div></div><button class="textbutton edit-device" data-mac="${escapeHtml(d.mac)}">Bearbeiten</button></div><div class="device-meta"><code>${escapeHtml(d.mac)}</code><span class="${fresh?'mint':''}">${fresh?'● Live':'○ Kein Liveempfang'}</span></div>${d.bondState?`<p class="bond-state muted">${({bonded:'Android-Kopplung vorhanden',bonding:'Android-Kopplung läuft · PIN bestätigen',none:'Noch nicht mit Android gekoppelt · PIN beim Archivimport',unknown:'Android-Kopplung noch nicht geprüft'})[d.bondState]||''}</p>`:''}${d.error?`<p class="device-error">${escapeHtml(d.error)}</p>`:''}<button class="quiet archive-import" ${snapshot.archive?.active||demo?'disabled':''} data-mac="${escapeHtml(d.mac)}">Gerätearchiv ergänzen</button></article>`;
   }).join('') : '<div class="empty-devices"><h2>Platz für deine Energieanlage.</h2><p>Starte die Suche oder füge SmartSolar und SmartShunt manuell hinzu.</p></div>';
   $('deviceCards').querySelectorAll('.edit-device').forEach(b => b.onclick = () => deviceForm(snapshot.devices.find(d => d.mac===b.dataset.mac)));
   $('scanStatus').textContent = snapshot.running ? snapshot.status : 'Die Suche startet mit der Aufzeichnung.';
@@ -113,7 +113,7 @@ function poll() {
       if (document.documentElement.dataset.theme !== snapshot.settings.theme) theme(snapshot.settings.theme,false);
     } catch (error) { console.error('Snapshot unavailable',error); }
   }
-  extras?.render();
+  extras?.render();equipment?.render();
   if (page === 'overview') { renderOverview(); loadMini(); }
   if (page === 'devices') renderDevices();
   if (page === 'settings') renderSettings();
@@ -360,6 +360,7 @@ $('saveSettings').onclick=()=>{const settings={capacity:Number($('capacitySettin
 $('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus');
 for(const [id,name] of [['navOverview','overview'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
 dashboard = new window.WattDashboard({native,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
+equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
 extras = new window.WattExtras({native,getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
 theme(!native?localStorage.getItem('wattpit-preview-theme')||'dark':'dark',false);
 selectRange('today');poll();renderSettings();

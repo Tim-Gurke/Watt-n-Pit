@@ -4,10 +4,12 @@
 
 [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · [Einrichtung](#einrichtung) · [CSV-Import](docs/CSV-IMPORT.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
-## Version 0.1.3
+## Version 0.1.4
 
 - SmartSolar 75/15 und SmartShunt 300 A gleichzeitig über Bluetooth-Sofortanzeige.
-- Automatischer Gerätearchiv-Import beim App-Start, je Gerät nacheinander; Fortschritt und Abbruch unter Geräte.
+- Automatischer Gerätearchiv-Import beim App-Start, je Gerät nacheinander; Fortschritt und Abbruch unter Geräte. Android-Kopplung wird vor dem GATT-Aufbau geprüft; vorhandene Kopplungen benötigen keine neue PIN-Abfrage.
+- Solaranlage unter Einstellungen frei anpassen: mehrere Solarkreise mit Modulanzahl, Wp pro Modul, Montage, Regler und Messwertquelle. Ohne Einrichtung werden keine persönlichen Anlagenangaben angenommen.
+- Kopierbare lokale Archivdiagnose mit Verbindungsschritten und Fehlerstatus, ohne Adressen, Schlüssel oder Messwerte.
 - Abgleich pro Gerät, Messgröße und Zeitpunkt mit Aufzeichnungen, CSV und früheren Archivimporten. Feinere Daten haben Vorrang; fehlende Kanäle werden ergänzt.
 - Sechs fertige Farbdesigns: Klassisch, Blau, Grün, Türkis, Orange und Neutral, jeweils hell und dunkel.
 - Optionale 14-Tage-Wetterzeile: pro Tag ein Symbol und Sonnenstunden; manuelle Ortswahl ohne GPS.
@@ -57,6 +59,7 @@ Der Schlüssel ist je Gerät verschieden und **nicht die sechsstellige Bluetooth
 - **Anordnen**: Kacheln ziehen und an der unteren rechten Ecke vergrößern. Überlappungen sind erlaubt; andere Kacheln behalten ihre Position. **Fertig** beendet das Anordnen.
 - Schmale und breite Ansichten haben eigene Positionen und Größen. Die Einstellungen werden auf diesem Telefon gespeichert und bleiben beim App-Update erhalten.
 - Unter **Einstellungen → Standardübersicht wiederherstellen** lässt sich die schlanke Ausgangsansicht zurückholen.
+- **Einstellungen → Deine Solaranlage → Bearbeiten**: Solarkreise hinzufügen oder entfernen. Nennleistungen werden addiert; sie ersetzen keine gemessenen Solarwerte und ändern keine Reglerparameter.
 
 Temperatur und Zusatzspannung benötigen den entsprechend eingerichteten Shunt-Eingang. Die Energie im Akku ist eine rechnerische Näherung aus Ladezustand, Kapazität und momentaner Spannung. Fehlende Werte erscheinen als „—“. Zeitfenster zeigen ausschließlich gespeicherte Messwerte; beim Solar-Tagesertrag werden Zählerstände ausgewertet und keine Tageserträge addiert.
 
@@ -68,7 +71,7 @@ Positiver Batteriestrom bedeutet Laden, negativer Batteriestrom Entladen. Restla
 
 ## Stand und offene Aufgaben
 
-0.1.3 ist eine Testversion. Der Java-Archivdecoder wurde mit einer privaten realen Bluetooth-Aufzeichnung gegen die unabhängige Offline-Auswertung abgeglichen (28.079 Einträge einschließlich fehlender Werte). Protokoll-, SQL-Abgleich- und CSV-Tests, Android-Lint und APK-Build sind automatisiert geprüft. **Die aktive GATT-Verbindung, Android-Kopplung und der automatische Import müssen noch an den realen Geräten geprüft werden.**
+0.1.4 ist eine Testversion. Der Java-Archivdecoder wurde mit einer privaten realen Bluetooth-Aufzeichnung gegen die unabhängige Offline-Auswertung abgeglichen (28.079 Einträge einschließlich fehlender Werte). Protokoll-, SQL-Abgleich- und CSV-Tests, Android-Lint und APK-Build sind automatisiert geprüft. **Der erste Gerätetest mit 0.1.3 zeigte einen fehlgeschlagenen Archivaufbau trotz funktionierender Sofortanzeige. 0.1.4 ergänzt die im Mitschnitt bestätigten Sitzungskontexte 0, 1 und 3 samt Antwortprüfung, frühzeitige Android-Kopplung und die MTU-Aushandlung. Der korrigierte Ablauf muss am realen Gerät erneut getestet werden.**
 
 Beim App-Start bzw. nach mehr als 30 Sekunden im Hintergrund beginnt ein kurzer Importlauf für die eingerichteten Geräte. Bluetooth muss eingeschaltet und VictronConnect getrennt sein. Android kann beim ersten Mal die sechsstellige Geräte-PIN anfordern. Die 32-stelligen Sofortanzeige-Schlüssel und diese PIN sind verschieden. Bereits gelesene Bereiche werden gespeichert; erneutes Starten ergänzt Lücken und erzeugt keine doppelten Archivpunkte. Abbrüche behalten alle schon abgeschlossenen Blöcke. Außerhalb der Reichweite endet der Lauf mit einem Hinweis; ein neuer Versuch erfolgt beim nächsten App-Start oder über „Gerätearchiv ergänzen“.
 
@@ -86,7 +89,7 @@ Voraussetzungen: Java 17 und Android SDK 35.
 
 Die APK liegt unter `app/build/outputs/apk/debug/app-debug.apk`. Die öffentlich bereitgestellte Release-APK wird getrennt mit einem dauerhaften privaten Signaturschlüssel signiert. Die Signatur bleibt für spätere Updates erhalten.
 
-Die Einheiten- und Konfigurationstests laufen mit `node --test tools/dashboard-core.test.cjs`.
+Die Einheiten- und Konfigurationstests laufen mit `node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs`. Zusätzliche UI-Prüfungen: `node tools/extras-smoke.cjs` und `node tools/equipment-smoke.cjs` (Playwright).
 
 Für die Oberflächenprüfung: `node tools/ui-smoke.cjs` (Playwright erforderlich; startet einen lokalen Asset-Server selbst). Die App selbst nutzt keine npm-Abhängigkeiten.
 
