@@ -59,6 +59,7 @@ window.WattExtras=class {
     const reports=s.archiveDiagnostics||{};document.getElementById('archiveDetails').hidden=!Object.keys(reports).length;
     document.getElementById('archiveDiagnosticText').textContent=Object.entries(reports).map(([kind,r])=>(kind==='solar'?'Solarladeregler':'Batteriewächter')+'\n'+(r.result||'')+'\n'+(r.steps||[]).join('\n')).join('\n\n');
     const archive=s.archive||{};document.getElementById('archiveStatus').hidden=!archive.text;
+    const historyStatus=document.getElementById('historyArchiveStatus');historyStatus.hidden=!archive.text||this.a.isDemo();historyStatus.textContent=archive.text?(archive.active?'Archivimport läuft · ':'Archivimport · ')+archive.text:'';
     document.getElementById('archiveText').textContent=archive.text||'';document.getElementById('archiveCancel').hidden=!archive.active;
     const progress=document.getElementById('archiveProgress');progress.hidden=!archive.active;if(archive.total>0){progress.max=archive.total;progress.value=Math.min(archive.done,archive.total);}else progress.removeAttribute('value');
     document.querySelectorAll('.archive-import').forEach(b=>b.disabled=!!archive.active||this.a.isDemo());

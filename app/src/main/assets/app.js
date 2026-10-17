@@ -26,7 +26,7 @@ let snapshot = {running:false,status:'Aufzeichnung pausiert',devices:[],found:[]
 let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastMiniLoad = 0, miniPoints = [];
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
-let currentImport = null;
+let currentImport = null, lastHistoryRevision=-1;
 let dashboard = null, extras = null, equipment = null;
 
 function toast(message) {
@@ -109,6 +109,7 @@ function poll() {
     try {
       const result = JSON.parse(native.snapshot());
       if (result.devices) snapshot = result;
+      if(snapshot.historyRevision!=null&&snapshot.historyRevision!==lastHistoryRevision){lastHistoryRevision=snapshot.historyRevision;dashboard?.clearCache();lastMiniLoad=0;if(page==='history'&&!demo)loadHistory();}
       if (snapshot.eventId && snapshot.eventId !== lastEvent) { toast(snapshot.event); lastEvent = snapshot.eventId; }
       if (document.documentElement.dataset.theme !== snapshot.settings.theme) theme(snapshot.settings.theme,false);
     } catch (error) { console.error('Snapshot unavailable',error); }
@@ -120,7 +121,7 @@ function poll() {
   if (page === 'history') {
     renderDaily();
     const count = snapshot.stats?.count || 0;
-    $('historyStats').innerHTML = `<span class="info-symbol">i</span><p>${demo?'Demo zeigt erfundene Beispieldaten.':count?`${num(count)} gespeicherte Messpunkte${snapshot.stats.from?` · ab ${date(snapshot.stats.from)}`:''}. Der Export enthält alle gespeicherten Daten.`:'Noch keine gespeicherten Messpunkte. Starte die Aufzeichnung oder importiere eine CSV.'}</p>`;
+    $('historyStats').innerHTML = `<span class="info-symbol">i</span><p>${demo?'Demo zeigt erfundene Beispieldaten.':count?`${num(count)} gespeicherte Messpunkte${snapshot.stats.archiveCount?` · ${num(snapshot.stats.archiveCount)} aus dem Gerätearchiv`:''}${snapshot.stats.from?` · ab ${date(snapshot.stats.from)}`:''}. Der Export enthält alle gespeicherten Daten.`:'Noch keine gespeicherten Messpunkte. Starte die Aufzeichnung oder ergänze das Gerätearchiv.'}</p>`;
   }
 }
 function toggleRecord() {

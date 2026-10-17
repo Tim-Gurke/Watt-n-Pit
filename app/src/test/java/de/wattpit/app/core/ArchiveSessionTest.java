@@ -16,4 +16,9 @@ public class ArchiveSessionTest {
     @Test(expected=IllegalArgumentException.class)public void rejectedContextIsNotTreatedAsReady(){
         ArchiveCodec.Message m=new ArchiveCodec.Stream().feed(new byte[]{7,0,3,1}).get(0);ArchiveSession.accepted(ArchiveSession.setup()[4],m);
     }
+    @Test public void importsTheFieldsNeededByThePowerChartBeforeAuxiliaryChannels(){
+        List<String> fields=new ArrayList<>(Arrays.asList("load","auxRaw","soc","current","voltage","solar"));
+        fields.sort(Comparator.comparingInt(ArchiveSession::priority));
+        assertEquals(Arrays.asList("solar","voltage","current","soc","load","auxRaw"),fields);
+    }
 }

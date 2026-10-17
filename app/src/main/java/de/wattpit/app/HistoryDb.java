@@ -139,9 +139,9 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
 
     JSONObject stats() throws Exception {
-        try (Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*),MIN(ts),MAX(ts) FROM readings", null)) {
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*),MIN(ts),MAX(ts),SUM(CASE WHEN origin='archive' THEN 1 ELSE 0 END) FROM readings", null)) {
             c.moveToFirst();
-            return new JSONObject().put("count", c.getLong(0)).put("from", c.isNull(1) ? 0 : c.getLong(1)).put("to", c.isNull(2) ? 0 : c.getLong(2));
+            return new JSONObject().put("count", c.getLong(0)).put("from", c.isNull(1) ? 0 : c.getLong(1)).put("to", c.isNull(2) ? 0 : c.getLong(2)).put("archiveCount",c.isNull(3)?0:c.getLong(3));
         }
     }
 

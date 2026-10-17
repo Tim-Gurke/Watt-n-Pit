@@ -24,7 +24,7 @@ final class Repository {
     volatile boolean archiveBusy=false;
     volatile String status = "Aufzeichnung pausiert";
     private JSONObject cachedStats = new JSONObject();
-    private long statsTime, eventId;
+    private long statsTime, eventId,historyRevision;
     private String event = "";
     private Repository(Context context) { this.context=context;prefs = context.getSharedPreferences("wattpit", Context.MODE_PRIVATE); db = new HistoryDb(context); }
 
@@ -40,7 +40,7 @@ final class Repository {
         JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));all.put(kind,result);prefs.edit().putString("archiveDiagnostics",all.toString()).apply();
     }
     synchronized String diagnosticText()throws JSONException{
-        JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));StringBuilder text=new StringBuilder("Watt’n’Pit 0.1.4 · Archivdiagnose\n");
+        JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));StringBuilder text=new StringBuilder("Watt’n’Pit 0.1.5 · Archivdiagnose\n");
         for(String kind:new String[]{"solar","shunt"}){
             JSONObject d=all.optJSONObject(kind);if(d==null)continue;text.append(kind.equals("solar")?"\nSolarladeregler\n":"\nBatteriewächter\n");
             text.append(d.optString("result")).append('\n');JSONArray lines=d.optJSONArray("steps");if(lines!=null)for(int i=0;i<lines.length();i++)text.append("· ").append(lines.getString(i)).append('\n');
@@ -153,13 +153,13 @@ final class Repository {
             if (now - f.getLong("seen") > 120_000) iterator.remove(); else discovery.put(f);
         }
         if (now - statsTime > 30_000) { cachedStats = db.stats(); statsTime = now; }
-        return new JSONObject().put("running",running).put("status",status).put("devices",devices).put("found",discovery)
+        return new JSONObject().put("historyRevision",historyRevision).put("running",running).put("status",status).put("devices",devices).put("found",discovery)
                 .put("equipment",equipment()).put("archiveDiagnostics",new JSONObject(prefs.getString("archiveDiagnostics","{}"))).put("archive",archive).put("deviceHistory",db.histories()).put("weatherError",prefs.getString("weatherError","")).put("weather",new JSONObject(prefs.getString("weatherCache","{}"))).put("readings",readings).put("stats",cachedStats).put("solarDaily",db.daily()).put("event",event).put("eventId",eventId)
                 .put("settings",new JSONObject().put("theme",prefs.getString("theme","dark"))
                     .put("palette",prefs.getString("palette","classic")).put("weatherPlace",new JSONObject(prefs.getString("weatherPlace","{}")))
                     .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10)));
     }
-    synchronized void invalidateStats() { statsTime = 0; }
+    synchronized void invalidateStats() { statsTime = 0;historyRevision++; }
     void saveSettings(JSONObject settings) throws Exception {
         String theme = settings.optString("theme",prefs.getString("theme","dark"));
         double capacity = settings.optDouble("capacity",prefs.getFloat("capacity",100f));

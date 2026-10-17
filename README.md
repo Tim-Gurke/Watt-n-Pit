@@ -4,11 +4,12 @@
 
 [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · [Einrichtung](#einrichtung) · [CSV-Import](docs/CSV-IMPORT.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
-## Version 0.1.4
+## Version 0.1.5
 
 - SmartSolar 75/15 und SmartShunt 300 A gleichzeitig über Bluetooth-Sofortanzeige.
 - Automatischer Gerätearchiv-Import beim App-Start, je Gerät nacheinander; Fortschritt und Abbruch unter Geräte. Android-Kopplung wird vor dem GATT-Aufbau geprüft; vorhandene Kopplungen benötigen keine neue PIN-Abfrage.
 - Solaranlage unter Einstellungen frei anpassen: mehrere Solarkreise mit Modulanzahl, Wp pro Modul, Montage, Regler und Messwertquelle. Ohne Einrichtung werden keine persönlichen Anlagenangaben angenommen.
+- Archivtransport mit regelmäßiger Sitzungserneuerung und Paketfreigaben; gespeicherte Blöcke werden während des Imports im Verlauf sichtbar.
 - Kopierbare lokale Archivdiagnose mit Verbindungsschritten und Fehlerstatus, ohne Adressen, Schlüssel oder Messwerte.
 - Abgleich pro Gerät, Messgröße und Zeitpunkt mit Aufzeichnungen, CSV und früheren Archivimporten. Feinere Daten haben Vorrang; fehlende Kanäle werden ergänzt.
 - Sechs fertige Farbdesigns: Klassisch, Blau, Grün, Türkis, Orange und Neutral, jeweils hell und dunkel.
@@ -71,7 +72,7 @@ Positiver Batteriestrom bedeutet Laden, negativer Batteriestrom Entladen. Restla
 
 ## Stand und offene Aufgaben
 
-0.1.4 ist eine Testversion. Der Java-Archivdecoder wurde mit einer privaten realen Bluetooth-Aufzeichnung gegen die unabhängige Offline-Auswertung abgeglichen (28.079 Einträge einschließlich fehlender Werte). Protokoll-, SQL-Abgleich- und CSV-Tests, Android-Lint und APK-Build sind automatisiert geprüft. **Der erste Gerätetest mit 0.1.3 zeigte einen fehlgeschlagenen Archivaufbau trotz funktionierender Sofortanzeige. 0.1.4 ergänzt die im Mitschnitt bestätigten Sitzungskontexte 0, 1 und 3 samt Antwortprüfung, frühzeitige Android-Kopplung und die MTU-Aushandlung. Der korrigierte Ablauf muss am realen Gerät erneut getestet werden.**
+0.1.5 ist eine Testversion. Der Java-Archivdecoder wurde mit einer privaten realen Bluetooth-Aufzeichnung gegen die unabhängige Offline-Auswertung abgeglichen (28.079 Einträge einschließlich fehlender Werte). Protokoll-, SQL-Abgleich- und CSV-Tests, Android-Lint und APK-Build sind automatisiert geprüft. **Der erste Gerätetest mit 0.1.3 zeigte einen fehlgeschlagenen Archivaufbau trotz funktionierender Sofortanzeige. 0.1.5 ergänzt die im Mitschnitt bestätigten Sitzungskontexte 0, 1 und 3 samt Antwortprüfung, frühzeitige Android-Kopplung und die MTU-Aushandlung. Der korrigierte Ablauf muss am realen Gerät erneut getestet werden.**
 
 Beim App-Start bzw. nach mehr als 30 Sekunden im Hintergrund beginnt ein kurzer Importlauf für die eingerichteten Geräte. Bluetooth muss eingeschaltet und VictronConnect getrennt sein. Android kann beim ersten Mal die sechsstellige Geräte-PIN anfordern. Die 32-stelligen Sofortanzeige-Schlüssel und diese PIN sind verschieden. Bereits gelesene Bereiche werden gespeichert; erneutes Starten ergänzt Lücken und erzeugt keine doppelten Archivpunkte. Abbrüche behalten alle schon abgeschlossenen Blöcke. Außerhalb der Reichweite endet der Lauf mit einem Hinweis; ein neuer Versuch erfolgt beim nächsten App-Start oder über „Gerätearchiv ergänzen“.
 
