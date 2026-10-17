@@ -40,3 +40,12 @@ test('settings preserve an explicit positive discharge choice after the negative
   delete backup.dashboard.dischargeSignVersion;
   assert.equal(C.normalize(backup).dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign,true);
 });
+
+test('comparison tile settings and both layouts survive a portable backup round trip',()=>{
+  const backup=sample(),tile=D.tile('energyBalance','comparison-test');
+  tile.unit='kWh';tile.type='number';tile.title='Mein Energievergleich';tile.period.mode='sunrise';
+  tile.layouts={compact:{x:2,y:24,w:8,h:6},wide:{x:4,y:30,w:4,h:4}};
+  backup.dashboard.tiles.push(tile);
+  const restored=C.normalize(JSON.parse(JSON.stringify(backup)));
+  assert.deepEqual(restored.dashboard.tiles.at(-1),tile);assert.deepEqual(restored.dashboard.tiles.slice(0,-1),backup.dashboard.tiles.slice(0,-1));
+});

@@ -21,6 +21,7 @@
     yieldWh:      {label:'Solarertrag heute', group:'Solar', kind:'solar', field:'yieldWh', units:['kWh','Wh'], min:0, max:2000, digits:2, color:'#e8bb57'},
     solarEnergy:  {label:'Solarertrag berechnet',group:'Energie',kind:'solar',backend:'solarEnergy',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#e8bb57',energy:true,hint:'Aus gespeicherter Solarleistung berechnet. Nur erfasste Zeitabschnitte; Aufzeichnungslücken werden ausgelassen.'},
     dischargeEnergy:{label:'Batterieentnahme berechnet',group:'Energie',kind:'shunt',backend:'dischargeEnergy',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#65cbb0',energy:true,hint:'Aus negativer Shunt-Leistung berechnet. Batterieentnahme ist kein Gesamtverbrauch: direkt genutzter Solarstrom fehlt.'},
+    energyBalance:{label:'Ertrag − Entnahme',group:'Energie',kind:'balance',backend:'energyBalance',units:['Wh','kWh'],min:-2000,max:2000,digits:2,color:'#81baf4',energy:true,comparison:true,hint:'Solarertrag minus Batterieentnahme im selben Zeitraum. Vergleichswert; keine Änderung der gespeicherten Akkuenergie und kein Gesamtverbrauch.'},
     pvVoltage: {label:'PV-Eingangsspannung',group:'Solar',kind:'solar',field:'pvVoltage',backend:'pvVoltage',units:['V','mV'],min:0,max:75,digits:2,color:'#efb468',hint:'Spannung am Solareingang des Reglers; aus dem Gerätearchiv.'},
     solarTemperature: {label:'Batterietemperatur am Regler',group:'Solar',kind:'solar',field:'temperature',backend:'solarTemperature',units:['°C'],min:-20,max:60,digits:1,color:'#81baf4',hint:'Nur mit vorhandenem Temperatursensor; aus dem Gerätearchiv.'},
     solarVoltage: {label:'Regler-Batteriespannung', group:'Solar', kind:'solar', field:'voltage', units:['V','mV'], min:10, max:15, digits:2, color:'#81baf4', hint:'Batterieseitige Spannung am SmartSolar; keine PV-Eingangsspannung.'},
@@ -226,7 +227,7 @@
     const dataLow=Math.min(...values),dataHigh=Math.max(...values);
     const upper=v=>{const step=10**(Math.floor(Math.log10(v))-1);return Number((Math.ceil(v/step-1e-9)*step).toPrecision(12));};
     let low,high;
-    if(['solar','yieldWh','solarEnergy','dischargeEnergy','solarCurrent','load','remaining','remainingAh','remainingWh','consumed','power','current'].includes(t.metric)){
+    if(['solar','yieldWh','solarEnergy','dischargeEnergy','energyBalance','solarCurrent','load','remaining','remainingAh','remainingWh','consumed','power','current'].includes(t.metric)){
       low=dataLow<0?-upper(-dataLow*1.1):0;high=dataHigh>0?upper(dataHigh*1.1):dataLow<0?0:1;
     }else{
       const span=dataHigh-dataLow||Math.max(Math.abs(dataHigh)*.02,.1),step=10**(Math.floor(Math.log10(span))-1),pad=span*.1;
