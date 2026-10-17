@@ -12,7 +12,7 @@
   const aggregateNames={avg:'Durchschnitt',min:'Minimum',max:'Maximum',last:'Letzter Wert'};
   class WattDashboard {
     constructor(adapter) {
-      this.a=adapter;this.board=$('dashboardBoard');this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
+      this.a=adapter;this.board=$('dashboardBoard');this.weatherContent=$('weatherStrip');this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
       let stored;
       try { stored=JSON.parse(adapter.native?.dashboard?adapter.native.dashboard():localStorage.getItem('wattpit-dashboard-v1') || '{}'); } catch (_) { stored={}; }
       this.config=C.normalize(stored);this.saved=copy(this.config);
@@ -40,16 +40,19 @@
       $('layoutHelp').hidden=!this.editing;
       this.renderBlockOrder();
       $('layoutProfile').textContent=this.profile==='wide'?'Breite Ansicht':'Schmale Ansicht';
+      $('weatherDock').append(this.weatherContent);
       this.board.innerHTML='';this.elements.clear();
       for (const t of this.config.tiles) {
         const m=C.CATALOG[t.metric],el=document.createElement('article');
         el.className='cockpit-tile type-'+t.type;el.dataset.tile=t.id;el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-label',(t.title || m.label)+' anpassen');
         el.innerHTML=`<div class="tile-head"><span class="tile-label">${esc(t.title || m.label)}</span><button class="tile-menu" aria-label="${esc(t.title || m.label)} bearbeiten">···</button></div><div class="tile-visual"></div><div class="tile-hint"></div><span class="tile-resize" aria-hidden="true"></span>`;
+        if(m.widget){this.weatherContent.dataset.title=t.title;this.weatherContent.querySelector('#weatherPlaceName').textContent=t.title||this.a.getSnapshot().settings.weatherPlace?.name||'Wetter';el.querySelector('.tile-visual').append(this.weatherContent);el.querySelector('.tile-visual').insertAdjacentHTML('beforeend','<span class="weather-disabled">Wetterort in den Einstellungen wählen.</span>');}
         el.style.setProperty('--tile-color',t.color);el.style.setProperty('--number-size',t.fontSize+'px');
         el.style.setProperty('--tile-bg',t.background==='auto'?`color-mix(in srgb,var(--panel) ${t.opacity}%,transparent)`:`${t.background}${Math.round(t.opacity*2.55).toString(16).padStart(2,'0')}`);
         el.querySelector('.tile-menu').onclick=e=>{e.stopPropagation();this.editor(t.id);};
-        el.onclick=()=>{if(Date.now()-(this.lastDrag || 0)>300)this.editor(t.id);};
+        el.onclick=e=>{if(m.widget&&e.target.closest('.weather-days,button'))return;if(Date.now()-(this.lastDrag || 0)>300)this.editor(t.id);};
         el.onkeydown=e=>{
+          if(e.target!==el)return;
           if(e.key==='Enter' || e.key===' '){e.preventDefault();this.editor(t.id);}
           if(this.editing && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
             e.preventDefault();const p=t.layouts[this.profile];p.x=C.clamp(p.x+(e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0),0,12-p.w);p.y=Math.max(0,p.y+(e.key==='ArrowUp'?-1:e.key==='ArrowDown'?1:0));this.commit();this.elements.get(t.id)?.focus();
@@ -65,7 +68,7 @@
       this.layout();this.update();
     }
     renderBlockOrder() {
-      const container=$('overviewBlocks'),controls=$('overviewOrder'),labels={tiles:'Kacheln',weather:'Wetter',history:'Verlauf',record:'Start / Pause'};
+      const container=$('overviewBlocks'),controls=$('overviewOrder'),labels={tiles:'Kacheln mit Wetter',history:'Verlauf',record:'Start / Pause'};
       for(const key of this.config.blockOrder){const block=container.querySelector(`[data-overview-block="${key}"]`);if(block)container.append(block);}
       controls.hidden=!this.editing;
       controls.innerHTML='<p>Reihenfolge der Blöcke</p>'+this.config.blockOrder.map((key,i)=>`<div class="overview-order-row"><span>${labels[key]}</span><button class="quiet" data-block="${key}" data-move="-1" aria-label="${labels[key]} nach oben" ${i===0?'disabled':''}>↑</button><button class="quiet" data-block="${key}" data-move="1" aria-label="${labels[key]} nach unten" ${i===this.config.blockOrder.length-1?'disabled':''}>↓</button></div>`).join('');
@@ -78,9 +81,11 @@
       const width=this.board.clientWidth;
       for(const t of this.config.tiles){const p=t.layouts[this.profile],el=this.elements.get(t.id);if(!el)continue;
         el.classList.toggle('short-tile',p.h<=3);
+        el.classList.toggle('narrow-weather',t.metric==='weather'&&p.w<8);
         Object.assign(el.style,{left:(p.x/12*width+5)+'px',top:(p.y*this.row+5)+'px',width:(p.w/12*width-10)+'px',height:(p.h*this.row-10)+'px'});
       }
-      this.board.style.height=(this.config.tiles.length?Math.max(...this.config.tiles.map(t=>{const p=t.layouts[this.profile];return p.y+p.h;}))+(this.editing?2:0):0)*this.row+'px';
+      const visible=this.config.tiles.filter(t=>!this.elements.get(t.id)?.hidden);
+      this.board.style.height=(visible.length?Math.max(...visible.map(t=>{const p=t.layouts[this.profile];return p.y+p.h;}))+(this.editing?2:0):0)*this.row+'px';
       this.fitNumbers();
     }
     pointerDown(event,t) {
@@ -95,7 +100,7 @@
       if(Math.abs(dx)+Math.abs(dy)>5)d.moved=true;
       if(!d.moved)return;
       event.preventDefault();const t=this.config.tiles.find(t=>t.id===d.id),p=t.layouts[this.profile],cols=Math.round(dx/(this.board.clientWidth/12)),rows=Math.round(dy/this.row);
-      if(d.resize){p.w=C.clamp(d.origin.w+cols,2,12-d.origin.x);p.h=C.clamp(d.origin.h+rows,2,18);}
+      if(d.resize){const min=C.CATALOG[t.metric].widget?4:2;p.w=C.clamp(d.origin.w+cols,min,12-d.origin.x);p.h=C.clamp(d.origin.h+rows,min,18);}
       else{p.x=C.clamp(d.origin.x+cols,0,12-p.w);p.y=C.clamp(d.origin.y+rows,0,1000);}
       this.layout();
     }
@@ -139,8 +144,14 @@
     update() {
       if(!this.a.getSnapshot)return;
       const snapshot=this.a.getSnapshot(),shunt=this.a.reading('shunt'),solar=this.a.reading('solar'),now=Date.now();
+      let visibilityChanged=false;
       for(const t of this.config.tiles){
         const el=this.elements.get(t.id);if(!el)continue;
+        if(C.CATALOG[t.metric].widget){
+          const configured=!!snapshot.settings.weatherPlace?.name,hidden=!configured&&!this.editing;
+          if(el.hidden!==hidden){el.hidden=hidden;visibilityChanged=true;}
+          el.querySelector('.weather-disabled').hidden=configured;continue;
+        }
         el.style.setProperty('--tile-color',this.paint(t.color,t,true));
         el.style.setProperty('--tile-muted',this.paint(getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),t,true));
         const m=C.CATALOG[t.metric],window=C.windowFor(t,now,snapshot.weather),data=window?this.data(t,window):null;
@@ -161,7 +172,7 @@
         const hintElement=el.querySelector('.tile-hint');hintElement.textContent=hint;hintElement.title=[window?.note||'',m.energy?Math.floor((data?.summary?.coverage||0)*100)+' % des Zeitraums erfasst':''].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
         el.classList.toggle('no-value',!C.finite(value));
       }
-      this.fitNumbers();
+      if(visibilityChanged)this.layout();else this.fitNumbers();
     }
     fitNumbers() {
       for(const el of this.elements.values()){
@@ -222,6 +233,7 @@
       document.querySelectorAll('.metric-option').forEach(el=>el.onclick=()=>this.add(el.dataset.metric));
     }
     add(metric,prototype) {
+      if(metric==='weather'&&this.config.tiles.some(t=>t.metric==='weather')){this.a.closeModal();this.a.toast('Die Wetterkachel ist bereits vorhanden. Über „Anordnen“ verschieben oder anpassen.');return;}
       const t=prototype?{...copy(prototype),id:C.tile(metric).id}:C.tile(metric);
       for(const profile of ['compact','wide']){const y=this.config.tiles.length?Math.max(...this.config.tiles.map(t=>t.layouts[profile].y+t.layouts[profile].h)):0;t.layouts[profile]={...t.layouts[profile],x:0,y};}
       this.config.tiles.push(t);
@@ -230,6 +242,7 @@
     editor(id,unsaved) {
       const original=this.config.tiles.find(t=>t.id===id);if(!original)return;
       const t=copy(unsaved || original),m=C.CATALOG[t.metric],p=t.layouts[this.profile];let layer='keep';
+      if(m.widget){this.weatherEditor(t);return;}
       const types=m.status?[['number','Zahlenwert']]:[['number','Zahlenwert'],['gauge','Rundinstrument'],...(!m.liveOnly?[['chart','Verlauf']]:[])];
       const fields=`<div class="form-grid">${field('Messwert',select('tileMetric',Object.entries(C.CATALOG).map(([key,m])=>[key,m.label])))}${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60" placeholder="'+esc(m.label)+'"'))}${field('Darstellung',select('tileType',types))}${field('Einheit',select('tileUnit',m.units.map(u=>[u,u || 'Ohne Einheit'])))}</div><p class="muted tile-explanation">${esc(m.hint || (m.kind==='shunt'?'Messwert vom SmartShunt.':'Messwert vom SmartSolar.'))}</p>`;
       const period=`<details open><summary>Wert & Zeitraum</summary><div class="form-grid">${field('<span id="tilePeriodLabel">Zeitraum</span>',select('tilePeriod',m.liveOnly?[['live','Aktuell']]:[['live','Aktuell'],['last','Letzte …'],['today','Heute'],['sunrise','Seit Sonnenaufgang'],['reset','Seit Zurücksetzen'],['custom','Freier Zeitraum']]))}${field('<span id="tileAggregateLabel">Auswertung</span>',select('tileAggregate',m.status?[['last','Letzter Wert']]:Object.entries(aggregateNames)))}</div><p class="muted" id="tileLiveHint" hidden>Aktuell zeigt den Liveempfang. Ohne frischen Wert erscheint —; die gespeicherte Kurve bleibt sichtbar.</p><p class="muted" id="tileSunriseHint" hidden></p>${m.energy?'<label class="check-field"><input type="checkbox" id="tileReverseSign"> Vorzeichen umkehren (+/−)</label>':''}<div id="tileLastFields" class="form-grid">${field('Anzahl',input('tileAmount',t.period.amount,'type="number" min="1" max="10000"'))}${field('Zeiteinheit',select('tileTimeUnit',[['min','Minuten'],['h','Stunden'],['d','Tage']]))}</div><div id="tileCustomFields" class="form-grid">${field('Von',input('tileFrom',dateInput(t.period.from || Date.now()-86400000),'type="datetime-local"'))}${field('Bis',input('tileTo',dateInput(t.period.to || Date.now()),'type="datetime-local"'))}</div><div id="tileResetFields"><p class="muted" id="tileResetLabel"></p><button class="quiet" id="tileReset">Jetzt zurücksetzen</button></div></details>`;
@@ -295,6 +308,13 @@
           if(this.commit()){this.a.closeModal();this.a.toast('Kachel gespeichert.');}
         } catch(error){$('tileError').hidden=false;$('tileError').textContent=error.message;}
       };
+    }
+    weatherEditor(t){
+      const p=t.layouts[this.profile];
+      this.a.openModal('Wetterkachel anpassen',`<div class="tile-editor"><p class="muted">14 Tage mit Wettersymbol und Sonnenstunden, seitlich wischbar. Unter „Anordnen“ frei zwischen deine Messkacheln verschieben.</p>${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60" placeholder="Wetterort"'))}<div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="4" max="12"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="4" max="18"'))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}</div><button id="tileWeatherSettings" class="quiet">Wetterort ändern</button><div class="form-actions"><button class="quiet" id="removeTile">Entfernen</button><button class="primary" id="saveTile">Übernehmen</button></div></div>`);
+      $('tileWeatherSettings').onclick=()=>{this.a.closeModal();document.querySelector('[data-page="settings"]').click();$('weatherQuery').focus();};
+      $('removeTile').onclick=()=>{this.config.tiles=this.config.tiles.filter(old=>old.id!==t.id);if(this.commit())this.a.closeModal();};
+      $('saveTile').onclick=()=>{t.title=$('tileTitle').value.trim();t.opacity=Number($('tileOpacity').value);t.layouts[this.profile]={...p,w:Number($('tileWidth').value),h:Number($('tileHeight').value)};t.layouts[this.profile].x=Math.min(p.x,12-t.layouts[this.profile].w);this.config.tiles=this.config.tiles.map(old=>old.id===t.id?t:old);if(this.commit()){this.a.closeModal();this.a.toast('Wetterkachel gespeichert.');}};
     }
     shortInput(n){return Math.round(n*1e6)/1e6;}
     reset() {

@@ -21,7 +21,7 @@ const fs=require('node:fs');
  await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
  const tile=metric=>page.locator(`[data-tile="default-${metric}"]`),value=metric=>tile(metric).locator('.tile-number').textContent();
  const initial=await page.evaluate(()=>window.WattDashboardCore.defaults());
- assert.equal(await value('solar'),'10');assert.equal(await value('solarEnergy'),'17,00');assert.equal(await value('dischargeEnergy'),'14,00');
+ assert.equal(await value('solar'),'10');assert.equal(await value('solarEnergy'),'17,00');assert.equal(await value('dischargeEnergy'),'-14,00');
  const soc=await tile('soc').boundingBox(),power=await tile('solar').boundingBox(),energy=await tile('solarEnergy').boundingBox(),discharge=await tile('dischargeEnergy').boundingBox();
  assert.equal(soc.y,power.y);assert.ok(soc.x<power.x&&discharge.y>soc.y&&energy.y>power.y);
  for(const metric of ['solar','solarEnergy','dischargeEnergy']){
@@ -29,7 +29,7 @@ const fs=require('node:fs');
   assert.match(await tile(metric).locator('.tile-hint').textContent(),/seit Sonnenaufgang/);
   const call=await page.evaluate(metric=>window.calls.filter(c=>c.metric===metric).at(-1),metric);assert.equal(call.from,await page.evaluate(()=>window.mock.weather.days[0].sunrise));
  }
- assert.equal(await value('solar'),'10');assert.equal(await value('solarEnergy'),'8,00');assert.equal(await value('dischargeEnergy'),'5,00');
+ assert.equal(await value('solar'),'10');assert.equal(await value('solarEnergy'),'8,00');assert.equal(await value('dischargeEnergy'),'-5,00');
  assert.equal(await tile('solar').locator('.tile-sparkline').getAttribute('data-scale-max'),'6.6');
  assert.deepEqual(await page.evaluate(()=>window.testConfig.tiles.map(t=>t.layouts)),initial.tiles.map(t=>t.layouts),'period selection moved tiles');
  await tile('dischargeEnergy').click();await page.locator('#tileReverseSign').check();await page.locator('#saveTile').click();

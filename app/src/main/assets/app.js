@@ -208,7 +208,8 @@ function loadHistory() {
     if(metric==='energy'){
       energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo)):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source)):{};
       if(energyData.error)throw new Error();
-      points=[...(energyData.solar?.points||[]),...(energyData.battery?.points||[])].sort((a,b)=>a.t-b.t);
+      const battery=(energyData.battery?.points||[]).map(p=>({...p,v:dischargeValue(p.v),min:dischargeValue(p.max),max:dischargeValue(p.min)}));
+      points=[...(energyData.solar?.points||[]),...battery].sort((a,b)=>a.t-b.t);
     }else points=demo?(source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric)):native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)).points || []:[];
   }catch(error){points=[];energyData=null;toast('Der Verlauf konnte nicht geladen werden.');}
   $('energyNote').hidden=metric!=='energy';
@@ -230,9 +231,11 @@ function loadMini(force=false) {
   catch(error){miniPoints=[];}
   drawMini();
 }
+function dischargeValue(v){return window.WattDashboardCore.finite(v)?-Math.abs(Number(v))||0:null;}
 function energyDescription(data){
   const describe=(series,label)=>{const s=series?.summary||{},coverage=Math.floor((s.coverage||0)*100);return `${label}: ${num(s.last,2)} Wh · ${coverage} % der Zeit erfasst`;};
-  return describe(data?.solar,'Solar')+' · '+describe(data?.battery,'Batterieentnahme')+'. Berechnet aus Leistungsdaten. Lücken werden ausgelassen. Batterieentnahme ist kein Gesamtverbrauch; direkt genutzter Solarstrom fehlt.';
+  const battery=data?.battery?{...data.battery,summary:{...data.battery.summary,last:dischargeValue(data.battery.summary?.last)}}:null;
+  return describe(data?.solar,'Solar')+' · '+describe(battery,'Batterieentnahme')+'. Berechnet aus Leistungsdaten. Lücken werden ausgelassen. Batterieentnahme ist kein Gesamtverbrauch; direkt genutzter Solarstrom fehlt.';
 }
 function sampleEnergyDemo(from,to){
   const data=sampleDemo(from,to,'power'),result={};
@@ -263,10 +266,10 @@ function canvasChart(canvas,data,from,to,chosen,mini=false) {
   const visible=data.filter(p=>p.t>=from&&p.t<=to);
   let low=0,high=100;
   if(visible.length){low=Math.min(...visible.map(p=>p.min));high=Math.max(...visible.map(p=>p.max));
-    if(chosen==='power'||chosen==='current'){low=Math.min(low,0);high=Math.max(high,0);}
+    if(chosen==='power'||chosen==='current'||chosen==='energy'){low=Math.min(low,0);high=Math.max(high,0);}
     const span=Math.max(high-low,chosen==='voltage'?.3:chosen==='current'?1:10);low-=span*.12;high+=span*.12;
     if(chosen==='soc'){low=Math.max(0,Math.floor(low/10)*10);high=Math.min(100,Math.ceil(high/10)*10);}
-    if(chosen==='yieldWh'||chosen==='energy')low=Math.max(0,low);
+    if(chosen==='yieldWh')low=Math.max(0,low);
   }
   if(!mini&&manualY){low=manualY.min;high=manualY.max;}
   if(high<=low)high=low+1;

@@ -50,12 +50,14 @@ window.WattExtras=class {
     document.getElementById('weatherLocation').textContent=place.name||'Noch kein Wetterort gewählt.';
     document.getElementById('weatherOff').hidden=!place.name;
     const strip=document.getElementById('weatherStrip');strip.hidden=!place.name;
-    document.getElementById('weatherPlaceName').textContent=place.name||'';
+    document.getElementById('weatherPlaceName').textContent=strip.dataset.title||place.name||'Wetter';
+    document.getElementById('weatherPlaceName').title=place.name||'';
     const today=new Intl.DateTimeFormat('en-CA',{timeZone:weather.timezone||undefined,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-    const valid=days.filter(d=>d.day>=today);
+    const valid=days.filter(d=>d.day>=today).slice(0,14);
     const weatherKey=JSON.stringify([valid,today]);
-    if(this.weatherKey!==weatherKey){this.weatherKey=weatherKey;document.getElementById('weatherDays').innerHTML=valid.length?valid.map(d=>{const date=new Date(d.day+'T12:00:00');return `<div class="weather-day"><time datetime="${e(d.day)}">${e(date.toLocaleDateString('de-DE',{weekday:'short'}))}<small>${e(date.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}))}</small></time>${this.symbol(d.code)}<span>${d.hours==null?'—':Number(d.hours).toLocaleString('de-DE',{maximumFractionDigits:1})} h</span></div>`;}).join(''):'<p class="muted">Vorschau wird geladen. Zum Abrufen Internet einschalten.</p>';}
-    document.getElementById('weatherNote').textContent=s.weatherError|| (weather.updated?'Stand '+new Date(weather.updated).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' · Sonnenstunden':'Sonnenstunden · 14 Tage');
+    if(this.weatherKey!==weatherKey){this.weatherKey=weatherKey;document.getElementById('weatherDays').innerHTML=valid.length?valid.map(d=>{const date=new Date(d.day+'T12:00:00');return `<div class="weather-day"><time datetime="${e(d.day)}" title="${e(date.toLocaleDateString('de-DE',{dateStyle:'full'}))}">${e(date.toLocaleDateString('de-DE',{weekday:'short'}))}<small>${e(date.toLocaleDateString('de-DE',{day:'2-digit'}))}</small></time>${this.symbol(d.code)}<span>${d.hours==null?'—':Number(d.hours).toLocaleString('de-DE',{maximumFractionDigits:1})} h</span></div>`;}).join(''):'<p class="muted">Vorschau lädt · Internet einschalten.</p>';}
+    const note=s.weatherError|| (weather.updated?'Stand '+new Date(weather.updated).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'Sonnenstunden');
+    document.getElementById('weatherNote').textContent=note;document.getElementById('weatherNote').title=note;
     const reports=s.archiveDiagnostics||{};document.getElementById('archiveDetails').hidden=!Object.keys(reports).length;
     document.getElementById('archiveDiagnosticText').textContent=Object.entries(reports).map(([kind,r])=>(kind==='solar'?'Solarladeregler':'Batteriewächter')+'\n'+(r.result||'')+'\n'+(r.steps||[]).join('\n')).join('\n\n');
     const archive=s.archive||{};document.getElementById('archiveStatus').hidden=!archive.text;

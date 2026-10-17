@@ -11,7 +11,7 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><div><div class="wordmark">Watt<span class="wordmark-n">’n’</span><span>Pit</span><small>0.1.8</small></div><div class="brandline">DEIN ENERGIE-COCKPIT</div></div></div>
+  <div class="brand"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><div><div class="wordmark">Watt<span class="wordmark-n">’n’</span><span>Pit</span><small>0.1.9</small></div><div class="brandline">DEIN ENERGIE-COCKPIT</div></div></div>
   <button class="iconbutton" id="themeToggle" aria-label="Farbschema wechseln"></button>
 </header>
 <div id="demoBar" class="demo-bar" hidden><span>DEMO · Beispieldaten</span><button id="exitDemo">Demo verlassen</button></div>
@@ -28,9 +28,6 @@
   <div id="dashboardEmpty" class="empty-dashboard" hidden>Platz für deine Werte. Über „+ Kachel“ legst du los.</div>
   <div class="dashboard-foot"><span id="batteryState"></span><span id="lastSeen"></span></div>
   </div>
-  <div data-overview-block="weather">
-  <article id="weatherStrip" class="weather-strip" hidden><div class="section-heading"><div><span class="eyebrow">14 TAGE · SONNENSTUNDEN</span><h2 id="weatherPlaceName"></h2></div><button id="weatherRefresh" class="textbutton" aria-label="Wetter aktualisieren">↻</button></div><div id="weatherDays" class="weather-days"></div><p class="weather-credit"><span id="weatherNote"></span> · Open-Meteo · CC BY 4.0</p></article>
-  </div>
   <div data-overview-block="history">
   <article class="card mini-history"><div class="section-heading"><div><span class="eyebrow" id="miniPeriodLabel">HEUTE</span><h2>So läuft deine Energie.</h2></div><button class="textbutton" id="openHistory">Verlauf <span>↗</span></button></div><label class="mini-range">Zeitraum<select id="miniRange" aria-label="Zeitraum auf der Übersicht"><option value="sunrise">Seit Sonnenaufgang</option><option value="today">Heute</option><option value="last6h">Letzte 6 Stunden</option></select></label><p class="muted" id="miniPeriodNote" hidden></p><div class="mini-legend"><span><i class="dot orange"></i> Solar</span><span><i class="dot mint"></i> Batterie</span></div><canvas id="miniChart" aria-label="Solarleistung und Batteriebilanz im gewählten Zeitraum"></canvas></article>
   </div>
@@ -39,6 +36,7 @@
   <button class="record-button" id="overviewRecord"><span id="recordIcon"></span><span id="recordText">Aufzeichnung starten</span></button>
   </div>
   </div>
+  <div id="weatherDock" hidden><div id="weatherStrip" class="weather-strip" hidden><div class="weather-heading"><span id="weatherPlaceName" class="weather-name"></span><span class="weather-period">14 Tage · Sonne</span><button id="weatherRefresh" class="textbutton" aria-label="Wetter aktualisieren">↻</button></div><div id="weatherDays" class="weather-days" tabindex="0" aria-label="14 Tage Wetter und Sonnenstunden, seitlich wischbar"></div><p class="weather-credit"><span id="weatherNote"></span><span class="weather-attribution">Open-Meteo · CC BY 4.0</span></p></div></div>
 </section>
 <section id="history" class="page">
   <div class="pagehead"><div><p class="eyebrow">DEINE DATEN BLEIBEN BEI DIR</p><h1>Der Verlauf.</h1></div><button class="iconbutton" id="historyImport" aria-label="CSV importieren"></button></div>
@@ -69,7 +67,7 @@
   <article class="card settings-card"><div class="section-heading"><div><h2>Deine Solaranlage</h2><p id="equipmentTotal" class="muted"></p></div><button id="editEquipment" class="textbutton">Bearbeiten</button></div><div id="equipmentGroups"></div><p class="muted equipment-disclaimer">Hier beschreibst du deine Module und Regler. Die Angaben ändern keine Geräteparameter. Livewerte kommen weiterhin vom jeweiligen Messgerät.</p></article>
   <article class="card settings-card"><h2>Einstellungen sichern</h2><p class="muted">Kacheln samt Anordnung, Farben, Zeiträume, Wetterort und Solaranlage als Datei sichern oder wieder einlesen. Ohne Messdaten, Geräteadressen, PINs und Verbindungsschlüssel.</p><div class="row"><button class="quiet" id="exportConfiguration">Einstellungen exportieren</button><button class="quiet" id="importConfiguration">Einstellungen importieren</button></div></article>
   <article class="card settings-card"><h2>Lokal. Ohne Konto.</h2><p class="muted">Watt’n’Pit empfängt deine Geräte direkt. Messwerte und Geräteschlüssel bleiben auf diesem Telefon. Kein Konto, keine Werbung. Nur die optionale Ortssuche und Wettervorschau nutzen Internet: Suchtext bzw. Ortskoordinaten gehen an Open-Meteo. Energiedaten und Geräteschlüssel werden nicht übertragen.</p><div class="row"><button class="quiet" id="settingsImport">CSV importieren</button><button class="quiet" id="settingsExport">CSV exportieren</button></div></article>
-  <div class="about"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><strong>Watt’n’Pit 0.1.8</strong><p>Dein Energie-Cockpit.</p><button class="textbutton" id="settingsDemo">Demo ansehen</button></div>
+  <div class="about"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><strong>Watt’n’Pit 0.1.9</strong><p>Dein Energie-Cockpit.</p><button class="textbutton" id="settingsDemo">Demo ansehen</button></div>
 </section>
 </main>
 <nav class="bottom-nav" aria-label="Hauptnavigation"><button data-page="overview" class="active"><span id="navOverview"></span>Übersicht</button><button data-page="history"><span id="navHistory"></span>Verlauf</button><button data-page="devices"><span id="navDevices"></span>Geräte</button><button data-page="settings"><span id="navSettings"></span>Einstellungen</button></nav>

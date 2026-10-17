@@ -80,7 +80,7 @@ test('zero, flat values and missing readings never produce a degenerate scale or
   const t=C.tile('solar');t.scaleMode='auto';
   assert.deepEqual(C.chartRange(t,[{v:0}]),{min:0,max:1,auto:true});
   assert.deepEqual(C.chartRange(t,[{v:null},{v:NaN},{v:Infinity}]),{min:0,max:300,auto:false});
-  for(const [metric,m] of Object.entries(C.CATALOG).filter(([,m])=>!m.status&&!m.liveOnly)){
+  for(const [metric,m] of Object.entries(C.CATALOG).filter(([,m])=>!m.status&&!m.liveOnly&&!m.widget)){
     const tile=C.tile(metric);tile.scaleMode='auto';
     for(const value of [0,3]){const r=C.chartRange(tile,[{v:value}]);assert.ok(Number.isFinite(r.min)&&Number.isFinite(r.max)&&r.max>r.min,metric);}
   }
@@ -111,13 +111,13 @@ test('calculated energy is a historical total and cannot pretend to be live',()=
   for(const metric of ['solarEnergy','dischargeEnergy']){
     const t=C.tile(metric);t.valueMode='live';t.period.mode='live';t.period.aggregate='avg';
     const saved=C.normalize({tiles:[t]}).tiles[0];assert.equal(saved.period.mode,'today');assert.equal(saved.period.aggregate,'last');assert.equal(C.usesLiveValue(saved),false);
-    assert.equal(C.displayValue(saved,{last:3.27},null,null,{settings:{capacity:100}}),3.27);
+    assert.equal(C.displayValue(saved,{last:3.27},null,null,{settings:{capacity:100}}),metric==='dischargeEnergy'?-3.27:3.27);
   }
 });
 test('overview block order preserves all blocks once and migrates old dashboards',()=>{
-  const input=C.defaults();delete input.blockOrder;assert.deepEqual(C.normalize(input).blockOrder,['tiles','weather','history','record']);
-  input.blockOrder=['record','history','record','invalid','weather'];assert.deepEqual(C.normalize(input).blockOrder,['record','history','weather','tiles']);
-  assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(C.normalize(input)))).blockOrder,['record','history','weather','tiles']);
+  const input=C.defaults();delete input.blockOrder;assert.deepEqual(C.normalize(input).blockOrder,['tiles','history','record']);
+  input.blockOrder=['record','history','record','invalid','weather'];assert.deepEqual(C.normalize(input).blockOrder,['record','history','tiles']);
+  assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(C.normalize(input)))).blockOrder,['record','history','tiles']);
 });
 test('sunrise range uses the selected location date and falls back visibly for missing or future sunrise',()=>{
   const now=Date.parse('2026-10-17T10:00:00Z'),rise=Date.parse('2026-10-17T05:48:00Z'),weather={timezone:'Europe/Berlin',days:[{day:'2026-10-17',sunrise:rise}]};
@@ -142,12 +142,12 @@ test('readable numbers handle shorthand white, custom dark surfaces and transpar
 });
 test('the standard overview follows the requested seven-tile arrangement',()=>{
   const board=C.defaults();
-  assert.deepEqual(board.tiles.map(t=>t.metric),['soc','solar','dischargeEnergy','solarEnergy','voltage','remaining','power']);
-  assert.deepEqual(board.tiles.map(t=>t.layouts.compact),[{x:0,y:0,w:6,h:6},{x:6,y:0,w:6,h:5},{x:0,y:6,w:6,h:5},{x:6,y:5,w:6,h:6},{x:0,y:11,w:4,h:4},{x:4,y:11,w:4,h:4},{x:8,y:11,w:4,h:4}]);
+  assert.deepEqual(board.tiles.filter(t=>t.metric!=='weather').map(t=>t.metric),['soc','solar','dischargeEnergy','solarEnergy','voltage','remaining','power']);
+  assert.deepEqual(board.tiles.filter(t=>t.metric!=='weather').map(t=>t.layouts.compact),[{x:0,y:0,w:6,h:6},{x:6,y:0,w:6,h:5},{x:0,y:6,w:6,h:5},{x:6,y:5,w:6,h:6},{x:0,y:11,w:4,h:4},{x:4,y:11,w:4,h:4},{x:8,y:11,w:4,h:4}]);
   assert.equal(board.tiles[1].valueMode,'live');assert.equal(board.tiles[1].scaleMode,'auto');
 });
 test('sunrise tile periods survive reload without changing customized layouts or live selection',()=>{
-  const board=C.defaults();board.blockOrder=['history','tiles','weather','record'];board.tiles[0].layouts.compact={x:2,y:17,w:8,h:6};
+  const board=C.defaults();board.blockOrder=['history','tiles','record'];board.tiles[0].layouts.compact={x:2,y:17,w:8,h:6};
   for(const tile of board.tiles.filter(t=>['solar','solarEnergy','dischargeEnergy'].includes(t.metric)))tile.period.mode='sunrise';
   const saved=C.normalize(JSON.parse(JSON.stringify(board)));
   assert.deepEqual(saved,board);
@@ -186,7 +186,30 @@ test('sign reversal survives reload and reflects fixed bounds while existing and
   assert.equal(restored.reverseSign,true);assert.deepEqual(C.fixedRange(restored),{min:-2,max:0});
   assert.deepEqual(C.chartRange(restored,[{v:5}]),{min:-2,max:0,auto:false});
   assert.equal(restored.min,0);assert.equal(restored.max,2000);
-  delete t.reverseSign;assert.equal(C.normalize({tiles:[t]}).tiles[0].reverseSign,false);
+  delete t.reverseSign;assert.equal(C.normalize({tiles:[t]}).tiles[0].reverseSign,true);
   const current=C.tile('current');current.reverseSign=true;
   const unchanged=C.normalize({tiles:[current]}).tiles[0];assert.equal(unchanged.reverseSign,false);assert.equal(C.signedValue(unchanged,-8.4),-8.4);
+});
+
+test('legacy weather blocks become one compact tile without moving existing layouts',()=>{
+  const board=C.defaults();board.tiles=board.tiles.filter(t=>t.metric!=='weather');board.blockOrder=['record','weather','tiles','history'];board.tiles[0].layouts.compact={x:3,y:21,w:6,h:6};
+  const before=structuredClone(board.tiles),migrated=C.normalize(board),weather=migrated.tiles.at(-1);
+  assert.deepEqual(migrated.tiles.slice(0,-1),before);assert.equal(weather.metric,'weather');
+  assert.deepEqual(weather.layouts.compact,{x:0,y:27,w:12,h:4});assert.deepEqual(weather.layouts.wide,{x:0,y:15,w:12,h:4});
+  assert.deepEqual(migrated.blockOrder,['record','tiles','history']);assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(migrated))),migrated);
+  assert.equal(C.windowFor(weather),null);
+});
+test('weather removal remains intentional and duplicate widgets or undersized layouts cannot break the board',()=>{
+  const board=C.defaults();board.tiles=board.tiles.filter(t=>t.metric!=='weather');assert.equal(C.normalize(board).tiles.some(t=>t.metric==='weather'),false);
+  const w=C.tile('weather');w.layouts.compact={x:10,y:2,w:2,h:2};board.tiles.push(w,{...w,id:'another-weather'});
+  const result=C.normalize(board).tiles.filter(t=>t.metric==='weather');assert.equal(result.length,1);assert.deepEqual(result[0].layouts.compact,{x:8,y:2,w:4,h:4});
+});
+
+test('battery discharge is negative immediately for new and upgraded tiles, while a later explicit choice survives',()=>{
+  assert.equal(C.tile('dischargeEnergy').reverseSign,true);
+  const old=C.defaults();delete old.dischargeSignVersion;const t=old.tiles.find(t=>t.metric==='dischargeEnergy');t.reverseSign=false;
+  const layouts=structuredClone(old.tiles.map(t=>t.layouts)),upgraded=C.normalize(old);
+  assert.equal(upgraded.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign,true);assert.deepEqual(upgraded.tiles.map(t=>t.layouts),layouts);
+  upgraded.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign=false;
+  assert.equal(C.normalize(JSON.parse(JSON.stringify(upgraded))).tiles.find(t=>t.metric==='dischargeEnergy').reverseSign,false);
 });

@@ -32,9 +32,11 @@ final class ConfigurationBackup {
             tiles.put(tile);
         }
         JSONArray order=board.getJSONArray("blockOrder");Set<String> blocks=new HashSet<>();
-        if(order.length()!=4)throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
+        if(order.length()!=3&&order.length()!=4)throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
         for(int i=0;i<order.length();i++)if(!Arrays.asList("tiles","weather","history","record").contains(order.getString(i))||!blocks.add(order.getString(i)))throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
+        if(!blocks.containsAll(Arrays.asList("tiles","history","record")))throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
         JSONObject dashboard=new JSONObject().put("version",1).put("blockOrder",order).put("tiles",tiles);
+        if(board.optInt("dischargeSignVersion")==1)dashboard.put("dischargeSignVersion",1);
         JSONObject place=input.optJSONObject("weatherPlace");if(place==null)place=new JSONObject();
         if(place.length()>0)place=WeatherClient.checkedPlace(place);
         JSONObject result=new JSONObject().put("format","wattnpit-settings").put("version",1).put("settings",settings).put("dashboard",dashboard).put("equipment",Repository.checkedEquipment(input.getJSONObject("equipment"))).put("weatherPlace",place);

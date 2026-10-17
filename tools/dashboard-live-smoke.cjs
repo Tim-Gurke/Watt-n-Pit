@@ -36,9 +36,8 @@ const fs=require('node:fs');
  // All overview blocks can be moved without changing the tile layout.
  const layouts=await page.evaluate(()=>window.testConfig.tiles[0].layouts);
  await page.locator('#editDashboard').click();
- await page.getByRole('button',{name:'Wetter nach unten',exact:true}).click();
- for(let i=0;i<3;i++)await page.getByRole('button',{name:'Start / Pause nach oben',exact:true}).click();
- const order=await page.locator('#overviewBlocks > [data-overview-block]').evaluateAll(nodes=>nodes.map(n=>n.dataset.overviewBlock));assert.deepEqual(order,['record','tiles','history','weather']);
+ for(let i=0;i<2;i++)await page.getByRole('button',{name:'Start / Pause nach oben',exact:true}).click();
+ const order=await page.locator('#overviewBlocks > [data-overview-block]').evaluateAll(nodes=>nodes.map(n=>n.dataset.overviewBlock));assert.deepEqual(order,['record','tiles','history']);
  assert.deepEqual(await page.evaluate(()=>window.testConfig.tiles[0].layouts),layouts);
  await page.locator('#editDashboard').click();assert.equal(await page.locator('#overviewOrder').isVisible(),false);
  await page.reload();assert.deepEqual(await page.locator('#overviewBlocks > [data-overview-block]').evaluateAll(nodes=>nodes.map(n=>n.dataset.overviewBlock)),order);
@@ -54,7 +53,7 @@ const fs=require('node:fs');
  const energyTile=page.locator('[data-tile]').last();assert.equal(await energyTile.locator('.tile-number').textContent(),'3,27');assert.match(await energyTile.locator('.tile-hint').textContent(),/Berechnet.*50 % erfasst/);
  await energyTile.click();assert.equal(await page.locator('#tileAggregate').isDisabled(),true);assert.equal(await page.locator('#tilePeriod option[value="live"]').evaluate(el=>el.disabled),true);await page.locator('#closeModal').click();
  await page.locator('[data-page="history"]').click();await page.locator('#metricButtons [data-metric="energy"]').click();
- assert.equal(await page.locator('#chartLegend span').count(),2);assert.match(await page.locator('#energyNote').textContent(),/3,27 Wh.*50 %.*1,25 Wh.*50 %/);assert.match(await page.locator('#energyNote').textContent(),/kein Gesamtverbrauch/);
+ assert.equal(await page.locator('#chartLegend span').count(),2);assert.match(await page.locator('#energyNote').textContent(),/3,27 Wh.*50 %.*-1,25 Wh.*50 %/);assert.match(await page.locator('#energyNote').textContent(),/kein Gesamtverbrauch/);assert.ok(await page.evaluate(()=>points.some(p=>p.kind==='shunt'&&p.v===-1.25)));assert.ok(await page.evaluate(()=>scale.low< -1.25));assert.equal(await page.evaluate(()=>dischargeValue(0)),0);assert.equal(await page.evaluate(()=>dischargeValue(null)),null);
  if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'energy-comparison-dark.png'),fullPage:true});await page.locator('[data-page="overview"]').click();await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'overview-blocks-dark.png'),fullPage:true});}
  assert.equal(await page.evaluate(()=>document.body.scrollWidth>innerWidth),false);
  assert.equal(errors.length,0,errors.join('\n'));await browser.close();console.log('Independent live/chart values, zero/stale/paused/error states, persistence, block ordering, sunrise/6h selection and calculated-energy UI passed.');
