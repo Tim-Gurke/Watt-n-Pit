@@ -41,6 +41,12 @@ const http = require('node:http');
       assert.equal(await page.locator('[data-tile="default-soc"] .tile-number').textContent(),'76,4');
       assert.equal(await page.locator('#demoBar').isVisible(),true);
       assert.equal(await page.locator('#overviewRecord').isDisabled(),true);
+      for(const tile of await page.locator('.short-tile.type-chart').all()){
+        const label=await tile.locator('.tile-label').boundingBox(),value=await tile.locator('.tile-reading').boundingBox(),curve=await tile.locator('.tile-sparkline').boundingBox(),axis=await tile.locator('.tile-chart-range').boundingBox();
+        assert.ok(value.y>=label.y+label.height-.5,'a low chart value overlaps its title');
+        assert.ok(curve.height>0&&curve.y>=value.y+value.height-.5,'a low chart curve overlaps its value');
+        assert.ok(axis.y>=curve.y+curve.height-.5,'a low chart scale overlaps its curve');
+      }
       if(output && viewport.width===360) { await page.waitForTimeout(600); await page.screenshot({path:path.join(output,`overview-${theme}.png`)}); }
       await page.locator('[data-page="history"]').click();
       assert.equal(await page.locator('#chartLegend span').count(),2);

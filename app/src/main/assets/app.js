@@ -208,11 +208,12 @@ function loadHistory() {
     if(metric==='energy'){
       energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo)):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source)):{};
       if(energyData.error)throw new Error();
-      const battery=(energyData.battery?.points||[]).map(p=>({...p,v:dischargeValue(p.v),min:dischargeValue(p.max),max:dischargeValue(p.min)}));
-      points=[...(energyData.solar?.points||[]),...battery].sort((a,b)=>a.t-b.t);
+      energyData.balance=window.WattDashboardCore.energyBalance(energyData.solar,energyData.battery);
+      points=energyPlotPoints(energyData);
     }else points=demo?(source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric)):native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)).points || []:[];
   }catch(error){points=[];energyData=null;toast('Der Verlauf konnte nicht geladen werden.');}
   $('energyNote').hidden=metric!=='energy';
+  $('energyOptions').hidden=metric!=='energy';
   $('energyNote').textContent=metric==='energy'?energyDescription(energyData):'';
   $('chartTitle').textContent=metrics[metric].title;
   $('chartWindow').textContent=`${date(viewFrom)} ${clock(viewFrom)} – ${date(viewTo)} ${clock(viewTo)}`;
@@ -232,10 +233,14 @@ function loadMini(force=false) {
   drawMini();
 }
 function dischargeValue(v){return window.WattDashboardCore.finite(v)?-Math.abs(Number(v))||0:null;}
+function energyPlotPoints(data){
+  const battery=(data?.battery?.points||[]).map(p=>({...p,v:dischargeValue(p.v),min:dischargeValue(p.max),max:dischargeValue(p.min)}));
+  return [...(data?.solar?.points||[]),...battery,...($('energyBalance').checked?data?.balance?.points||[]:[])].sort((a,b)=>a.t-b.t);
+}
 function energyDescription(data){
   const describe=(series,label)=>{const s=series?.summary||{},coverage=Math.floor((s.coverage||0)*100);return `${label}: ${num(s.last,2)} Wh · ${coverage} % der Zeit erfasst`;};
   const battery=data?.battery?{...data.battery,summary:{...data.battery.summary,last:dischargeValue(data.battery.summary?.last)}}:null;
-  return describe(data?.solar,'Solar')+' · '+describe(battery,'Batterieentnahme')+'. Berechnet aus Leistungsdaten. Lücken werden ausgelassen. Batterieentnahme ist kein Gesamtverbrauch; direkt genutzter Solarstrom fehlt.';
+  return describe(data?.solar,'Solar')+' · '+describe(battery,'Batterieentnahme')+' · Ertrag − Entnahme: '+num(data?.balance?.summary?.last,2)+' Wh. Berechnet aus Leistungsdaten. Lücken werden ausgelassen. Ertrag − Entnahme ist weder der Gesamtverbrauch noch die Änderung der gespeicherten Akkuenergie.';
 }
 function sampleEnergyDemo(from,to){
   const data=sampleDemo(from,to,'power'),result={};
@@ -250,6 +255,7 @@ function seriesOf(data) {
   return [...groups.values()];
 }
 function seriesLabel(s) {
+  if(s.kind==='balance')return 'Ertrag − Entnahme';
   if(s.origin==='calculated')return s.kind==='solar'?'Solarertrag berechnet':'Batterieentnahme berechnet';
   const name=snapshot.devices.find(d=>d.mac===s.device)?.name || (s.kind==='solar'?'SmartSolar':'SmartShunt');
   return name + (s.origin==='csv'?' · CSV':s.origin==='archive'?' · Archiv':'');
@@ -260,7 +266,7 @@ function canvasChart(canvas,data,from,to,chosen,mini=false) {
   canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
   const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);
   const style=getComputedStyle(document.documentElement),muted=style.getPropertyValue('--muted').trim(),border=style.getPropertyValue('--border').trim();
-  const mint=style.getPropertyValue('--mint').trim(),orange=style.getPropertyValue('--orange').trim();
+  const mint=style.getPropertyValue('--mint').trim(),orange=style.getPropertyValue('--orange').trim(),blue=style.getPropertyValue('--blue').trim();
   const left=chosen==='yieldWh'?51:43,right=12,top=18,bottom=30;
   const plotW=width-left-right,plotH=height-top-bottom;
   const visible=data.filter(p=>p.t>=from&&p.t<=to);
@@ -282,14 +288,14 @@ function canvasChart(canvas,data,from,to,chosen,mini=false) {
   ctx.save();ctx.beginPath();ctx.rect(left,top,plotW,plotH);ctx.clip();
   const series=seriesOf(visible);
   for(const s of series){
-    const color=s.kind==='solar'?orange:mint;
+    const color=s.kind==='balance'?blue:s.kind==='solar'?orange:mint;
     const bucket=(to-from)/600;
     const gapLimit=Math.max(bucket*3,s.origin==='csv'?45*60000:45000,...s.points.map(p=>(p.period||0)*1500));
     const segments=[];let segment=[];
     for(const p of s.points){if(segment.length && (chosen==='energy'?p.gap:p.t-segment[segment.length-1].last>gapLimit)){segments.push(segment);segment=[];}segment.push(p);}if(segment.length)segments.push(segment);
     for(const segment of segments){
       if(segment.some(p=>p.n>1)){ctx.beginPath();segment.forEach((p,i)=>i?ctx.lineTo(x(p.t),y(p.max)):ctx.moveTo(x(p.t),y(p.max)));[...segment].reverse().forEach(p=>ctx.lineTo(x(p.t),y(p.min)));ctx.closePath();ctx.globalAlpha=.16;ctx.fillStyle=color;ctx.fill();ctx.globalAlpha=1;}
-      ctx.strokeStyle=color;ctx.lineWidth=mini?2:2.2;ctx.setLineDash(s.origin==='csv'?[5,4]:[]);ctx.beginPath();segment.forEach((p,i)=>i?ctx.lineTo(x(p.t),y(p.v)):ctx.moveTo(x(p.t),y(p.v)));ctx.stroke();ctx.setLineDash([]);
+      ctx.strokeStyle=color;ctx.lineWidth=mini?2:2.2;ctx.setLineDash(s.kind==='balance'?[6,3]:s.origin==='csv'?[5,4]:[]);ctx.beginPath();segment.forEach((p,i)=>i?ctx.lineTo(x(p.t),y(p.v)):ctx.moveTo(x(p.t),y(p.v)));ctx.stroke();ctx.setLineDash([]);
       if(segment.length===1){ctx.beginPath();ctx.arc(x(segment[0].t),y(segment[0].v),2.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();}
     }
   }
@@ -299,7 +305,7 @@ function canvasChart(canvas,data,from,to,chosen,mini=false) {
 function drawHistory(){
   if(page!=='history')return;
   scale=canvasChart($('historyChart'),points,viewFrom,viewTo,metric);
-  $('chartLegend').innerHTML=scale.series.map(s=>`<span><i class="dot ${s.kind==='solar'?'orange':'mint'}"></i>${escapeHtml(seriesLabel(s))}${s.origin==='csv'?' · gestrichelt':''}</span>`).join('');
+  $('chartLegend').innerHTML=scale.series.map(s=>`<span><i class="dot ${s.kind==='balance'?'blue':s.kind==='solar'?'orange':'mint'}"></i>${escapeHtml(seriesLabel(s))}${s.origin==='csv'||s.kind==='balance'?' · gestrichelt':''}</span>`).join('');
 }
 function drawMini(){if(page==='overview'&&miniWindow)canvasChart($('miniChart'),miniPoints,miniWindow.from,Math.max(miniWindow.from+1,miniWindow.to),'power',true);}
 function clampView(from,to){const span=Math.min(baseTo-baseFrom,Math.max(60000,to-from));let start=Math.max(baseFrom,Math.min(from,baseTo-span));viewFrom=start;viewTo=start+span;selectedPoint=null;$('chartTooltip').hidden=true;drawHistory();delayedHistory();}
@@ -323,7 +329,7 @@ $('historyChart').addEventListener('pointermove',event=>{
 });
 function releasePointer(event){
   if(!pointers.has(event.pointerId))return;
-  if(pointers.size===1&&dragDistance<6&&scale){const px=event.clientX-$('historyChart').getBoundingClientRect().left;const time=viewFrom+(px-scale.left)/scale.plotW*(viewTo-viewFrom);const nearest=[...points].sort((a,b)=>Math.abs(a.t-time)-Math.abs(b.t-time))[0];if(nearest){selectedPoint=nearest;const nearby=points.filter(p=>Math.abs(p.t-nearest.t)<Math.max(1000,(viewTo-viewFrom)/500));$('chartTooltip').innerHTML=`<strong>${date(nearest.t)} ${clock(nearest.t)}</strong><br>${nearby.slice(0,4).map(p=>`${escapeHtml(seriesLabel(p))}: ${num(p.v,metric==='voltage'||metric==='current'?2:1)} ${metrics[metric].unit}${p.period?`<br><span class="muted">Archivauflösung ${num(p.period)} s</span>`:''}${p.n>1?`<br><span class="muted">Ø aus ${p.n} Werten · ${num(p.min,1)}–${num(p.max,1)} ${metrics[metric].unit}</span>`:''}`).join('<br>')}`;$('chartTooltip').hidden=false;drawHistory();}}
+  if(pointers.size===1&&dragDistance<6&&scale){const px=event.clientX-$('historyChart').getBoundingClientRect().left;const time=viewFrom+(px-scale.left)/scale.plotW*(viewTo-viewFrom);const nearest=[...points].sort((a,b)=>Math.abs(a.t-time)-Math.abs(b.t-time))[0];if(nearest){selectedPoint=nearest;const nearby=seriesOf(points.filter(p=>Math.abs(p.t-nearest.t)<Math.max(1000,(viewTo-viewFrom)/500))).map(s=>s.points.reduce((a,b)=>Math.abs(a.t-nearest.t)<=Math.abs(b.t-nearest.t)?a:b));$('chartTooltip').innerHTML=`<strong>${date(nearest.t)} ${clock(nearest.t)}</strong><br>${nearby.slice(0,4).map(p=>`${escapeHtml(seriesLabel(p))}: ${num(p.v,['energy','voltage','current'].includes(metric)?2:1)} ${metrics[metric].unit}${p.period?`<br><span class="muted">Archivauflösung ${num(p.period)} s</span>`:''}${p.n>1?`<br><span class="muted">Ø aus ${p.n} Werten · ${num(p.min,1)}–${num(p.max,1)} ${metrics[metric].unit}</span>`:''}`).join('<br>')}`;$('chartTooltip').hidden=false;drawHistory();}}
   pointers.delete(event.pointerId);gesture=null;
 }
 $('historyChart').addEventListener('pointerup',releasePointer);
@@ -380,6 +386,7 @@ $('modal').onclick=event=>{if(event.target===$('modal'))closeModal();};
 document.addEventListener('keydown',event=>{if(event.key==='Escape')window.handleBack();if(event.key==='Tab'&&!$('modal').hidden){const items=[...$('modal').querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),summary')].filter(el=>el.offsetParent);if(!items.length)return;const first=items[0],last=items[items.length-1];if(event.shiftKey&&document.activeElement===first){last.focus();event.preventDefault();}else if(!event.shiftKey&&document.activeElement===last){first.focus();event.preventDefault();}}});
 $('applyRange').onclick=()=>setWindow(new Date($('rangeFrom').value).getTime(),new Date($('rangeTo').value).getTime());
 $('historySource').onchange=()=>{source=$('historySource').value;loadHistory();};
+$('energyBalance').onchange=()=>{if(metric!=='energy')return;points=energyPlotPoints(energyData);selectedPoint=null;$('chartTooltip').hidden=true;drawHistory();};
 $('zoomIn').onclick=()=>zoom(.5);$('zoomOut').onclick=()=>zoom(2);$('openScale').onclick=scaleForm;
 $('resetChart').onclick=()=>{viewFrom=baseFrom;viewTo=baseTo;manualY=null;loadHistory();};
 ['importCsv','historyImport','settingsImport'].forEach(id=>$(id).onclick=chooseImport);
