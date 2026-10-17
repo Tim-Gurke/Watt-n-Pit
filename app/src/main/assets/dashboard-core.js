@@ -19,6 +19,8 @@
     alarm:        {label:'Shunt-Alarm', group:'Akku', kind:'shunt', field:'alarm', units:['Code'], min:0, max:255, digits:0, color:'#e8bb57', status:true},
     solar:        {label:'Solarleistung', group:'Solar', kind:'solar', field:'solar', units:['W','kW'], min:0, max:300, digits:0, color:'#e8bb57'},
     yieldWh:      {label:'Solarertrag heute', group:'Solar', kind:'solar', field:'yieldWh', units:['kWh','Wh'], min:0, max:2000, digits:2, color:'#e8bb57'},
+    solarEnergy:  {label:'Solarertrag berechnet',group:'Energie',kind:'solar',backend:'solarEnergy',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#e8bb57',energy:true,hint:'Aus gespeicherter Solarleistung berechnet. Nur erfasste Zeitabschnitte; Aufzeichnungslücken werden ausgelassen.'},
+    dischargeEnergy:{label:'Batterieentnahme berechnet',group:'Energie',kind:'shunt',backend:'dischargeEnergy',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#65cbb0',energy:true,hint:'Aus negativer Shunt-Leistung berechnet. Batterieentnahme ist kein Gesamtverbrauch: direkt genutzter Solarstrom fehlt.'},
     pvVoltage: {label:'PV-Eingangsspannung',group:'Solar',kind:'solar',field:'pvVoltage',backend:'pvVoltage',units:['V','mV'],min:0,max:75,digits:2,color:'#efb468',hint:'Spannung am Solareingang des Reglers; aus dem Gerätearchiv.'},
     solarTemperature: {label:'Batterietemperatur am Regler',group:'Solar',kind:'solar',field:'temperature',backend:'solarTemperature',units:['°C'],min:-20,max:60,digits:1,color:'#81baf4',hint:'Nur mit vorhandenem Temperatursensor; aus dem Gerätearchiv.'},
     solarVoltage: {label:'Regler-Batteriespannung', group:'Solar', kind:'solar', field:'voltage', units:['V','mV'], min:10, max:15, digits:2, color:'#81baf4', hint:'Batterieseitige Spannung am SmartSolar; keine PV-Eingangsspannung.'},
@@ -29,13 +31,25 @@
     shuntRssi:    {label:'Shunt-Signal', group:'Verbindung', kind:'shunt', units:['dBm'], min:-100, max:-30, digits:0, color:'#81baf4', liveOnly:true},
     solarRssi:    {label:'Regler-Signal', group:'Verbindung', kind:'solar', units:['dBm'], min:-100, max:-30, digits:0, color:'#81baf4', liveOnly:true},
     shuntAge:     {label:'Shunt: letzter Empfang', group:'Verbindung', kind:'shunt', units:['s','min'], min:0, max:60, digits:0, color:'#81baf4', liveOnly:true},
-    solarAge:     {label:'Regler: letzter Empfang', group:'Verbindung', kind:'solar', units:['s','min'], min:0, max:60, digits:0, color:'#81baf4', liveOnly:true}
+    solarAge:     {label:'Regler: letzter Empfang', group:'Verbindung', kind:'solar', units:['s','min'], min:0, max:60, digits:0, color:'#81baf4', liveOnly:true},
+    weather:      {label:'Wetter · 14 Tage',group:'Wetter',kind:'weather',units:[''],min:0,max:1,digits:0,color:'#e8bb57',widget:true}
   };
   const PHASES = {0:'Aus',1:'Wenig Leistung',2:'Fehler',3:'Bulk',4:'Absorption',5:'Float',6:'Storage',7:'Ausgleich',9:'Invertieren',11:'Stromversorgung',245:'Start',247:'Auto-Ausgleich',252:'Extern gesteuert'};
+  const BLOCK_ORDER=['tiles','history','record'];
   const finite = x => x !== null && x !== '' && Number.isFinite(Number(x));
   const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
   const numeric = (x,fallback,a,b) => finite(x) ? clamp(Number(x),a,b) : fallback;
   const color = (x,fallback) => /^#[0-9a-f]{6}$/i.test(x || '') ? x : fallback;
+  function readableColor(foreground,background,page,opacity=100,target=7) {
+    const rgb=hex=>{hex=hex.trim();if(/^#[0-9a-f]{3}$/i.test(hex))hex='#'+[...hex.slice(1)].map(c=>c+c).join('');return [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));};
+    const luminance=channels=>channels.map(c=>c/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4).reduce((n,c,i)=>n+c*[.2126,.7152,.0722][i],0);
+    const back=rgb(background),base=rgb(page),alpha=clamp(opacity,0,100)/100,surface=back.map((c,i)=>c*alpha+base[i]*(1-alpha)),bg=luminance(surface),original=rgb(foreground);
+    const whiteRatio=1.05/(bg+.05),blackRatio=(bg+.05)/.05,end=whiteRatio>blackRatio?255:0;
+    for(let step=0;step<=100;step++){
+      const channels=original.map(c=>Math.round(c+(end-c)*step/100)),fg=luminance(channels),ratio=(Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05);
+      if(ratio>=target||step===100)return '#'+channels.map(c=>c.toString(16).padStart(2,'0')).join('');
+    }
+  }
   function unitValue(value,unit) {
     if (!finite(value)) return null;
     value=Number(value);
@@ -69,9 +83,9 @@
   }
   function tile(metric,id) {
     const m=CATALOG[metric] || CATALOG.soc;
-    return {id:id || 'tile-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),metric:CATALOG[metric]?metric:'soc',title:'',unit:m.units[0],type:metric==='soc'?'gauge':'number',
-      digits:m.digits,fontSize:32,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,min:m.min,max:m.max,background:'auto',opacity:100,
-      period:{mode:'live',amount:6,unit:'h',aggregate:'avg',resetAt:Date.now(),from:0,to:0},layouts:{compact:position({}),wide:position({},true)}};
+    return {id:id || 'tile-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),metric:CATALOG[metric]?metric:'soc',title:'',unit:m.units[0],type:m.widget?'weather':m.energy?'chart':metric==='soc'?'gauge':'number',
+      digits:m.digits,fontSize:32,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,reverseSign:metric==='dischargeEnergy',min:m.min,max:m.max,scaleMode:m.energy?'auto':'fixed',valueMode:'history',background:'auto',opacity:100,
+      period:{mode:m.energy?'today':'live',amount:6,unit:'h',aggregate:m.energy?'last':'avg',resetAt:Date.now(),from:0,to:0},layouts:{compact:position(m.widget?{w:12,h:4}:{h:m.energy?6:3}),wide:position(m.widget?{w:12,h:4}:{h:m.energy?6:3},true)}};
   }
   function normalizeTile(input,seen) {
     if (!input || !CATALOG[input.metric]) return null;
@@ -85,28 +99,49 @@
     result.multicolor=!!input.multicolor;result.invert=!!input.invert;result.adaptiveColor=input.adaptiveColor!==false;
     result.min=numeric(input.min,m.min,-1e9,1e9);result.max=numeric(input.max,m.max,-1e9,1e9);
     if(result.max<=result.min){result.min=m.min;result.max=m.max;}
+    result.scaleMode=input.scaleMode==='auto'?'auto':'fixed';
+    result.valueMode=input.valueMode==='live'?'live':'history';
+    result.reverseSign=!!m.energy&&input.reverseSign===true;
     result.opacity=numeric(input.opacity,100,0,100);result.background=input.background==='auto'?'auto':color(input.background,'auto');
     const p=input.period || {};
-    result.period={mode:!m.liveOnly && ['live','last','today','reset','custom'].includes(p.mode)?p.mode:'live',amount:numeric(p.amount,6,1,10000),unit:['min','h','d'].includes(p.unit)?p.unit:'h',
+    result.period={mode:!m.liveOnly && ['live','last','today','sunrise','reset','custom'].includes(p.mode)?p.mode:'live',amount:numeric(p.amount,6,1,10000),unit:['min','h','d'].includes(p.unit)?p.unit:'h',
       aggregate:['last','avg','min','max'].includes(p.aggregate)?p.aggregate:'avg',resetAt:numeric(p.resetAt,Date.now(),0,9e15),from:numeric(p.from,0,0,9e15),to:numeric(p.to,0,0,9e15)};
     if(m.status)result.period.aggregate='last';
+    if(m.energy){result.valueMode='history';result.period.aggregate='last';if(result.period.mode==='live')result.period.mode='today';}
     result.layouts={compact:position(input.layouts?.compact),wide:position(input.layouts?.wide,true)};
+    if(m.widget){result.type='weather';result.period.mode='live';for(const p of Object.values(result.layouts)){p.w=Math.max(4,p.w);p.h=Math.max(4,p.h);p.x=Math.min(p.x,12-p.w);}}
     return result;
   }
   function defaults() {
-    const ids=['soc','remaining','yieldWh','solar','power','voltage','current'];
-    const compact=[[0,0,6,6],[6,0,6,3],[6,3,6,3],[0,6,6,4],[6,6,6,4],[0,10,6,3],[6,10,6,3]];
-    const wide=[[0,0,4,6],[4,0,4,3],[8,0,4,3],[4,3,4,3],[8,3,4,3],[0,6,6,3],[6,6,6,3]];
-    return {version:1,tiles:ids.map((id,i)=>{const t=tile(id,'default-'+id);for(const [profile,list] of [['compact',compact],['wide',wide]]) {const [x,y,w,h]=list[i];t.layouts[profile]={x,y,w,h};}return t;})};
+    const ids=['soc','solar','dischargeEnergy','solarEnergy','voltage','remaining','power','weather'];
+    const layout=[[0,0,6,6],[6,0,6,5],[0,6,6,5],[6,5,6,6],[0,11,4,4],[4,11,4,4],[8,11,4,4],[0,15,12,4]];
+    return {version:1,dischargeSignVersion:1,blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
+      const t=tile(id,'default-'+id),[x,y,w,h]=layout[i];
+      for(const profile of ['compact','wide'])t.layouts[profile]={x,y,w,h};
+      if(id==='soc')t.fontSize=20;
+      if(id==='solar'){t.type='chart';t.scaleMode='auto';t.valueMode='live';t.period.mode='today';}
+      return t;
+    })};
   }
   function normalize(input) {
     if (!input || !Array.isArray(input.tiles)) return defaults();
     const seen=new Set();
-    return {version:1,tiles:input.tiles.slice(0,64).map(t=>normalizeTile(t,seen)).filter(Boolean)};
+    const order=Array.isArray(input.blockOrder)?input.blockOrder.filter(k=>BLOCK_ORDER.includes(k)):[];
+    let weatherSeen=false;
+    const tiles=input.tiles.slice(0,64).map(t=>normalizeTile(t,seen)).filter(t=>{if(!t)return false;if(t.metric!=='weather')return true;if(weatherSeen)return false;weatherSeen=true;return true;});
+    if(Array.isArray(input.blockOrder)&&input.blockOrder.includes('weather')&&!weatherSeen&&tiles.length<64){
+      const w=tile('weather',seen.has('default-weather')?undefined:'default-weather');
+      for(const profile of ['compact','wide'])w.layouts[profile].y=tiles.length?Math.max(...tiles.map(t=>t.layouts[profile].y+t.layouts[profile].h)):0;
+      tiles.push(w);
+    }
+    if(input.dischargeSignVersion!==1)for(const t of tiles)if(t.metric==='dischargeEnergy')t.reverseSign=true;
+    return {version:1,dischargeSignVersion:1,blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles};
   }
-  function windowFor(t,now=Date.now()) {
+  function windowFor(t,now=Date.now(),weather={}) {
+    if(CATALOG[t.metric].widget)return null;
     const p=t.period;
     if(p.mode==='live' && t.type!=='chart') return null;
+    if(p.mode==='sunrise')return miniWindow('sunrise',weather,now);
     let from,to=now;
     if(p.mode==='today'){const d=new Date(now);d.setHours(0,0,0,0);from=d.getTime();}
     else if(p.mode==='reset')from=p.resetAt;
@@ -133,6 +168,15 @@
     if(!finite(value))return null;
     return (metric==='remainingAh'?Number(value)/100:metric==='remainingWh'?Number(value):Number(value))*(['remainingAh','remainingWh'].includes(metric)?capacity:1);
   }
+  function usesLiveValue(t) { return !CATALOG[t.metric].energy&&(t.type==='chart'?t.valueMode==='live':t.period.mode==='live'); }
+  function signedValue(t,value) { return finite(value)?Number(value)===0?0:Number(value)*(CATALOG[t.metric].energy&&t.reverseSign?-1:1):null; }
+  function fixedRange(t) {
+    const min=convert(t.min,t.unit,t.metric),max=convert(t.max,t.unit,t.metric);
+    return CATALOG[t.metric].energy&&t.reverseSign?{min:signedValue(t,max),max:signedValue(t,min)}:{min,max};
+  }
+  function displayValue(t,summary,shunt,solar,snapshot) {
+    return signedValue(t,usesLiveValue(t)?liveValue(t.metric,shunt,solar,snapshot):historicalValue(t.metric,summary?.[t.period.aggregate],snapshot.settings.capacity));
+  }
   function format(value,t) {
     if(!finite(value))return '—';
     if(t.metric==='state')return PHASES[value] || 'Code '+value;
@@ -140,5 +184,43 @@
     if(t.metric==='alarm')return Number(value)===0?'Kein Alarm':'0x'+Number(value).toString(16).toUpperCase();
     return Number(value).toLocaleString('de-DE',{minimumFractionDigits:t.digits,maximumFractionDigits:t.digits});
   }
-  return {CATALOG,PHASES,finite,clamp,color,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,format};
+  /** Uses actual extrema, including peaks hidden by chart buckets; manual bounds remain stored. */
+  function chartRange(t,points=[],capacity=100,summary={}) {
+    const fixed={...fixedRange(t),auto:false};
+    if(t.scaleMode!=='auto')return fixed;
+    const values=[summary.min,summary.max,...points.flatMap(p=>[p.min,p.max,p.v])].filter(finite).map(v=>signedValue(t,historicalValue(t.metric,v,capacity)));
+    if(!values.length)return fixed;
+    const dataLow=Math.min(...values),dataHigh=Math.max(...values);
+    const upper=v=>{const step=10**(Math.floor(Math.log10(v))-1);return Number((Math.ceil(v/step-1e-9)*step).toPrecision(12));};
+    let low,high;
+    if(['solar','yieldWh','solarEnergy','dischargeEnergy','solarCurrent','load','remaining','remainingAh','remainingWh','consumed','power','current'].includes(t.metric)){
+      low=dataLow<0?-upper(-dataLow*1.1):0;high=dataHigh>0?upper(dataHigh*1.1):dataLow<0?0:1;
+    }else{
+      const span=dataHigh-dataLow||Math.max(Math.abs(dataHigh)*.02,.1),step=10**(Math.floor(Math.log10(span))-1),pad=span*.1;
+      low=Number((Math.floor((dataLow-pad)/step+1e-9)*step).toPrecision(12));high=Number((Math.ceil((dataHigh+pad)/step-1e-9)*step).toPrecision(12));
+      if(dataLow>=0&&CATALOG[t.metric].min>=0)low=Math.max(0,low);
+      if(t.metric==='soc'&&dataLow>=0&&dataHigh<=100)high=Math.min(100,high);
+    }
+    return {min:convert(low,t.unit,t.metric),max:convert(high,t.unit,t.metric),auto:true};
+  }
+  function axisLabel(value,span){
+    const digits=Math.max(0,Math.min(8,1-Math.floor(Math.log10(Math.abs(span)||1))));
+    return Number(value).toLocaleString('de-DE',{maximumFractionDigits:digits});
+  }
+  function miniWindow(mode,weather={},now=Date.now()) {
+    const midnight=new Date(now);midnight.setHours(0,0,0,0);
+    if(mode==='last6h')return {from:now-6*3600000,to:now,label:'Letzte 6 Stunden',note:''};
+    const today={from:midnight.getTime(),to:now,label:'Heute',note:''};
+    if(mode==='today')return today;
+    try {
+      const dayFormat=new Intl.DateTimeFormat('en-CA',{timeZone:weather.timezone||undefined,year:'numeric',month:'2-digit',day:'2-digit'});
+      const day=dayFormat.format(new Date(now)),rise=(weather.days||[]).find(d=>d.day===day)?.sunrise;
+      if(finite(rise)&&Number(rise)>0&&dayFormat.format(new Date(Number(rise)))===day){
+        if(Number(rise)<now)return {from:Number(rise),to:now,label:'Seit Sonnenaufgang',note:'Sonnenaufgang am gewählten Wetterort.'};
+        return {...today,note:'Heute: Der Sonnenaufgang am Wetterort steht noch bevor.'};
+      }
+    }catch(_){}
+    return {...today,note:'Heute: Sonnenaufgang nicht verfügbar. Wetterort wählen oder Wetter aktualisieren.'};
+  }
+  return {CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow};
 });

@@ -53,6 +53,7 @@ public final class MonitorService extends Service {
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        if(intent!=null&&"ARCHIVE_SCAN".equals(intent.getAction())){if(repository.running){restartScan();getSystemService(NotificationManager.class).notify(NOTIFICATION,notification());return START_STICKY;}stopSelf();return START_NOT_STICKY;}
         if (intent != null && "STOP".equals(intent.getAction())) { repository.prefs.edit().putBoolean("recording",false).apply(); stopSelf(); return START_NOT_STICKY; }
         if (!hasPermissions()) { repository.status = "Bluetooth-Berechtigung fehlt"; stopSelf(); return START_NOT_STICKY; }
         try {
@@ -81,6 +82,7 @@ public final class MonitorService extends Service {
     @SuppressLint("MissingPermission")
     private void startScan() {
         if (!repository.running || scanning || !hasPermissions()) return;
+        if(repository.archiveBusy){repository.status="Gerätearchiv wird gelesen";return;}
         BluetoothManager manager = getSystemService(BluetoothManager.class);
         BluetoothAdapter adapter = manager == null ? null : manager.getAdapter();
         if (adapter == null) { repository.status = "Dieses Gerät unterstützt kein Bluetooth LE."; return; }

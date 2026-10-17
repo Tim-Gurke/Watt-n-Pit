@@ -50,7 +50,7 @@ public final class ArchiveCodec {
             List<Message> out=new ArrayList<>();int p=0;
             while(p<b.length){
                 int code=b[p]&255;
-                if(code==2||code==7){int n=code==2?9:4;if(b.length-p<n)break;p+=n;continue;}
+                if(code==2||code==7){int n=code==2?9:4;if(b.length-p<n)break;out.add(new Message(code,-1,Arrays.copyOfRange(b,p,p+n),0));p+=n;continue;}
                 if(code!=8&&code!=9)throw new IllegalArgumentException("Unbekannte Bluetooth-Antwort.");
                 if(b.length-p<2)break;
                 if((b[p+1]&255)>3)throw new IllegalArgumentException("Ungültiger Archivkontext.");

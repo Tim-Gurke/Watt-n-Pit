@@ -25,11 +25,19 @@ public final class HistoryQuery {
         Selection s=select(from,to,metric,source);
         return new HistoryQuery("SELECT "+s.field+",ts FROM readings WHERE "+s.where+" ORDER BY ts DESC LIMIT 1",s.args);
     }
+    public static HistoryQuery rawPower(long from,long to,String metric,String source) {
+        if(!metric.equals("solar")&&!metric.equals("batteryPower"))throw new IllegalArgumentException("Keine Leistungsmessgröße.");
+        Selection s=select(from,to,metric,source,false);
+        return new HistoryQuery("SELECT ts,"+s.field+",period,device,origin FROM readings WHERE "+s.where+" ORDER BY ts",s.args);
+    }
     private static final class Selection {
         final String field,where; final List<String> args;
         Selection(String field,String where,List<String> args) { this.field=field;this.where=where;this.args=args; }
     }
     private static Selection select(long from,long to,String metric,String source) {
+        return select(from,to,metric,source,true);
+    }
+    private static Selection select(long from,long to,String metric,String source,boolean merge) {
         if(from<0||to<=from)throw new IllegalArgumentException("Ungültiger Zeitraum.");
         if(!Arrays.asList("all","live","csv","archive").contains(source))throw new IllegalArgumentException("Unbekannte Datenquelle.");
         String field,kind="";
@@ -62,7 +70,7 @@ public final class HistoryQuery {
         List<String> args=new ArrayList<>(Arrays.asList(String.valueOf(from),String.valueOf(to)));
         if(!kind.isEmpty()){where+=" AND kind=?";args.add(kind);}
         if(!source.equals("all")){where+=" AND origin=?";args.add(source);}
-        else {
+        else if(merge) {
             String liveField;
             if (metric.equals("power")) liveField="CASE WHEN l.kind='solar' THEN l.solar ELSE l.power END";
             else if (metric.equals("consumed")) liveField="ABS(l.consumed)";

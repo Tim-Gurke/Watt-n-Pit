@@ -22,7 +22,7 @@ public class ArchiveCodecTest {
     }
     @Test public void statusIsNotDataAndHandshakeCanBeFragmented(){
         ArchiveCodec.Stream stream=new ArchiveCodec.Stream();assertTrue(stream.feed(hex("029f000001")).isEmpty());
-        List<ArchiveCodec.Message> out=stream.feed(hex("000301ff07000300090319ec5b03"));assertEquals(1,out.size());assertEquals(9,out.get(0).code);assertNull(out.get(0).data);assertEquals(3,out.get(0).status);
+        List<ArchiveCodec.Message> out=stream.feed(hex("000301ff07000300090319ec5b03"));assertEquals(3,out.size());assertEquals(2,out.get(0).code);assertEquals(7,out.get(1).code);assertEquals(9,out.get(2).code);assertNull(out.get(2).data);assertEquals(3,out.get(2).status);
     }
     @Test public void validatesWidthsSignsSentinelsAndNewestFirst(){
         ArchiveCodec.Field current=ArchiveCodec.field(0xed8c,-1);

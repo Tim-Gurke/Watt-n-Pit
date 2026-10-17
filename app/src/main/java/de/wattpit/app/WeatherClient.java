@@ -5,6 +5,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import de.wattpit.app.core.SunriseTime;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -38,27 +39,32 @@ final class WeatherClient {
     }
     static void place(Repository repository,JSONObject input) throws Exception {
         if(input.optBoolean("off")){repository.prefs.edit().remove("weatherPlace").remove("weatherCache").remove("weatherError").apply();return;}
+        JSONObject p=checkedPlace(input);
+        repository.prefs.edit().putString("weatherPlace",p.toString()).remove("weatherCache").remove("weatherError").apply();refresh(repository,true);
+    }
+    static JSONObject checkedPlace(JSONObject input)throws Exception{
         double lat=input.getDouble("latitude"),lon=input.getDouble("longitude");String name=input.getString("name").trim();
         if(!Double.isFinite(lat)||!Double.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180||name.isEmpty()||name.length()>180)throw new IllegalArgumentException("Ungültiger Wetterort.");
-        JSONObject p=new JSONObject().put("latitude",lat).put("longitude",lon).put("name",name);
-        repository.prefs.edit().putString("weatherPlace",p.toString()).remove("weatherCache").remove("weatherError").apply();refresh(repository,true);
+        return new JSONObject().put("latitude",lat).put("longitude",lon).put("name",name);
     }
     static void refresh(Repository repository,boolean force){
         String place=repository.prefs.getString("weatherPlace","");if(place.isEmpty()||!BUSY.compareAndSet(false,true))return;
         NETWORK.execute(()->{
             try {
                 JSONObject cached=new JSONObject(repository.prefs.getString("weatherCache","{}"));
-                if(!force&&System.currentTimeMillis()-cached.optLong("updated")<6*3600000L)return;
+                if(!force&&cached.optInt("version")==2&&System.currentTimeMillis()-cached.optLong("updated")<6*3600000L)return;
                 JSONObject p=new JSONObject(place);
-                JSONObject result=get("https://api.open-meteo.com/v1/forecast?latitude="+p.getDouble("latitude")+"&longitude="+p.getDouble("longitude")+"&daily=weather_code,sunshine_duration&forecast_days=14&timezone=auto");
+                JSONObject result=get("https://api.open-meteo.com/v1/forecast?latitude="+p.getDouble("latitude")+"&longitude="+p.getDouble("longitude")+"&daily=weather_code,sunshine_duration,sunrise&forecast_days=14&timezone=auto");
                 JSONObject daily=result.getJSONObject("daily");JSONArray dates=daily.getJSONArray("time"),codes=daily.getJSONArray("weather_code"),sun=daily.getJSONArray("sunshine_duration"),days=new JSONArray();
+                JSONArray rises=daily.optJSONArray("sunrise");
                 for(int i=0;i<Math.min(14,dates.length());i++){
                     String date=dates.getString(i);LocalDate.parse(date);
                     Object hours=JSONObject.NULL;if(!sun.isNull(i)){double seconds=sun.getDouble(i);if(Double.isFinite(seconds)&&seconds>=0&&seconds<=86400)hours=seconds/3600;}
-                    days.put(new JSONObject().put("day",date).put("code",codes.isNull(i)?JSONObject.NULL:codes.getInt(i)).put("hours",hours));
+                    long sunrise=SunriseTime.parse(date,rises==null?"":rises.optString(i),result.optString("timezone"));
+                    days.put(new JSONObject().put("day",date).put("code",codes.isNull(i)?JSONObject.NULL:codes.getInt(i)).put("hours",hours).put("sunrise",sunrise>0?sunrise:JSONObject.NULL));
                 }
                 if(days.length()==0)throw new IOException();
-                JSONObject cache=new JSONObject().put("place",p).put("updated",System.currentTimeMillis()).put("days",days).put("timezone",result.optString("timezone"));
+                JSONObject cache=new JSONObject().put("version",2).put("place",p).put("updated",System.currentTimeMillis()).put("days",days).put("timezone",result.optString("timezone"));
                 if(place.equals(repository.prefs.getString("weatherPlace","")))repository.prefs.edit().putString("weatherCache",cache.toString()).remove("weatherError").apply();
             }catch(Exception e){if(place.equals(repository.prefs.getString("weatherPlace","")))repository.prefs.edit().putString("weatherError","Wetter gerade nicht erreichbar. Gespeicherte Vorschau bleibt verfügbar.").apply();}
             finally {BUSY.set(false);if(!place.equals(repository.prefs.getString("weatherPlace","")))refresh(repository,false);}
