@@ -85,3 +85,58 @@ test('zero, flat values and missing readings never produce a degenerate scale or
     for(const value of [0,3]){const r=C.chartRange(tile,[{v:value}]);assert.ok(Number.isFinite(r.min)&&Number.isFinite(r.max)&&r.max>r.min,metric);}
   }
 });
+test('current chart values are independent of the stored window and aggregation',()=>{
+  const t=C.tile('solar');t.type='chart';t.period.mode='today';t.period.aggregate='max';t.valueMode='live';
+  const snapshot={settings:{capacity:100}},summary={last:3,max:22},now=Date.now(),window=C.windowFor(t,now);
+  assert.equal(C.displayValue(t,summary,null,{solar:7},snapshot),7);
+  assert.equal(C.displayValue(t,summary,null,{solar:0},snapshot),0);
+  assert.equal(C.displayValue(t,summary,null,null,snapshot),null);
+  assert.equal(C.displayValue(t,{},null,{solar:7},snapshot),7);
+  assert.deepEqual(C.windowFor(t,now),window);
+  t.valueMode='history';assert.equal(C.displayValue(t,summary,null,{solar:7},snapshot),22);
+});
+test('live selection is saved without migrating historical tile choices',()=>{
+  const old=C.tile('solar');delete old.valueMode;old.type='chart';old.period.mode='today';old.period.aggregate='last';
+  const saved=C.normalize({tiles:[old]}).tiles[0];assert.equal(saved.valueMode,'history');assert.equal(saved.period.aggregate,'last');
+  saved.valueMode='live';assert.equal(C.normalize(JSON.parse(JSON.stringify({tiles:[saved]}))).tiles[0].valueMode,'live');
+});
+test('all numeric charts use their own current field and unit',()=>{
+  const snapshot={settings:{capacity:150},devices:[],readings:[]};
+  for(const [metric,reading,expected] of [['solar',{solar:7},7],['current',{current:-.2},-.2],['voltage',{voltage:13.15},13.15],['soc',{soc:87},87],['remainingAh',{soc:50},75]]){
+    const t=C.tile(metric);t.type='chart';t.valueMode='live';t.period.mode='today';
+    const shunt=C.CATALOG[metric].kind==='shunt';assert.equal(C.displayValue(t,{last:999},shunt?reading:null,shunt?null:reading,snapshot),expected);
+  }
+});
+test('calculated energy is a historical total and cannot pretend to be live',()=>{
+  for(const metric of ['solarEnergy','dischargeEnergy']){
+    const t=C.tile(metric);t.valueMode='live';t.period.mode='live';t.period.aggregate='avg';
+    const saved=C.normalize({tiles:[t]}).tiles[0];assert.equal(saved.period.mode,'today');assert.equal(saved.period.aggregate,'last');assert.equal(C.usesLiveValue(saved),false);
+    assert.equal(C.displayValue(saved,{last:3.27},null,null,{settings:{capacity:100}}),3.27);
+  }
+});
+test('overview block order preserves all blocks once and migrates old dashboards',()=>{
+  const input=C.defaults();delete input.blockOrder;assert.deepEqual(C.normalize(input).blockOrder,['tiles','weather','history','record']);
+  input.blockOrder=['record','history','record','invalid','weather'];assert.deepEqual(C.normalize(input).blockOrder,['record','history','weather','tiles']);
+  assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(C.normalize(input)))).blockOrder,['record','history','weather','tiles']);
+});
+test('sunrise range uses the selected location date and falls back visibly for missing or future sunrise',()=>{
+  const now=Date.parse('2026-10-17T10:00:00Z'),rise=Date.parse('2026-10-17T05:48:00Z'),weather={timezone:'Europe/Berlin',days:[{day:'2026-10-17',sunrise:rise}]};
+  assert.equal(C.miniWindow('sunrise',weather,now).from,rise);
+  assert.equal(C.miniWindow('sunrise',weather,now).label,'Seit Sonnenaufgang');
+  assert.equal(C.miniWindow('last6h',weather,now).from,now-6*3600000);
+  assert.equal(C.miniWindow('today',weather,now).from,new Date(new Date(now).setHours(0,0,0,0)).getTime());
+  assert.match(C.miniWindow('sunrise',{},now).note,/nicht verfügbar/);
+  assert.match(C.miniWindow('sunrise',weather,rise-1).note,/noch bevor/);
+  assert.match(C.miniWindow('sunrise',{...weather,days:[{day:'2026-10-16',sunrise:rise-86400000}]},now).note,/nicht verfügbar/);
+  assert.match(C.miniWindow('sunrise',{timezone:'invalid'},now).note,/nicht verfügbar/);
+});
+test('readable numbers handle shorthand white, custom dark surfaces and transparency',()=>{
+  const luminance=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4).reduce((v,c,i)=>v+c*[.2126,.7152,.0722][i],0);
+  const contrast=(a,b)=>(Math.max(luminance(a),luminance(b))+.05)/(Math.min(luminance(a),luminance(b))+.05);
+  for(const fg of ['#e8bb57','#65cbb0','#81baf4','#ffffff','#000000']){
+    assert.ok(contrast(C.readableColor(fg,'#fff','#f4f6f9'), '#ffffff')>=7);
+    assert.ok(contrast(C.readableColor(fg,'#18303b','#f4f6f9'), '#18303b')>=7);
+    assert.ok(contrast(C.readableColor(fg,'#18303b','#f4f6f9',0), '#f4f6f9')>=7);
+  }
+  assert.notEqual(C.readableColor('#e8bb57','#fff','#f4f6f9'),'#ffffff');
+});

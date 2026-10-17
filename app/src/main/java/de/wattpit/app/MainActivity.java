@@ -203,6 +203,10 @@ public final class MainActivity extends Activity {
             try { return repository.db.dashboardData(from,to,metric).toString(); }
             catch(Exception e) { return "{\"points\":[],\"summary\":{},\"error\":\"Zeitraum konnte nicht geladen werden.\"}"; }
         }
+        @JavascriptInterface public String energyHistory(long from,long to,String source) {
+            try {return new JSONObject().put("solar",repository.db.energyData(from,to,"solarEnergy",source)).put("battery",repository.db.energyData(from,to,"dischargeEnergy",source)).toString();}
+            catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
+        }
         @JavascriptInterface public void searchWeather(String query){files.execute(()->{try{call("onWeatherSearch",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onWeatherSearch",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte Verbindung prüfen und erneut suchen."));}catch(JSONException ignored){}}});}
         @JavascriptInterface public String weatherPlace(String json){try{WeatherClient.place(repository,new JSONObject(json));return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public void refreshWeather(){WeatherClient.refresh(repository,true);}

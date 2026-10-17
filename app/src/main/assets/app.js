@@ -23,7 +23,7 @@ function formatRemaining(minutes) { const total=Math.max(0,Math.round(minutes)),
 const clock = t => new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
 const date = t => new Date(t).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
 let snapshot = {running:false,status:'Aufzeichnung pausiert',devices:[],found:[],readings:[],stats:{count:0},settings:{theme:'dark',capacity:100,sampleSeconds:10}};
-let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastMiniLoad = 0, miniPoints = [];
+let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastMiniLoad = 0, miniPoints = [], miniWindow = null, miniKey = '', energyData = null;
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let currentImport = null, lastHistoryRevision=-1;
@@ -167,7 +167,7 @@ function deviceForm(device={},found=false) {
   };
 }
 
-const metrics = {power:{title:'Solar & Batteriebilanz',unit:'W'},soc:{title:'Ladezustand',unit:'%'},voltage:{title:'Batteriespannung',unit:'V'},current:{title:'Strom am Gerät',unit:'A'},yieldWh:{title:'Tagesertrag des SmartSolar',unit:'Wh'}};
+const metrics = {power:{title:'Solar & Batteriebilanz',unit:'W'},soc:{title:'Ladezustand',unit:'%'},voltage:{title:'Batteriespannung',unit:'V'},current:{title:'Strom am Gerät',unit:'A'},yieldWh:{title:'Tagesertrag des SmartSolar',unit:'Wh'},energy:{title:'Solarertrag & Batterieentnahme',unit:'Wh'}};
 function selectRange(next) {
   range=next; const now=new Date(), end=new Date(now); end.setHours(24,0,0,0);
   const begin=new Date(now);begin.setHours(0,0,0,0);
@@ -203,19 +203,43 @@ function sampleDemo(from,to,chosen) {
 function loadHistory() {
   if(!viewFrom)return;
   clearTimeout(loadTimer);
-  try{points=demo?(source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric)):native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)).points || []:[];}
-  catch(error){points=[];toast('Der Verlauf konnte nicht geladen werden.');}
+  energyData=null;
+  try{
+    if(metric==='energy'){
+      energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo)):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source)):{};
+      if(energyData.error)throw new Error();
+      points=[...(energyData.solar?.points||[]),...(energyData.battery?.points||[])].sort((a,b)=>a.t-b.t);
+    }else points=demo?(source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric)):native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)).points || []:[];
+  }catch(error){points=[];energyData=null;toast('Der Verlauf konnte nicht geladen werden.');}
+  $('energyNote').hidden=metric!=='energy';
+  $('energyNote').textContent=metric==='energy'?energyDescription(energyData):'';
   $('chartTitle').textContent=metrics[metric].title;
   $('chartWindow').textContent=`${date(viewFrom)} ${clock(viewFrom)} – ${date(viewTo)} ${clock(viewTo)}`;
   selectedPoint=null;$('chartTooltip').hidden=true;drawHistory();
 }
 function delayedHistory(){clearTimeout(loadTimer);loadTimer=setTimeout(loadHistory,300);}
 function loadMini(force=false) {
-  if(!force && Date.now()-lastMiniLoad<20000)return;
-  lastMiniLoad=Date.now();
-  try{miniPoints=demo?sampleDemo(Date.now()-6*3600000,Date.now(),'power'):native?JSON.parse(native.history(Date.now()-6*3600000,Date.now(),'power','all')).points||[]:[];}
+  const mode=native?snapshot.settings.miniRange||'sunrise':localStorage.getItem('wattpit-mini-range')||'sunrise';
+  miniWindow=window.WattDashboardCore.miniWindow(mode,snapshot.weather);
+  $('miniRange').value=mode;$('miniPeriodLabel').textContent=miniWindow.label.toLocaleUpperCase('de-DE');
+  $('miniPeriodNote').textContent=miniWindow.note;$('miniPeriodNote').hidden=!miniWindow.note;
+  const key=[mode,Math.floor(miniWindow.from/60000)].join(':');
+  if(!force&&key===miniKey&&Date.now()-lastMiniLoad<20000)return;
+  miniKey=key;lastMiniLoad=Date.now();
+  try{miniPoints=demo?sampleDemo(miniWindow.from,miniWindow.to,'power'):native?JSON.parse(native.history(miniWindow.from,miniWindow.to,'power','all')).points||[]:[];}
   catch(error){miniPoints=[];}
   drawMini();
+}
+function energyDescription(data){
+  const describe=(series,label)=>{const s=series?.summary||{},coverage=Math.floor((s.coverage||0)*100);return `${label}: ${num(s.last,2)} Wh · ${coverage} % der Zeit erfasst`;};
+  return describe(data?.solar,'Solar')+' · '+describe(data?.battery,'Batterieentnahme')+'. Berechnet aus Leistungsdaten. Lücken werden ausgelassen. Batterieentnahme ist kein Gesamtverbrauch; direkt genutzter Solarstrom fehlt.';
+}
+function sampleEnergyDemo(from,to){
+  const data=sampleDemo(from,to,'power'),result={};
+  for(const [key,kind] of [['solar','solar'],['battery','shunt']]){
+    let total=0,last=null;const points=data.filter(p=>p.kind===kind).map(p=>{const power=Math.max(0,kind==='solar'?p.v:-p.v);if(last)total+=(last.power+power)/2*(p.t-last.t)/3600000;last={t:p.t,power};return {...p,v:total,min:total,max:total,origin:'calculated'};});
+    result[key]={points,summary:{last:points.length?total:null,coverage:points.length?1:0}};
+  }return result;
 }
 function seriesOf(data) {
   const groups=new Map();
@@ -223,6 +247,7 @@ function seriesOf(data) {
   return [...groups.values()];
 }
 function seriesLabel(s) {
+  if(s.origin==='calculated')return s.kind==='solar'?'Solarertrag berechnet':'Batterieentnahme berechnet';
   const name=snapshot.devices.find(d=>d.mac===s.device)?.name || (s.kind==='solar'?'SmartSolar':'SmartShunt');
   return name + (s.origin==='csv'?' · CSV':s.origin==='archive'?' · Archiv':'');
 }
@@ -241,7 +266,7 @@ function canvasChart(canvas,data,from,to,chosen,mini=false) {
     if(chosen==='power'||chosen==='current'){low=Math.min(low,0);high=Math.max(high,0);}
     const span=Math.max(high-low,chosen==='voltage'?.3:chosen==='current'?1:10);low-=span*.12;high+=span*.12;
     if(chosen==='soc'){low=Math.max(0,Math.floor(low/10)*10);high=Math.min(100,Math.ceil(high/10)*10);}
-    if(chosen==='yieldWh')low=Math.max(0,low);
+    if(chosen==='yieldWh'||chosen==='energy')low=Math.max(0,low);
   }
   if(!mini&&manualY){low=manualY.min;high=manualY.max;}
   if(high<=low)high=low+1;
@@ -258,7 +283,7 @@ function canvasChart(canvas,data,from,to,chosen,mini=false) {
     const bucket=(to-from)/600;
     const gapLimit=Math.max(bucket*3,s.origin==='csv'?45*60000:45000,...s.points.map(p=>(p.period||0)*1500));
     const segments=[];let segment=[];
-    for(const p of s.points){if(segment.length && p.t-segment[segment.length-1].last>gapLimit){segments.push(segment);segment=[];}segment.push(p);}if(segment.length)segments.push(segment);
+    for(const p of s.points){if(segment.length && (chosen==='energy'?p.gap:p.t-segment[segment.length-1].last>gapLimit)){segments.push(segment);segment=[];}segment.push(p);}if(segment.length)segments.push(segment);
     for(const segment of segments){
       if(segment.some(p=>p.n>1)){ctx.beginPath();segment.forEach((p,i)=>i?ctx.lineTo(x(p.t),y(p.max)):ctx.moveTo(x(p.t),y(p.max)));[...segment].reverse().forEach(p=>ctx.lineTo(x(p.t),y(p.min)));ctx.closePath();ctx.globalAlpha=.16;ctx.fillStyle=color;ctx.fill();ctx.globalAlpha=1;}
       ctx.strokeStyle=color;ctx.lineWidth=mini?2:2.2;ctx.setLineDash(s.origin==='csv'?[5,4]:[]);ctx.beginPath();segment.forEach((p,i)=>i?ctx.lineTo(x(p.t),y(p.v)):ctx.moveTo(x(p.t),y(p.v)));ctx.stroke();ctx.setLineDash([]);
@@ -273,7 +298,7 @@ function drawHistory(){
   scale=canvasChart($('historyChart'),points,viewFrom,viewTo,metric);
   $('chartLegend').innerHTML=scale.series.map(s=>`<span><i class="dot ${s.kind==='solar'?'orange':'mint'}"></i>${escapeHtml(seriesLabel(s))}${s.origin==='csv'?' · gestrichelt':''}</span>`).join('');
 }
-function drawMini(){if(page==='overview')canvasChart($('miniChart'),miniPoints,Date.now()-6*3600000,Date.now(),'power',true);}
+function drawMini(){if(page==='overview'&&miniWindow)canvasChart($('miniChart'),miniPoints,miniWindow.from,Math.max(miniWindow.from+1,miniWindow.to),'power',true);}
 function clampView(from,to){const span=Math.min(baseTo-baseFrom,Math.max(60000,to-from));let start=Math.max(baseFrom,Math.min(from,baseTo-span));viewFrom=start;viewTo=start+span;selectedPoint=null;$('chartTooltip').hidden=true;drawHistory();delayedHistory();}
 function zoom(factor,anchor=.5){const span=(viewTo-viewFrom)*factor,center=viewFrom+(viewTo-viewFrom)*anchor;clampView(center-span*anchor,center+span*(1-anchor));}
 function scaleForm(){
@@ -358,6 +383,7 @@ $('resetChart').onclick=()=>{viewFrom=baseFrom;viewTo=baseTo;manualY=null;loadHi
 ['exportCsv','settingsExport'].forEach(id=>$(id).onclick=chooseExport);
 ['capacitySetting','sampleSetting'].forEach(id=>$(id).oninput=()=>settingsDirty=true);
 $('saveSettings').onclick=()=>{const settings={capacity:Number($('capacitySetting').value),sampleSeconds:Number($('sampleSetting').value)};if(!settings.capacity||settings.capacity<=0||settings.capacity>10000){toast('Bitte eine Kapazität zwischen 1 und 10.000 Ah eingeben.');return;}const error=native?native.settings(JSON.stringify(settings)):'';if(error){toast(error);return;}Object.assign(snapshot.settings,settings);settingsDirty=false;toast('Einstellungen gespeichert.');renderOverview();};
+$('miniRange').onchange=()=>{const miniRange=$('miniRange').value,error=native?native.settings(JSON.stringify({miniRange})):'';if(error){toast(error);loadMini(true);return;}snapshot.settings.miniRange=miniRange;if(!native)localStorage.setItem('wattpit-mini-range',miniRange);loadMini(true);};
 $('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus');
 for(const [id,name] of [['navOverview','overview'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
 dashboard = new window.WattDashboard({native,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});

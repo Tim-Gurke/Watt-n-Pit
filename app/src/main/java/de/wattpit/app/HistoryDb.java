@@ -9,6 +9,7 @@ import de.wattpit.app.core.CsvCodec;
 import de.wattpit.app.core.Reading;
 import de.wattpit.app.core.HistoryQuery;
 import de.wattpit.app.core.ArchiveMerge;
+import de.wattpit.app.core.EnergyIntegral;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.*;
@@ -124,6 +125,7 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
 
     JSONArray query(long from, long to, String metric, String source) throws Exception {
+        if(metric.equals("solarEnergy")||metric.equals("dischargeEnergy"))return energyData(from,to,metric,source).getJSONArray("points");
         HistoryQuery query = HistoryQuery.build(from,to,metric,source);
         JSONArray result = new JSONArray();
         try (Cursor c = getReadableDatabase().rawQuery(query.sql, query.args)) {
@@ -146,6 +148,7 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
 
     JSONObject dashboardData(long from,long to,String metric) throws Exception {
+        if(metric.equals("solarEnergy")||metric.equals("dischargeEnergy"))return energyData(from,to,metric,"all");
         JSONObject summary=new JSONObject();
         HistoryQuery aggregate=HistoryQuery.summary(from,to,metric,"all");
         try (Cursor c=getReadableDatabase().rawQuery(aggregate.sql,aggregate.args)) {
@@ -157,6 +160,24 @@ final class HistoryDb extends SQLiteOpenHelper {
         HistoryQuery last=HistoryQuery.latest(from,to,metric,"all");
         try (Cursor c=getReadableDatabase().rawQuery(last.sql,last.args)) { summary.put("last",c.moveToFirst()?c.getDouble(0):JSONObject.NULL); }
         return new JSONObject().put("summary",summary).put("points",query(from,to,metric,"all"));
+    }
+
+    JSONObject energyData(long from,long to,String metric,String source) throws Exception {
+        boolean discharge=metric.equals("dischargeEnergy");
+        if(!discharge&&!metric.equals("solarEnergy"))throw new IllegalArgumentException("Unbekannte Energiegröße.");
+        to=Math.min(to,System.currentTimeMillis());
+        if(to<=from)return new JSONObject().put("points",new JSONArray()).put("summary",new JSONObject());
+        HistoryQuery query=HistoryQuery.rawPower(Math.max(0,from-EnergyIntegral.LOOKAROUND),Math.min(System.currentTimeMillis(),to+EnergyIntegral.LOOKAROUND),discharge?"batteryPower":"solar",source);
+        List<EnergyIntegral.Sample> samples=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().rawQuery(query.sql,query.args)){
+            while(c.moveToNext())samples.add(new EnergyIntegral.Sample(c.getLong(0),c.getDouble(1),c.getInt(2),c.getString(3),c.getString(4)));
+        }
+        EnergyIntegral.Result result=EnergyIntegral.calculate(samples,from,to,discharge);
+        JSONArray points=new JSONArray();String kind=discharge?"shunt":"solar";
+        for(EnergyIntegral.Point p:result.points)points.put(new JSONObject().put("t",p.time).put("last",p.time).put("v",p.wh).put("min",p.wh).put("max",p.wh).put("n",1).put("gap",p.gap).put("kind",kind).put("device","calculated-"+kind).put("origin","calculated"));
+        Object total=result.wh==null?JSONObject.NULL:result.wh;
+        JSONObject summary=new JSONObject().put("last",total).put("min",result.wh==null?JSONObject.NULL:0).put("max",total).put("n",result.points.size()).put("coverage",result.coverage(from,to)).put("coveredMillis",result.coveredMillis).put("from",from).put("to",to);
+        return new JSONObject().put("points",points).put("summary",summary);
     }
 
     Reading last(String device) {

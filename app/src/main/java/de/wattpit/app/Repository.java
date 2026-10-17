@@ -40,7 +40,7 @@ final class Repository {
         JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));all.put(kind,result);prefs.edit().putString("archiveDiagnostics",all.toString()).apply();
     }
     synchronized String diagnosticText()throws JSONException{
-        JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));StringBuilder text=new StringBuilder("Watt’n’Pit 0.1.6 · Archivdiagnose\n");
+        JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));StringBuilder text=new StringBuilder("Watt’n’Pit 0.1.7 · Archivdiagnose\n");
         for(String kind:new String[]{"solar","shunt"}){
             JSONObject d=all.optJSONObject(kind);if(d==null)continue;text.append(kind.equals("solar")?"\nSolarladeregler\n":"\nBatteriewächter\n");
             text.append(d.optString("result")).append('\n');JSONArray lines=d.optJSONArray("steps");if(lines!=null)for(int i=0;i<lines.length();i++)text.append("· ").append(lines.getString(i)).append('\n');
@@ -156,7 +156,7 @@ final class Repository {
         return new JSONObject().put("historyRevision",historyRevision).put("running",running).put("status",status).put("devices",devices).put("found",discovery)
                 .put("equipment",equipment()).put("archiveDiagnostics",new JSONObject(prefs.getString("archiveDiagnostics","{}"))).put("archive",archive).put("deviceHistory",db.histories()).put("weatherError",prefs.getString("weatherError","")).put("weather",new JSONObject(prefs.getString("weatherCache","{}"))).put("readings",readings).put("stats",cachedStats).put("solarDaily",db.daily()).put("event",event).put("eventId",eventId)
                 .put("settings",new JSONObject().put("theme",prefs.getString("theme","dark"))
-                    .put("palette",prefs.getString("palette","classic")).put("weatherPlace",new JSONObject(prefs.getString("weatherPlace","{}")))
+                    .put("palette",prefs.getString("palette","classic")).put("miniRange",prefs.getString("miniRange","sunrise")).put("weatherPlace",new JSONObject(prefs.getString("weatherPlace","{}")))
                     .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10)));
     }
     synchronized void invalidateStats() { statsTime = 0;historyRevision++; }
@@ -168,7 +168,9 @@ final class Repository {
             throw new IllegalArgumentException("Bitte gültige Einstellungen eingeben.");
         String palette=settings.optString("palette",prefs.getString("palette","classic"));
         if(!Arrays.asList("classic","blue","green","turquoise","orange","neutral").contains(palette))throw new IllegalArgumentException("Unbekanntes Farbdesign.");
-        prefs.edit().putString("palette",palette).putString("theme",theme).putFloat("capacity",(float)capacity).putInt("sampleSeconds",seconds).apply();
+        String miniRange=settings.optString("miniRange",prefs.getString("miniRange","sunrise"));
+        if(!Arrays.asList("sunrise","today","last6h").contains(miniRange))throw new IllegalArgumentException("Unbekannter Übersichtszeitraum.");
+        prefs.edit().putString("miniRange",miniRange).putString("palette",palette).putString("theme",theme).putFloat("capacity",(float)capacity).putInt("sampleSeconds",seconds).apply();
     }
     static String safeError(Exception e) {
         if (e instanceof IllegalArgumentException) return e.getMessage();

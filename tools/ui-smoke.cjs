@@ -103,7 +103,7 @@ const http = require('node:http');
   assert.equal(await shared.locator('[data-tile="default-remaining"] .tile-gauge svg path').count(),60);
   const before=await shared.evaluate(()=>JSON.parse(localStorage.getItem('wattpit-dashboard-v1')));
   await shared.locator('#editDashboard').click();
-  await shared.locator('[data-tile="default-voltage"]').scrollIntoViewIfNeeded();
+  await shared.locator('[data-tile="default-voltage"]').evaluate(el=>el.scrollIntoView({block:'center',behavior:'instant'}));
   const rect=await shared.locator('[data-tile="default-voltage"]').boundingBox();
   await shared.mouse.move(rect.x+25,rect.y+30);await shared.mouse.down();
   await shared.mouse.move(rect.x+65,rect.y+56,{steps:6});await shared.mouse.up();

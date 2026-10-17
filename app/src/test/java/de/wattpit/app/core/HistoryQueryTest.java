@@ -70,4 +70,14 @@ public class HistoryQueryTest {
         List<Double> merged=values("batteryVoltage","all");assertTrue(merged.contains(12.8));assertFalse(merged.contains(12.5));assertTrue(merged.contains(13.5));
         assertTrue(values("batteryVoltage","archive").contains(12.65));
     }
+    @Test public void energyReceivesOriginalPowerSamplesRatherThanChartBucketAverages() throws Exception {
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,power,period) VALUES (100001,'shunt','shunt','archive',-100,30),(100002,'shunt','shunt','archive',100,30)");
+        HistoryQuery q=HistoryQuery.rawPower(1,500000,"batteryPower","all");
+        List<Double> power=new ArrayList<>();
+        try(PreparedStatement s=db.prepareStatement(q.sql)){
+            for(int i=0;i<q.args.length;i++)s.setString(i+1,q.args[i]);
+            try(ResultSet r=s.executeQuery()){while(r.next())power.add(r.getDouble(2));}
+        }
+        assertTrue(power.contains(-100.0));assertTrue(power.contains(100.0));assertTrue(power.contains(-26.4));assertFalse(power.contains(80.0));
+    }
 }

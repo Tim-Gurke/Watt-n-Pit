@@ -38,6 +38,7 @@
       $('editDashboard').textContent=this.editing?'Fertig':'Anordnen';
       $('editDashboard').setAttribute('aria-pressed',String(this.editing));
       $('layoutHelp').hidden=!this.editing;
+      this.renderBlockOrder();
       $('layoutProfile').textContent=this.profile==='wide'?'Breite Ansicht':'Schmale Ansicht';
       this.board.innerHTML='';this.elements.clear();
       for (const t of this.config.tiles) {
@@ -62,6 +63,13 @@
       }
       $('dashboardEmpty').hidden=!!this.config.tiles.length;
       this.layout();this.update();
+    }
+    renderBlockOrder() {
+      const container=$('overviewBlocks'),controls=$('overviewOrder'),labels={tiles:'Kacheln',weather:'Wetter',history:'Verlauf',record:'Start / Pause'};
+      for(const key of this.config.blockOrder){const block=container.querySelector(`[data-overview-block="${key}"]`);if(block)container.append(block);}
+      controls.hidden=!this.editing;
+      controls.innerHTML='<p>Reihenfolge der Blöcke</p>'+this.config.blockOrder.map((key,i)=>`<div class="overview-order-row"><span>${labels[key]}</span><button class="quiet" data-block="${key}" data-move="-1" aria-label="${labels[key]} nach oben" ${i===0?'disabled':''}>↑</button><button class="quiet" data-block="${key}" data-move="1" aria-label="${labels[key]} nach unten" ${i===this.config.blockOrder.length-1?'disabled':''}>↓</button></div>`).join('');
+      controls.querySelectorAll('button').forEach(button=>button.onclick=()=>{const i=this.config.blockOrder.indexOf(button.dataset.block),next=i+Number(button.dataset.move);if(next<0||next>=this.config.blockOrder.length)return;[this.config.blockOrder[i],this.config.blockOrder[next]]=[this.config.blockOrder[next],this.config.blockOrder[i]];this.commit();controls.querySelector(`[data-block="${button.dataset.block}"][data-move="${button.dataset.move}"]`)?.focus();});
     }
     layout() {
       const profile=this.board.clientWidth>=620?'wide':'compact';
@@ -117,23 +125,26 @@
     }
     demoData(t,window) {
       const m=C.CATALOG[t.metric],now=Date.now(),step=Math.max(60000,(window.to-window.from)/240),out=[];
+      let energy=0,previous=null;
       for(let time=window.from;time<=Math.min(now,window.to);time+=step){
         const hour=new Date(time).getHours()+new Date(time).getMinutes()/60,solar=Math.max(0,Math.sin((hour-7)/12*Math.PI))*170;
         const shunt={soc:70+6*Math.sin((hour-9)/24*Math.PI*2),ttg:480,voltage:13+.15*Math.sin(hour/12*Math.PI),current:(solar*.9-32)/13,power:solar*.9-32,consumed:-23.6,temperature:null,aux:null,alarm:0};
         const reg={solar,voltage:13.08,current:solar/13.08,yieldWh:Math.max(0,Math.min(900,(hour-7)*80)),state:solar>1?3:0,error:0,load:0};
         let value=t.metric==='remainingWh'?shunt.soc*shunt.voltage/100:t.metric==='remainingAh'?shunt.soc:t.metric==='consumed'?Math.abs(shunt.consumed):(m.kind==='shunt'?shunt:reg)[m.field];
+        if(m.energy){const power=t.metric==='solarEnergy'?solar:Math.max(0,-shunt.power);if(previous!=null)energy+=(previous+power)/2*step/3600000;previous=power;value=energy;}
         if(C.finite(value))out.push({t:time,last:time,kind:m.kind,device:'demo-'+m.kind,origin:'live',v:value,min:value,max:value,n:1});
       }
-      return {points:out,summary:this.summary(out)};
+      return {points:out,summary:{...this.summary(out),...(m.energy?{coverage:1}:{})}};
     }
     update() {
       if(!this.a.getSnapshot)return;
       const snapshot=this.a.getSnapshot(),shunt=this.a.reading('shunt'),solar=this.a.reading('solar');
       for(const t of this.config.tiles){
         const el=this.elements.get(t.id);if(!el)continue;
-        el.style.setProperty('--tile-color',this.paint(t.color,t));
+        el.style.setProperty('--tile-color',this.paint(t.color,t,true));
+        el.style.setProperty('--tile-muted',this.paint(getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),t,true));
         const m=C.CATALOG[t.metric],window=C.windowFor(t),data=window?this.data(t,window):null;
-        let value=window?C.historicalValue(t.metric,data.summary?.[t.period.aggregate],snapshot.settings.capacity):C.liveValue(t.metric,shunt,solar,snapshot);
+        let value=C.displayValue(t,data?.summary,shunt,solar,snapshot);
         value=C.convert(value,t.unit,t.metric);
         const reading=`<strong class="tile-number">${esc(C.format(value,t))}</strong><span class="tile-unit">${C.finite(value) && !m.status?esc(t.unit):!m.status?esc(t.unit):''}</span>`;
         const visual=el.querySelector('.tile-visual');
@@ -144,7 +155,9 @@
         if(!window && t.metric==='remaining' && !C.finite(value))hint=shunt?.current>.03?'Akku wird geladen':'Wert vom SmartShunt';
         if(!window && t.metric==='solar' && solar?.state!=null)hint=C.PHASES[solar.state] || 'Ladephase '+solar.state;
         if(!window && t.metric==='power' && C.finite(shunt?.power))hint=shunt.power>.4?'Akku wird geladen':shunt.power<-.4?'Akku wird entladen':'Bilanz ausgeglichen';
-        if(data?.error)hint='Zeitraum nicht verfügbar';
+        if(m.energy&&!data?.error)hint=`Berechnet · ${this.periodLabel(t)} · ${Math.floor((data?.summary?.coverage||0)*100)} % erfasst`;
+        if(t.type==='chart'&&C.usesLiveValue(t))hint=`${C.finite(value)?'Aktuell':'Kein Livewert'} · ${data?.error?'Verlauf nicht verfügbar':'Verlauf: '+this.periodLabel(t)}`;
+        else if(data?.error)hint='Zeitraum nicht verfügbar';
         el.querySelector('.tile-hint').textContent=hint;
         el.classList.toggle('no-value',!C.finite(value));
       }
@@ -180,17 +193,14 @@
     }
     short(n){return Number(n.toFixed(Math.abs(n)<10?1:0)).toLocaleString('de-DE');}
     blend(a,b,p){const ca=parseInt(a.slice(1),16),cb=parseInt(b.slice(1),16);return '#'+[16,8,0].map(s=>Math.round(((ca>>s)&255)*(1-p)+((cb>>s)&255)*p).toString(16).padStart(2,'0')).join('');}
-    paint(color,t) {
-      if(t.adaptiveColor===false)return color;
+    paint(color,t,text=false) {
+      if(t.adaptiveColor===false&&!text)return color;
       const css=getComputedStyle(document.documentElement);
-      if(color===C.CATALOG[t.metric]?.color){const tone=['solar','yieldWh','solarVoltage','solarCurrent','pvVoltage','state','error'].includes(t.metric)?'--orange':['temperature','aux','load'].includes(t.metric)?'--blue':'--mint';color=css.getPropertyValue(tone).trim()||color;}
+      if(t.adaptiveColor!==false&&color===C.CATALOG[t.metric]?.color){const tone=['solar','yieldWh','solarEnergy','solarVoltage','solarCurrent','pvVoltage','state','error'].includes(t.metric)?'--orange':['temperature','aux','load'].includes(t.metric)?'--blue':'--mint';color=css.getPropertyValue(tone).trim()||color;}
       const background=t.background==='auto'?css.getPropertyValue('--panel').trim():t.background;
-      const key=[color,background].join(':');this.paintCache=this.paintCache || new Map();
+      const page=css.getPropertyValue('--bg').trim(),target=text?7:4.5,key=[color,background,page,t.opacity,target].join(':');this.paintCache=this.paintCache || new Map();
       if(this.paintCache.has(key))return this.paintCache.get(key);
-      const luminance=hex=>{const rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
-      const bg=luminance(background),target=bg>.4?'#000000':'#ffffff';
-      let result=color;
-      for(let amount=0;amount<=1;amount+=.04){result=this.blend(color,target,Math.min(1,amount));const fg=luminance(result);if((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)>=4.5)break;}
+      const result=C.readableColor(color,background,page,t.opacity,target);
       this.paintCache.set(key,result);return result;
     }
     sparkline(t,points,window,capacity,summary) {
@@ -200,7 +210,7 @@
       const bounds=C.chartRange(t,points,capacity,summary),low=bounds.min,high=bounds.max,x=p=>4+(p.t-window.from)/(window.to-window.from)*292,y=p=>58-C.clamp((p.v-low)/(high-low),0,1)*52;
       const zero=low<0&&high>=0?`<path class="tile-zero-line" d="M4 ${y({v:0}).toFixed(2)}H296" stroke="var(--border)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`:'';
       let path='',last=null;
-      for(const p of series){const gap=last && (last.device!==p.device || last.origin!==p.origin || p.t-(last.last || last.t)>Math.max(this.a.isDemo()?600001:45000,(p.period||0)*1500,(window.to-window.from)/600*3));path+=(last&&!gap?'L':'M')+x(p).toFixed(2)+','+y(p).toFixed(2);last=p;}
+      for(const p of series){const gap=last && (C.CATALOG[t.metric].energy?p.gap:(last.device!==p.device || last.origin!==p.origin || p.t-(last.last || last.t)>Math.max(this.a.isDemo()?600001:45000,(p.period||0)*1500,(window.to-window.from)/600*3)));path+=(last&&!gap?'L':'M')+x(p).toFixed(2)+','+y(p).toFixed(2);last=p;}
       return `<svg class="tile-sparkline" data-scale-min="${low}" data-scale-max="${high}" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true"><path d="M4 60H296" stroke="var(--border)"/>${zero}<path d="${path}" fill="none" stroke="${this.paint(t.color,t)}" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg><div class="tile-chart-range"><span>${esc(C.axisLabel(low,high-low))}</span>${bounds.auto?'<span title="Skala nach bisherigen Messwerten im gewählten Zeitraum">Auto</span>':''}<span>${esc(C.axisLabel(high,high-low))} ${esc(t.unit)}</span></div>`;
     }
     picker() {
@@ -221,8 +231,8 @@
       const t=copy(unsaved || original),m=C.CATALOG[t.metric],p=t.layouts[this.profile];let layer='keep';
       const types=m.status?[['number','Zahlenwert']]:[['number','Zahlenwert'],['gauge','Rundinstrument'],...(!m.liveOnly?[['chart','Verlauf']]:[])];
       const fields=`<div class="form-grid">${field('Messwert',select('tileMetric',Object.entries(C.CATALOG).map(([key,m])=>[key,m.label])))}${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60" placeholder="'+esc(m.label)+'"'))}${field('Darstellung',select('tileType',types))}${field('Einheit',select('tileUnit',m.units.map(u=>[u,u || 'Ohne Einheit'])))}</div><p class="muted tile-explanation">${esc(m.hint || (m.kind==='shunt'?'Messwert vom SmartShunt.':'Messwert vom SmartSolar.'))}</p>`;
-      const period=`<details open><summary>Wert & Zeitraum</summary><div class="form-grid">${field('Zeitraum',select('tilePeriod',m.liveOnly?[['live','Aktuell']]:[['live','Aktuell'],['last','Letzte …'],['today','Heute'],['reset','Seit Zurücksetzen'],['custom','Freier Zeitraum']]))}${field('Auswertung',select('tileAggregate',m.status?[['last','Letzter Wert']]:Object.entries(aggregateNames)))}</div><div id="tileLastFields" class="form-grid">${field('Anzahl',input('tileAmount',t.period.amount,'type="number" min="1" max="10000"'))}${field('Zeiteinheit',select('tileTimeUnit',[['min','Minuten'],['h','Stunden'],['d','Tage']]))}</div><div id="tileCustomFields" class="form-grid">${field('Von',input('tileFrom',dateInput(t.period.from || Date.now()-86400000),'type="datetime-local"'))}${field('Bis',input('tileTo',dateInput(t.period.to || Date.now()),'type="datetime-local"'))}</div><div id="tileResetFields"><p class="muted" id="tileResetLabel"></p><button class="quiet" id="tileReset">Jetzt zurücksetzen</button></div></details>`;
-      const appearance=`<details><summary>Farben & Schrift</summary><div class="form-grid">${field('Wertfarbe',input('tileColor',t.color,'type="color"'))}${field('Schriftgröße',input('tileFont',t.fontSize,'type="number" min="18" max="64"'))}${field('Nachkommastellen',select('tileDigits',[[0,'Keine'],[1,'Eine'],[2,'Zwei'],[3,'Drei']]))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}${field('Hintergrund',select('tileBackgroundMode',[['auto','Passend zum Farbschema'],['custom','Eigene Farbe']]))}${field('Eigene Hintergrundfarbe',input('tileBackground',t.background==='auto'?'#18303b':t.background,'type="color"'))}</div><label class="check-field"><input type="checkbox" id="tileAdaptiveColor"> Farben an Hell/Dunkel anpassen</label></details>`;
+      const period=`<details open><summary>Wert & Zeitraum</summary><div class="form-grid">${field('<span id="tilePeriodLabel">Zeitraum</span>',select('tilePeriod',m.liveOnly?[['live','Aktuell']]:[['live','Aktuell'],['last','Letzte …'],['today','Heute'],['reset','Seit Zurücksetzen'],['custom','Freier Zeitraum']]))}${field('<span id="tileAggregateLabel">Auswertung</span>',select('tileAggregate',m.status?[['last','Letzter Wert']]:Object.entries(aggregateNames)))}</div><p class="muted" id="tileLiveHint" hidden>Aktuell zeigt den Liveempfang. Ohne frischen Wert erscheint —; die gespeicherte Kurve bleibt sichtbar.</p><div id="tileLastFields" class="form-grid">${field('Anzahl',input('tileAmount',t.period.amount,'type="number" min="1" max="10000"'))}${field('Zeiteinheit',select('tileTimeUnit',[['min','Minuten'],['h','Stunden'],['d','Tage']]))}</div><div id="tileCustomFields" class="form-grid">${field('Von',input('tileFrom',dateInput(t.period.from || Date.now()-86400000),'type="datetime-local"'))}${field('Bis',input('tileTo',dateInput(t.period.to || Date.now()),'type="datetime-local"'))}</div><div id="tileResetFields"><p class="muted" id="tileResetLabel"></p><button class="quiet" id="tileReset">Jetzt zurücksetzen</button></div></details>`;
+      const appearance=`<details><summary>Farben & Schrift</summary><div class="form-grid">${field('Wertfarbe',input('tileColor',t.color,'type="color"'))}${field('Schriftgröße',input('tileFont',t.fontSize,'type="number" min="18" max="64"'))}${field('Nachkommastellen',select('tileDigits',[[0,'Keine'],[1,'Eine'],[2,'Zwei'],[3,'Drei']]))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}${field('Hintergrund',select('tileBackgroundMode',[['auto','Passend zum Farbschema'],['custom','Eigene Farbe']]))}${field('Eigene Hintergrundfarbe',input('tileBackground',t.background==='auto'?'#18303b':t.background,'type="color"'))}</div><label class="check-field"><input type="checkbox" id="tileAdaptiveColor"> Kurven- und Instrumentfarben an Hell/Dunkel anpassen</label></details>`;
       const scale=`<details><summary>Skala</summary><div id="tileChartScale">${field('Verlaufsskala',select('tileScaleMode',[['fixed','Feste Skala'],['auto','Automatisch nach bisherigen Werten']]))}<p class="muted" id="tileScaleHint" hidden>Passt sich den Messwerten im gewählten Zeitraum an, mit etwas Platz über dem Maximum. Spannung, Temperatur und Akkustand passen auch die Untergrenze an. Für die bisherigen Tageswerte den Zeitraum „Heute“ wählen.</p></div><div class="form-grid">${field('Minimum',input('tileMin',this.shortInput(C.convert(t.min,t.unit,t.metric)),'type="number" step="any"'))}${field('Maximum',input('tileMax',this.shortInput(C.convert(t.max,t.unit,t.metric)),'type="number" step="any"'))}</div><label class="check-field"><input type="checkbox" id="tileMulticolor"> Mehrfarbiges Rundinstrument</label><div class="form-grid">${field('Mittlere Farbe',input('tileColorMid',t.colorMid,'type="color"'))}${field('Endfarbe',input('tileColorEnd',t.colorEnd,'type="color"'))}</div><label class="check-field"><input type="checkbox" id="tileInvert"> Farbverlauf umkehren</label></details>`;
       const arrangement=`<details><summary>Größe & Ebene</summary><div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="2" max="12"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="2" max="18"'))}</div><div class="row"><button class="quiet" id="tileBack">Nach hinten</button><button class="quiet" id="tileFront">Nach vorne</button><button class="quiet" id="duplicateTile">Duplizieren</button></div><p class="muted">Gilt für die ${this.profile==='wide'?'breite':'schmale'} Ansicht. Andere Kacheln behalten ihre Position.</p></details>`;
       this.a.openModal('Kachel anpassen',`<div class="tile-editor">${fields}${period}${appearance}${m.status?'':scale}${arrangement}<p class="form-error" id="tileError" hidden></p><div class="form-actions"><button class="quiet danger-text" id="removeTile">Entfernen</button><button class="primary" id="saveTile">Übernehmen</button></div></div>`);
@@ -232,10 +242,27 @@
       if($('tileMulticolor')){$('tileMulticolor').checked=t.multicolor;$('tileInvert').checked=t.invert;}
       const scaleChanged=()=>{if(!$('tileScaleMode'))return;const chart=$('tileType').value==='chart',auto=chart&&$('tileScaleMode').value==='auto';$('tileChartScale').hidden=!chart;$('tileScaleHint').hidden=!auto;$('tileMin').disabled=auto;$('tileMax').disabled=auto;};
       if($('tileScaleMode')){$('tileScaleMode').value=t.scaleMode||'fixed';$('tileScaleMode').onchange=scaleChanged;}scaleChanged();
-      const periodChanged=()=>{const mode=$('tilePeriod').value;$('tileLastFields').hidden=mode!=='last';$('tileCustomFields').hidden=mode!=='custom';$('tileResetFields').hidden=mode!=='reset';$('tileAggregate').disabled=mode==='live';$('tileResetLabel').textContent='Ab '+stamp(t.period.resetAt);};
-      $('tilePeriod').onchange=periodChanged;periodChanged();
+      const periodChanged=()=>{
+        const chart=$('tileType').value==='chart',mode=$('tilePeriod').value;
+        $('tilePeriodLabel').textContent=chart?'Kurvenzeitraum':'Zeitraum';$('tileAggregateLabel').textContent=chart?'Große Zahl':'Auswertung';
+        const liveOption=$('tilePeriod').querySelector('option[value="live"]');liveOption.hidden=chart||!!m.energy;liveOption.disabled=chart||!!m.energy;
+        $('tileLastFields').hidden=mode!=='last';$('tileCustomFields').hidden=mode!=='custom';$('tileResetFields').hidden=mode!=='reset';
+        $('tileAggregate').disabled=!!m.energy||!chart&&mode==='live';$('tileLiveHint').hidden=!chart||$('tileAggregate').value!=='live';
+        $('tileResetLabel').textContent='Ab '+stamp(t.period.resetAt);
+      };
+      const valueOptions=value=>{const chart=$('tileType').value==='chart';$('tileAggregate').innerHTML=(m.energy?[['last','Berechnete Energie']]:m.status?[['last','Letzter Wert']]:[...(chart?[['live','Aktuell (Live)']]:[]),...Object.entries(aggregateNames).map(([key,name])=>[key,key==='last'?'Letzter gespeicherter Wert':name])]).map(x=>option(...x)).join('');$('tileAggregate').value=value;};
+      valueOptions(t.type==='chart'&&t.valueMode==='live'?'live':t.period.aggregate);
+      if(t.type==='chart'&&$('tilePeriod').value==='live'){$('tilePeriod').value='last';$('tileAmount').value=6;$('tileTimeUnit').value='h';}
+      $('tilePeriod').onchange=periodChanged;$('tileAggregate').onchange=periodChanged;periodChanged();
       $('tileReset').onclick=()=>{t.period.resetAt=Date.now();periodChanged();};
-      $('tileType').onchange=()=>{if($('tileType').value!=='number')$('tileHeight').value=Math.max(Number($('tileHeight').value),6);if($('tileType').value==='chart' && $('tilePeriod').value==='live'){$('tilePeriod').value='last';periodChanged();}scaleChanged();};
+      $('tileType').onchange=()=>{
+        const chart=$('tileType').value==='chart',value=$('tileAggregate').value;
+        if($('tileType').value!=='number')$('tileHeight').value=Math.max(Number($('tileHeight').value),6);
+        const wasLive=$('tilePeriod').value==='live';
+        if(chart&&wasLive)$('tilePeriod').value='last';
+        if(!chart&&value==='live')$('tilePeriod').value='live';
+        valueOptions(chart&&wasLive?'live':value==='live'?t.period.aggregate:value);periodChanged();scaleChanged();
+      };
       let previousUnit=t.unit;
       $('tileUnit').onchange=()=>{if($('tileMin'))for(const id of ['tileMin','tileMax'])$(id).value=this.shortInput(C.convert(C.unconvert(Number($(id).value),previousUnit,t.metric),$('tileUnit').value,t.metric));previousUnit=$('tileUnit').value;};
       $('tileMetric').onchange=()=>{const changed=C.tile($('tileMetric').value,id);changed.layouts=copy(t.layouts);changed.title=$('tileTitle').value;this.editor(id,changed);};
@@ -247,7 +274,8 @@
       $('saveTile').onclick=()=>{
         try {
           t.title=$('tileTitle').value.trim();t.unit=$('tileUnit').value;t.type=$('tileType').value;
-          t.period={...t.period,mode:$('tilePeriod').value,aggregate:$('tileAggregate').value,amount:Number($('tileAmount').value),unit:$('tileTimeUnit').value,from:new Date($('tileFrom').value).getTime(),to:new Date($('tileTo').value).getTime()};
+          const selectedValue=$('tileAggregate').value;t.valueMode=t.type==='chart'&&selectedValue==='live'?'live':'history';
+          t.period={...t.period,mode:$('tilePeriod').value,aggregate:selectedValue==='live'?t.period.aggregate:selectedValue,amount:Number($('tileAmount').value),unit:$('tileTimeUnit').value,from:new Date($('tileFrom').value).getTime(),to:new Date($('tileTo').value).getTime()};
           if(t.type==='chart' && t.period.mode==='live')t.period.mode='last';
           if(t.period.mode==='last' && (!C.finite(t.period.amount)||t.period.amount<1||t.period.amount>10000))throw new Error('Bitte einen Zeitraum zwischen 1 und 10.000 wählen.');
           if(t.period.mode==='custom' && (!C.finite(t.period.from)||!C.finite(t.period.to)||t.period.from>=t.period.to))throw new Error('Bitte einen gültigen Zeitraum wählen.');

@@ -4,7 +4,7 @@
 
 [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · [Einrichtung](#einrichtung) · [CSV-Import](docs/CSV-IMPORT.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
-## Version 0.1.6
+## Version 0.1.7
 
 - SmartSolar 75/15 und SmartShunt 300 A gleichzeitig über Bluetooth-Sofortanzeige.
 - Automatischer Gerätearchiv-Import beim App-Start, je Gerät nacheinander; Fortschritt und Abbruch unter Geräte. Android-Kopplung wird vor dem GATT-Aufbau geprüft; vorhandene Kopplungen benötigen keine neue PIN-Abfrage.
@@ -14,8 +14,13 @@
 - Abgleich pro Gerät, Messgröße und Zeitpunkt mit Aufzeichnungen, CSV und früheren Archivimporten. Feinere Daten haben Vorrang; fehlende Kanäle werden ergänzt.
 - Sechs fertige Farbdesigns: Klassisch, Blau, Grün, Türkis, Orange und Neutral, jeweils hell und dunkel.
 - Optionale 14-Tage-Wetterzeile: pro Tag ein Symbol und Sonnenstunden; manuelle Ortswahl ohne GPS.
-- Luftige Standardübersicht mit sieben Kacheln; 24 Mess- und Zusatzwerte stehen optional bereit.
+- Luftige Standardübersicht mit sieben Kacheln; 26 Mess- und Zusatzwerte stehen optional bereit.
 - Optionale automatische Skala je Verlaufskachel: bisherige Messwerte im gewählten Zeitraum bestimmen die Grenzen. Kleine Solarleistungen, Spannungsänderungen und negative Batteriebilanzen bleiben erkennbar.
+- Livewert und Kurvenzeitraum getrennt wählen: Kachel → Darstellung Verlauf → Große Zahl „Aktuell (Live)“, Kurvenzeitraum beispielsweise „Heute“. Ohne frischen Empfang bleibt die Kurve gespeichert, die Livezahl zeigt —.
+- Berechneter Solarertrag und Batterieentnahme in Wh/kWh: als eigene Kacheln und unter Verlauf → Energie berechnet. Die Anzeige nennt die erfasste Zeit; größere Messlücken werden ausgelassen. Batterieentnahme ist kein Gesamtverbrauch einschließlich direkt genutztem Solarstrom.
+- Der kleine Übersichtsverlauf ist wählbar: seit Sonnenaufgang am Wetterort, heute oder letzte sechs Stunden. Ohne brauchbare Sonnenaufgangszeit wird „Heute“ mit Hinweis verwendet.
+- Unter „Anordnen“ die Reihenfolge der vier Blöcke Kacheln, Wetter, Verlauf und Start/Pause ändern; die Anordnung bleibt gespeichert.
+- Lesbare Zahlen im hellen Design: Farbberechnung für kurzes Weiß korrigiert, Kontrast auch für eigene Hintergründe und transparente Kacheln geprüft.
 - Kacheln hinzufügen, antippen und anpassen, frei verschieben, skalieren und überlappen; getrennte Anordnungen für schmale und breite Ansichten.
 - Zahlenwert, Rundinstrument oder kleiner Verlauf mit individuell gespeicherten Einheiten, Farben, Skalen, Schriftgrößen, Hintergrund und Deckkraft.
 - Restlaufzeit wahlweise in Stunden, Tagen, Minuten oder Sekunden; W/kW, Wh/kWh und weitere passende Einheiten.
@@ -73,7 +78,7 @@ Positiver Batteriestrom bedeutet Laden, negativer Batteriestrom Entladen. Restla
 
 ## Stand und offene Aufgaben
 
-Der Archivimport beider Geräte und die Anzeige im Verlauf wurden mit 0.1.5 an einer realen SmartSolar-/SmartShunt-Anlage erfolgreich bestätigt. Der Java-Decoder wurde zusätzlich mit einer privaten Bluetooth-Aufzeichnung gegen die unabhängige Offline-Auswertung abgeglichen (28.079 Einträge einschließlich fehlender Werte). Protokoll-, SQL-Abgleich- und CSV-Tests, Android-Lint und APK-Build sind automatisiert geprüft. 0.1.6 ergänzt die optionale automatische Skala für numerische Verlaufskacheln; sie wird mit Berechnungs- und Browserprüfungen abgesichert.
+Der Archivimport beider Geräte und die Anzeige im Verlauf wurden mit 0.1.5 an einer realen SmartSolar-/SmartShunt-Anlage erfolgreich bestätigt. Der Java-Decoder wurde zusätzlich mit einer privaten Bluetooth-Aufzeichnung gegen die unabhängige Offline-Auswertung abgeglichen (28.079 Einträge einschließlich fehlender Werte). Protokoll-, SQL-Abgleich- und CSV-Tests, Android-Lint und APK-Build sind automatisiert geprüft. 0.1.7 ergänzt unabhängige Livezahlen, Energieberechnungen aus Rohpunkten, Sonnenaufgangszeiträume, Blockreihenfolge und korrigierte Textkontraste. Die Prüfung umfasst 59 JVM-Tests, 23 Node-Tests sowie Browserprüfungen für Konfiguration, Empfangsausfälle, Kontrast und Bedienung; das neue Verhalten wartet auf den erneuten Android-Gerätetest.
 
 Beim App-Start bzw. nach mehr als 30 Sekunden im Hintergrund beginnt ein kurzer Importlauf für die eingerichteten Geräte. Bluetooth muss eingeschaltet und VictronConnect getrennt sein. Android kann beim ersten Mal die sechsstellige Geräte-PIN anfordern. Die 32-stelligen Sofortanzeige-Schlüssel und diese PIN sind verschieden. Bereits gelesene Bereiche werden gespeichert; erneutes Starten ergänzt Lücken und erzeugt keine doppelten Archivpunkte. Abbrüche behalten alle schon abgeschlossenen Blöcke. Außerhalb der Reichweite endet der Lauf mit einem Hinweis; ein neuer Versuch erfolgt beim nächsten App-Start oder über „Gerätearchiv ergänzen“.
 
@@ -91,7 +96,7 @@ Voraussetzungen: Java 17 und Android SDK 35.
 
 Die APK liegt unter `app/build/outputs/apk/debug/app-debug.apk`. Die öffentlich bereitgestellte Release-APK wird getrennt mit einem dauerhaften privaten Signaturschlüssel signiert. Die Signatur bleibt für spätere Updates erhalten.
 
-Die Einheiten- und Konfigurationstests laufen mit `node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs`. Zusätzliche Skalenprüfung: `node tools/dashboard-scale-smoke.cjs`. Weitere UI-Prüfungen: `node tools/extras-smoke.cjs` und `node tools/equipment-smoke.cjs` (Playwright).
+Die Einheiten- und Konfigurationstests laufen mit `node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs`. Zusätzliche Browserprüfungen: `node tools/dashboard-scale-smoke.cjs`, `node tools/dashboard-live-smoke.cjs` und `node tools/dashboard-contrast-smoke.cjs`. Weitere UI-Prüfungen: `node tools/extras-smoke.cjs` und `node tools/equipment-smoke.cjs` (Playwright).
 
 Für die Oberflächenprüfung: `node tools/ui-smoke.cjs` (Playwright erforderlich; startet einen lokalen Asset-Server selbst). Die App selbst nutzt keine npm-Abhängigkeiten.
 
