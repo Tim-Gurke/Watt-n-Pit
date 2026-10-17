@@ -35,5 +35,5 @@ const path=require('node:path');
  await page.locator('[data-page="settings"]').click();const backupCard=page.locator('#settings .settings-card').filter({has:page.locator('#exportConfiguration')});await backupCard.scrollIntoViewIfNeeded();await backupCard.screenshot({path:path.join(output,'settings-backup.png'),animations:'disabled'});console.log('settings-backup.png');
  await page.locator('#editEquipment').click();await page.locator('.remove-solar-group').last().click();await page.setViewportSize({width:390,height:1000});await screenshot('equipment-editor.png');
  assert.equal(errors.length,0,errors.join('\n'));await browser.close();
- console.log('Documentation screenshots generated from 0.1.9 assets with fictional values, location and device identifiers.');
+ console.log('Documentation screenshots generated from 1.0.0 assets with fictional values, location and device identifiers.');
 })().catch(error=>{console.error(error);process.exit(1);});

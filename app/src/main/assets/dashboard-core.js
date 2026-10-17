@@ -114,12 +114,16 @@
   }
   function defaults() {
     const ids=['soc','solar','dischargeEnergy','solarEnergy','voltage','remaining','power','weather'];
-    const layout=[[0,0,6,6],[6,0,6,5],[0,6,6,5],[6,5,6,6],[0,11,4,4],[4,11,4,4],[8,11,4,4],[0,15,12,4]];
+    const layouts={
+      compact:[[0,0,6,6],[6,0,6,5],[0,6,6,5],[6,5,6,6],[0,11,4,4],[4,11,4,4],[8,11,4,4],[0,15,12,4]],
+      wide:[[0,0,4,6],[4,3,4,3],[0,9,4,6],[8,0,4,3],[0,6,6,3],[4,0,4,3],[8,3,4,3],[0,15,12,4]]
+    };
     return {version:1,dischargeSignVersion:1,blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
-      const t=tile(id,'default-'+id),[x,y,w,h]=layout[i];
-      for(const profile of ['compact','wide'])t.layouts[profile]={x,y,w,h};
-      if(id==='soc')t.fontSize=20;
-      if(id==='solar'){t.type='chart';t.scaleMode='auto';t.valueMode='live';t.period.mode='today';}
+      const t=tile(id,'default-'+id);
+      for(const profile of ['compact','wide']){const [x,y,w,h]=layouts[profile][i];t.layouts[profile]={x,y,w,h};}
+      if(id==='soc'){t.fontSize=20;t.scaleMode='auto';}
+      if(id==='solar'){t.type='chart';t.scaleMode='auto';t.valueMode='live';t.period.mode='sunrise';}
+      if(id==='solarEnergy')t.period.mode='sunrise';
       return t;
     })};
   }
