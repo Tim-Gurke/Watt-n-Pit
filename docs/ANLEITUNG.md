@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.1.1** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.1.1/Watt-n-Pit-v1.1.1.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.2.2** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.2/Watt-n-Pit-v1.2.2.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -39,15 +39,17 @@ Falls nichts ankommt: Bluetooth und Reichweite prüfen, VictronConnect vom Gerä
 
 *Sieben Messkacheln und die kompakte Wetterkachel bilden den Standard. Werte, Farben, Größe und Position lassen sich anpassen.*
 
-Auf schmalen Bildschirmen stehen der schmale Ladezustand und die breitere Solarleistung oben. Darunter folgen „Ertrag − Entnahme“ und berechneter Solarertrag nebeneinander. Batteriespannung und die mit „Aktuell“ beschriftete Batteriebilanz stehen links übereinander; rechts liegt die größere negative Batterieentnahme. Das Wetter liegt flach über die gesamte Breite. Anschließend folgen Verlauf und Start/Pause. Der Appkopf und „Energie im Blick“ benötigen weniger Höhe.
+Auf schmalen Bildschirmen stehen der schmale Ladezustand und die breitere Solarleistung oben. Darunter folgen „Ertrag − Entnahme“ und berechneter Solarertrag nebeneinander. Batteriespannung und die mit „Aktuell“ beschriftete Batteriebilanz stehen links übereinander; rechts liegt die größere negative Batterieentnahme. Das Wetter liegt flach über die gesamte Breite. Anschließend folgen Verlauf und Start/Pause. Im Hochformat bleibt diese Anordnung erhalten. Im Querformat wechseln **+ Kachel**, **Anordnen**, Empfangszustand und Ansichtsart zusammen mit „Energie im Blick“ in den kompakten Appkopf. Ab 760 Pixel Breite stehen sie gemeinsam in einer Zeile.
+
+![Breite Ansicht mit Werkzeugen und Empfangszustand oben im kompakten Kopf](images/overview-landscape.png)
 
 Die Restlaufzeit kann über **+ Kachel → Akku → Restlaufzeit** ergänzt werden; Stunden sind weiterhin die voreingestellte Einheit.
 
 Solarleistung und berechneter Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. „Ertrag − Entnahme“ und Batterieentnahme beziehen sich auf **heute ab Mitternacht**. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
 
-**+ Kachel** öffnet die Auswahl. Neue Kacheln erscheinen am Ende des Rasters. Eine Messkachel antippen, um Beschriftung, Einheit, Darstellung und Zeitraum zu ändern. Als Darstellung stehen je nach Messgröße Zahl, Rundinstrument oder Verlauf zur Wahl.
+**+ Kachel** öffnet die Auswahl. Neue Kacheln erscheinen am Ende des Rasters. Eine Messkachel antippen und **Kachel-Einstellungen** wählen, um Beschriftung, Einheit, Darstellung und Zeitraum dauerhaft zu ändern. **Großansicht öffnen** zeigt dieselbe Messgröße zum Untersuchen in groß. Als Darstellung stehen je nach Messgröße Zahl, Rundinstrument oder Verlauf zur Wahl.
 
-Unter **Anordnen** die Kacheln ziehen und an der unteren rechten Ecke vergrößern. Überlappungen sind erlaubt. Andere Kacheln behalten ihre Position. **Fertig** beendet die Anordnung. Schmale und breite Ansichten speichern ihre Positionen und Größen getrennt.
+Unter **Anordnen** die Kacheln ziehen und an der unteren rechten Ecke vergrößern. Das Raster für Position und Größe ist in beiden Formaten doppelt so fein wie zuvor. Überlappungen sind erlaubt. Andere Kacheln behalten ihre Position. **Fertig** beendet die Anordnung. Schmale und breite Ansichten speichern ihre Positionen und Größen getrennt.
 
 ![Anordnungsmodus mit verschiebbaren Kacheln und Reihenfolge der Übersichtsblöcke](images/arrange.png)
 
@@ -71,9 +73,19 @@ Bei einer Verlaufskachel sind **die große Zahl und die Kurve getrennt einstellb
 
 *Beispiel Solarleistung: Livezahl anzeigen und die gespeicherte Kurve seit Sonnenaufgang betrachten. Die Skala kann sich automatisch anpassen.*
 
-**Kachel antippen → Wert & Zeitraum → Seit Sonnenaufgang** funktioniert auch bei berechnetem Solarertrag und Batterieentnahme. Deren Energiesummen beziehen sich dann auf dieses Fenster. Ohne verwendbare Sonnenaufgangszeit oder vor dem heutigen Sonnenaufgang steht ausdrücklich **heute (Ersatz)**; die Auswahl bleibt gespeichert.
+**Kachel antippen → Kachel-Einstellungen → Wert & Zeitraum → Seit Sonnenaufgang** funktioniert auch bei berechnetem Solarertrag und Batterieentnahme. Deren Energiesummen beziehen sich dann auf dieses Fenster. Ohne verwendbare Sonnenaufgangszeit oder vor dem heutigen Sonnenaufgang steht ausdrücklich **heute (Ersatz)**; die Auswahl bleibt gespeichert.
 
 Unter **Skala** zwischen festen Grenzen und automatischer Skalierung wählen. Bei kleinen Solarleistungen nutzt die Kurve dadurch die verfügbare Höhe. Spannungs- und Temperaturkurven passen auch die Untergrenze an. **Farben & Schrift** bietet eigene Farben, Schriftgröße, Nachkommastellen, Hintergrund und Deckkraft.
+
+### Großansicht und Vergleichswerte
+
+**Kachel antippen → Großansicht öffnen** vergrößert die Messgröße. Oben den Zeitraum wählen: Heute, Gestern, Woche, Monat, Seit Sonnenaufgang, Seit Zurücksetzen, Letzte … oder Von / bis. **Ansicht einstellen** öffnet Darstellung, Einheit, große Zahl, automatische oder feste Skalen, Nachkommastellen und Farbe.
+
+![Großansicht der Solarleistung mit Batteriebilanz und Batteriespannung als Vergleich](images/tile-detail.png)
+
+Unter **Vergleichswerte** weitere Messgrößen einschalten. Gleiche Einheiten werden gemeinsam dargestellt; unterschiedliche Einheiten erhalten eigene Werteskalen bei derselben Zeitachse. **+ / −** zoomt die Zeitachse. Mit einem Finger verschieben, mit zwei Fingern zoomen. **Gesamter Zeitraum** stellt das vollständige gewählte Zeitfenster wieder her. Berechnete Energiesummen bleiben auf den gewählten Zeitraum bezogen.
+
+Diese Änderungen gelten nur in der geöffneten Großansicht. **×** oder Android-Zurück schließt sie; die gespeicherte Kachel und ihre Anordnung bleiben erhalten. Für bleibende Änderungen **Kachel-Einstellungen** verwenden. Im Anordnungsmodus öffnet Antippen direkt den Kacheleditor.
 
 ## 5. Ertrag und Batterieentnahme verstehen
 
@@ -95,7 +107,7 @@ Unter **+ Kachel → Energie → Ertrag − Entnahme** hinzufügen. Die neue Kac
 
 ![Die Vergleichskachel mit berechnetem Wert, Kurve und automatischer Skala](images/energy-tile.png)
 
-Durch Antippen **Zahlenwert** oder **Verlauf**, **Wh** oder **kWh** sowie den Zeitraum wählen. Möglich sind beispielsweise **Heute**, **Seit Sonnenaufgang**, **Letzte …** und ein freier Zeitraum. Beide Ausgangswerte werden für dasselbe Fenster berechnet. Im Verlauf ist die automatische Skala voreingestellt; feste Grenzen und Vorzeichenumkehr sind ebenfalls möglich.
+Unter **Kachel antippen → Kachel-Einstellungen** die Darstellung **Zahlenwert** oder **Verlauf**, **Wh** oder **kWh** sowie den Zeitraum wählen. Möglich sind beispielsweise **Heute**, **Seit Sonnenaufgang**, **Letzte …** und ein freier Zeitraum. Beide Ausgangswerte werden für dasselbe Fenster berechnet. Im Verlauf ist die automatische Skala voreingestellt; feste Grenzen und Vorzeichenumkehr sind ebenfalls möglich.
 
 Fehlt einer der beiden Werte, zeigt die Kachel **—** und den Hinweis, dass Ertrag und Entnahme benötigt werden. Eine gemessene Null wird als **0,00** angezeigt. Größe, Position, Darstellung, Einheit und Zeitraum sind Bestandteil der Einstellungssicherung. Die zeitliche Erfassung wird im ergänzenden Hinweis getrennt für Solar und Batterie geführt.
 
@@ -115,7 +127,9 @@ Die kleine Verlaufskarte auf der Übersicht bietet ebenfalls **Seit Sonnenaufgan
 
 ## 7. Wetter und Solaranlage einstellen
 
-**Einstellungen → Sonne voraus.** öffnet die manuelle Ortssuche. GPS wird dafür nicht benötigt. Nach der Ortswahl zeigt die flache Wetterkachel **14 Tage mit je einem Symbol und den erwarteten Sonnenstunden**. Seitlich wischen, um die weiteren Tage zu sehen; **↻** aktualisiert die Vorschau.
+**Einstellungen → Sonne voraus.** öffnet die manuelle Ortssuche. GPS wird dafür nicht benötigt. Nach der Ortswahl zeigt die flache Wetterkachel **14 Tage mit je einem Symbol und den erwarteten Sonnenstunden**. Seitlich wischen, um die weiteren Tage zu sehen; **↻** aktualisiert die Vorschau von Hand.
+
+**Ab 1.2.2 wird die Vorhersage beim Öffnen der App und bei der Rückkehr aus dem Hintergrund automatisch frisch geladen**, sofern ein Wetterort eingestellt ist. Der Abruf läuft im Hintergrund. Währenddessen und ohne Internet bleibt die gespeicherte Vorschau sichtbar; bei einem Fehler erscheint ein entsprechender Hinweis. Ohne aktivierten Wetterort erfolgt kein Wetterabruf. **Wetter ausschalten** deaktiviert die Wetterfunktion wieder.
 
 Die Wetterkachel liegt im selben Raster wie die Messkacheln. **Anordnen** macht sie verschiebbar. Den Ortskopf antippen oder **···** wählen, um Beschriftung, Breite, Höhe und Deckkraft anzupassen. Nach dem Entfernen ist sie über **+ Kachel → Wetter** wieder verfügbar. Ohne Wetterort wird sie außerhalb des Anordnungsmodus ausgeblendet.
 
@@ -123,7 +137,7 @@ Die Wetterkachel liegt im selben Raster wie die Messkacheln. **Anordnen** macht 
 
 *Einstellungen → Deine Solaranlage → Bearbeiten: Modulgruppen beschreiben und ihre Messwertquelle zuordnen. Die gezeigten Angaben sind frei erfunden.*
 
-Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.1.1 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
+Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.2.2 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
 
 ## 8. Einstellungen und Messdaten sichern
 

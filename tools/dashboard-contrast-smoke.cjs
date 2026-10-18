@@ -22,10 +22,10 @@ const ratio=(a,b)=>(Math.max(luminance(a),luminance(b))+.05)/(Math.min(luminance
  }
  await page.locator('#themeToggle').click();
  // Saved custom backgrounds and disabled decorative adaptation cannot hide the numbers.
- await page.locator('[data-tile="default-solar"]').click();await page.locator('#tileType').selectOption('chart');
+ await page.locator('[data-tile="default-solar"]').click();await page.locator('#tileActionSettings').click();await page.locator('#tileType').selectOption('chart');
  await page.locator('summary').filter({hasText:/^Farben & Schrift$/}).click();await page.locator('#tileAdaptiveColor').uncheck();
  await page.locator('#tileBackgroundMode').selectOption('custom');await page.locator('#tileBackground').fill('#18303b');await page.locator('#saveTile').click();await check('light/custom dark');
- await page.locator('[data-tile="default-solar"]').click();await page.locator('summary').filter({hasText:/^Farben & Schrift$/}).click();await page.locator('#tileOpacity').fill('0');await page.locator('#saveTile').click();await check('light/transparent');
+ await page.locator('[data-tile="default-solar"]').click();await page.locator('#tileActionSettings').click();await page.locator('summary').filter({hasText:/^Farben & Schrift$/}).click();await page.locator('#tileOpacity').fill('0');await page.locator('#saveTile').click();await check('light/transparent');
  if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'overview-light-contrast.png'),fullPage:true});}
  assert.equal(errors.length,0,errors.join('\n'));await browser.close();console.log('Rendered number, unit, label and axis contrast passed for all 12 palette/theme combinations and custom/transparent tiles.');
 })().catch(error=>{console.error(error);process.exit(1);});

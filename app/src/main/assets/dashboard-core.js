@@ -79,8 +79,8 @@
     return /Age$/.test(metric) ? finite(value) ? Number(value)*(unit==='min'?60:1) : null : fromUnit(value,unit);
   }
   function position(input={},wide=false) {
-    const w=Math.round(numeric(input.w,wide?4:6,2,12));
-    return {x:Math.round(numeric(input.x,0,0,12-w)), y:Math.round(numeric(input.y,0,0,1000)), w,h:Math.round(numeric(input.h,3,2,18))};
+    const snap=x=>Math.round(x*2)/2,w=snap(numeric(input.w,wide?4:6,2,12));
+    return {x:snap(numeric(input.x,0,0,12-w)), y:snap(numeric(input.y,0,0,1000)), w,h:snap(numeric(input.h,3,2,18))};
   }
   function tile(metric,id) {
     const m=CATALOG[metric] || CATALOG.soc;
@@ -117,7 +117,7 @@
     const ids=['soc','solar','energyBalance','solarEnergy','voltage','power','weather','dischargeEnergy'];
     const layouts={
       compact:[[0,0,4,6],[4,0,8,6],[0,6,6,6],[6,6,6,6],[0,12,4,3],[0,15,4,3],[0,18,12,4],[4,12,8,6]],
-      wide:[[0,0,4,6],[4,3,4,3],[0,9,4,6],[8,0,4,3],[0,6,6,3],[8,3,4,3],[0,15,12,4],[0,19,4,6]]
+      wide:[[0,0,2,4],[2,0,2,8],[7,0,3,8],[4,0,3,8],[0,4,2,2],[0,6,2,2],[0,8,12,4],[10,0,2,8]]
     };
     return {version:1,dischargeSignVersion:1,blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
       const t=tile(id,'default-'+id);

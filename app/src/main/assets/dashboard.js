@@ -50,12 +50,12 @@
         el.style.setProperty('--tile-color',t.color);el.style.setProperty('--number-size',t.fontSize+'px');
         el.style.setProperty('--tile-bg',t.background==='auto'?`color-mix(in srgb,var(--panel) ${t.opacity}%,transparent)`:`${t.background}${Math.round(t.opacity*2.55).toString(16).padStart(2,'0')}`);
         el.querySelector('.tile-menu').onclick=e=>{e.stopPropagation();this.editor(t.id);};
-        el.onclick=e=>{if(m.widget&&e.target.closest('.weather-days,button'))return;if(Date.now()-(this.lastDrag || 0)>300)this.editor(t.id);};
+        el.onclick=e=>{if(m.widget&&e.target.closest('.weather-days,button'))return;if(Date.now()-(this.lastDrag || 0)>300)this.editing?this.editor(t.id):this.choose(t.id);};
         el.onkeydown=e=>{
           if(e.target!==el)return;
-          if(e.key==='Enter' || e.key===' '){e.preventDefault();this.editor(t.id);}
+          if(e.key==='Enter' || e.key===' '){e.preventDefault();this.editing?this.editor(t.id):this.choose(t.id);}
           if(this.editing && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
-            e.preventDefault();const p=t.layouts[this.profile];p.x=C.clamp(p.x+(e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0),0,12-p.w);p.y=Math.max(0,p.y+(e.key==='ArrowUp'?-1:e.key==='ArrowDown'?1:0));this.commit();this.elements.get(t.id)?.focus();
+            e.preventDefault();const p=t.layouts[this.profile];p.x=C.clamp(p.x+(e.key==='ArrowLeft'?-.5:e.key==='ArrowRight'?.5:0),0,12-p.w);p.y=Math.max(0,p.y+(e.key==='ArrowUp'?-.5:e.key==='ArrowDown'?.5:0));this.commit();this.elements.get(t.id)?.focus();
           }
         };
         el.addEventListener('pointerdown',e=>this.pointerDown(e,t));
@@ -99,7 +99,7 @@
       const dx=event.clientX-d.startX,dy=event.clientY-d.startY;
       if(Math.abs(dx)+Math.abs(dy)>5)d.moved=true;
       if(!d.moved)return;
-      event.preventDefault();const t=this.config.tiles.find(t=>t.id===d.id),p=t.layouts[this.profile],cols=Math.round(dx/(this.board.clientWidth/12)),rows=Math.round(dy/this.row);
+      event.preventDefault();const t=this.config.tiles.find(t=>t.id===d.id),p=t.layouts[this.profile],cols=Math.round(dx/(this.board.clientWidth/24))/2,rows=Math.round(dy/(this.row/2))/2;
       if(d.resize){const min=C.CATALOG[t.metric].widget?4:2;p.w=C.clamp(d.origin.w+cols,min,12-d.origin.x);p.h=C.clamp(d.origin.h+rows,min,18);}
       else{p.x=C.clamp(d.origin.x+cols,0,12-p.w);p.y=C.clamp(d.origin.y+rows,0,1000);}
       this.layout();
@@ -180,6 +180,7 @@
         el.classList.toggle('no-value',!C.finite(value));
       }
       if(visibilityChanged)this.layout();else this.fitNumbers();
+      this.detail?.themeChanged();
     }
     fitNumbers() {
       for(const el of this.elements.values()){
@@ -232,6 +233,12 @@
       for(const p of series){const gap=last && (C.CATALOG[t.metric].energy?p.gap:(last.device!==p.device || last.origin!==p.origin || p.t-(last.last || last.t)>Math.max(this.a.isDemo()?600001:45000,(p.period||0)*1500,(window.to-window.from)/600*3)));path+=(last&&!gap?'L':'M')+x(p).toFixed(2)+','+y(p).toFixed(2);last=p;}
       return `<svg class="tile-sparkline" data-scale-min="${low}" data-scale-max="${high}" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true"><path d="M4 60H296" stroke="var(--border)"/>${zero}<path d="${path}" fill="none" stroke="${this.paint(t.color,t)}" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg><div class="tile-chart-range"><span>${esc(C.axisLabel(low,high-low))}</span>${bounds.auto?'<span title="Skala nach bisherigen Messwerten im gewählten Zeitraum">Auto</span>':''}<span>${esc(C.axisLabel(high,high-low))} ${esc(t.unit)}</span></div>`;
     }
+    choose(id) {
+      const t=this.config.tiles.find(t=>t.id===id);if(!t)return;
+      this.a.openModal(t.title||C.CATALOG[t.metric].label,`<div class="tile-actions"><button class="primary" id="tileActionDetail">Großansicht öffnen</button><button class="secondary" id="tileActionSettings">Kachel-Einstellungen</button></div>`);
+      $('tileActionSettings').onclick=()=>this.editor(id);
+      $('tileActionDetail').onclick=()=>{this.a.closeModal();if(!this.detail)this.detail=new window.WattTileDetail(this);this.detail.open(id);};
+    }
     picker() {
       if(this.config.tiles.length>=64){this.a.toast('Bis zu 64 Kacheln sind möglich.');return;}
       const groups=[...new Set(Object.values(C.CATALOG).map(m=>m.group))];
@@ -255,7 +262,7 @@
       const period=`<details open><summary>Wert & Zeitraum</summary><div class="form-grid">${field('<span id="tilePeriodLabel">Zeitraum</span>',select('tilePeriod',m.liveOnly?[['live','Aktuell']]:[['live','Aktuell'],['last','Letzte …'],['today','Heute'],['sunrise','Seit Sonnenaufgang'],['reset','Seit Zurücksetzen'],['custom','Freier Zeitraum']]))}${field('<span id="tileAggregateLabel">Auswertung</span>',select('tileAggregate',m.status?[['last','Letzter Wert']]:Object.entries(aggregateNames)))}</div><p class="muted" id="tileLiveHint" hidden>Aktuell zeigt den Liveempfang. Ohne frischen Wert erscheint —; die gespeicherte Kurve bleibt sichtbar.</p><p class="muted" id="tileSunriseHint" hidden></p>${m.energy?'<label class="check-field"><input type="checkbox" id="tileReverseSign"> Vorzeichen umkehren (+/−)</label>':''}<div id="tileLastFields" class="form-grid">${field('Anzahl',input('tileAmount',t.period.amount,'type="number" min="1" max="10000"'))}${field('Zeiteinheit',select('tileTimeUnit',[['min','Minuten'],['h','Stunden'],['d','Tage']]))}</div><div id="tileCustomFields" class="form-grid">${field('Von',input('tileFrom',dateInput(t.period.from || Date.now()-86400000),'type="datetime-local"'))}${field('Bis',input('tileTo',dateInput(t.period.to || Date.now()),'type="datetime-local"'))}</div><div id="tileResetFields"><p class="muted" id="tileResetLabel"></p><button class="quiet" id="tileReset">Jetzt zurücksetzen</button></div></details>`;
       const appearance=`<details><summary>Farben & Schrift</summary><div class="form-grid">${field('Wertfarbe',input('tileColor',t.color,'type="color"'))}${field('Schriftgröße',input('tileFont',t.fontSize,'type="number" min="18" max="64"'))}${field('Nachkommastellen',select('tileDigits',[[0,'Keine'],[1,'Eine'],[2,'Zwei'],[3,'Drei']]))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}${field('Hintergrund',select('tileBackgroundMode',[['auto','Passend zum Farbschema'],['custom','Eigene Farbe']]))}${field('Eigene Hintergrundfarbe',input('tileBackground',t.background==='auto'?'#18303b':t.background,'type="color"'))}</div><label class="check-field"><input type="checkbox" id="tileAdaptiveColor"> Kurven- und Instrumentfarben an Hell/Dunkel anpassen</label></details>`;
       const scale=`<details><summary>Skala</summary><div id="tileChartScale">${field('Verlaufsskala',select('tileScaleMode',[['fixed','Feste Skala'],['auto','Automatisch nach bisherigen Werten']]))}<p class="muted" id="tileScaleHint" hidden>Passt sich den Messwerten im gewählten Zeitraum an, mit etwas Platz über dem Maximum. Spannung, Temperatur und Akkustand passen auch die Untergrenze an. Für die bisherigen Tageswerte den Zeitraum „Heute“ wählen.</p></div><div class="form-grid">${field('Minimum',input('tileMin',this.shortInput(C.fixedRange(t).min),'type="number" step="any"'))}${field('Maximum',input('tileMax',this.shortInput(C.fixedRange(t).max),'type="number" step="any"'))}</div><label class="check-field"><input type="checkbox" id="tileMulticolor"> Mehrfarbiges Rundinstrument</label><div class="form-grid">${field('Mittlere Farbe',input('tileColorMid',t.colorMid,'type="color"'))}${field('Endfarbe',input('tileColorEnd',t.colorEnd,'type="color"'))}</div><label class="check-field"><input type="checkbox" id="tileInvert"> Farbverlauf umkehren</label></details>`;
-      const arrangement=`<details><summary>Größe & Ebene</summary><div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="2" max="12"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="2" max="18"'))}</div><div class="row"><button class="quiet" id="tileBack">Nach hinten</button><button class="quiet" id="tileFront">Nach vorne</button><button class="quiet" id="duplicateTile">Duplizieren</button></div><p class="muted">Gilt für die ${this.profile==='wide'?'breite':'schmale'} Ansicht. Andere Kacheln behalten ihre Position.</p></details>`;
+      const arrangement=`<details><summary>Größe & Ebene</summary><div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="2" max="12" step="0.5"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="2" max="18" step="0.5"'))}</div><div class="row"><button class="quiet" id="tileBack">Nach hinten</button><button class="quiet" id="tileFront">Nach vorne</button><button class="quiet" id="duplicateTile">Duplizieren</button></div><p class="muted">Gilt für die ${this.profile==='wide'?'breite':'schmale'} Ansicht. Andere Kacheln behalten ihre Position.</p></details>`;
       this.a.openModal('Kachel anpassen',`<div class="tile-editor">${fields}${period}${appearance}${m.status?'':scale}${arrangement}<p class="form-error" id="tileError" hidden></p><div class="form-actions"><button class="quiet danger-text" id="removeTile">Entfernen</button><button class="primary" id="saveTile">Übernehmen</button></div></div>`);
       const values={tileMetric:t.metric,tileType:t.type,tileUnit:t.unit,tilePeriod:t.period.mode,tileAggregate:m.status?'last':t.period.aggregate,tileTimeUnit:t.period.unit,tileDigits:t.digits,tileBackgroundMode:t.background==='auto'?'auto':'custom'};
       for(const [id,value] of Object.entries(values))$(id).value=value;
@@ -318,7 +325,7 @@
     }
     weatherEditor(t){
       const p=t.layouts[this.profile];
-      this.a.openModal('Wetterkachel anpassen',`<div class="tile-editor"><p class="muted">14 Tage mit Wettersymbol und Sonnenstunden, seitlich wischbar. Unter „Anordnen“ frei zwischen deine Messkacheln verschieben.</p>${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60" placeholder="Wetterort"'))}<div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="4" max="12"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="4" max="18"'))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}</div><button id="tileWeatherSettings" class="quiet">Wetterort ändern</button><div class="form-actions"><button class="quiet" id="removeTile">Entfernen</button><button class="primary" id="saveTile">Übernehmen</button></div></div>`);
+      this.a.openModal('Wetterkachel anpassen',`<div class="tile-editor"><p class="muted">14 Tage mit Wettersymbol und Sonnenstunden, seitlich wischbar. Unter „Anordnen“ frei zwischen deine Messkacheln verschieben.</p>${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60" placeholder="Wetterort"'))}<div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="4" max="12" step="0.5"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="4" max="18" step="0.5"'))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}</div><button id="tileWeatherSettings" class="quiet">Wetterort ändern</button><div class="form-actions"><button class="quiet" id="removeTile">Entfernen</button><button class="primary" id="saveTile">Übernehmen</button></div></div>`);
       $('tileWeatherSettings').onclick=()=>{this.a.closeModal();document.querySelector('[data-page="settings"]').click();$('weatherQuery').focus();};
       $('removeTile').onclick=()=>{this.config.tiles=this.config.tiles.filter(old=>old.id!==t.id);if(this.commit())this.a.closeModal();};
       $('saveTile').onclick=()=>{t.title=$('tileTitle').value.trim();t.opacity=Number($('tileOpacity').value);t.layouts[this.profile]={...p,w:Number($('tileWidth').value),h:Number($('tileHeight').value)};t.layouts[this.profile].x=Math.min(p.x,12-t.layouts[this.profile].w);this.config.tiles=this.config.tiles.map(old=>old.id===t.id?t:old);if(this.commit()){this.a.closeModal();this.a.toast('Wetterkachel gespeichert.');}};

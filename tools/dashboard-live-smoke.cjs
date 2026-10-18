@@ -20,7 +20,7 @@ const fs=require('node:fs');
  await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
  const solar=page.locator('[data-tile="test-solar"]'),number=()=>solar.locator('.tile-number').textContent(),curve=async()=>JSON.stringify([...(await solar.locator('.tile-sparkline path').last().getAttribute('d')).matchAll(/([ML])[\d.]+,([\d.]+)/g)].map(m=>[m[1],Number(m[2])]));
  assert.equal(await number(),'3','old chart choices changed on upgrade');const originalCurve=await curve();
- await solar.click();assert.equal(await page.locator('#tileAggregate').inputValue(),'last');
+ await solar.click();await page.locator('#tileActionSettings').click();assert.equal(await page.locator('#tileAggregate').inputValue(),'last');
  assert.equal(await page.locator('#tilePeriodLabel').textContent(),'Kurvenzeitraum');
  await page.locator('#tileAggregate').selectOption('live');await page.locator('#saveTile').click();
  assert.equal(await number(),'7');assert.equal(await curve(),originalCurve);assert.match(await solar.locator('.tile-hint').textContent(),/Aktuell.*Verlauf: heute/);
@@ -29,9 +29,9 @@ const fs=require('node:fs');
  await page.evaluate(()=>{window.mock.readings[0].t=Date.now();window.mock.running=false;poll();});assert.equal(await number(),'—');assert.equal(await curve(),originalCurve);
  await page.evaluate(()=>{window.mock.running=true;window.mock.readings[0].solar=7;window.historyError=true;window.mock.historyRevision++;poll();});assert.equal(await number(),'7');assert.match(await solar.locator('.tile-hint').textContent(),/Aktuell.*Verlauf nicht verfügbar/);
  await page.evaluate(()=>{window.historyError=false;window.mock.historyRevision++;poll();});
- await page.reload();assert.equal(await number(),'7');await solar.click();assert.equal(await page.locator('#tileAggregate').inputValue(),'live');assert.equal(await page.locator('#tilePeriod').inputValue(),'today');
+ await page.reload();assert.equal(await number(),'7');await solar.click();await page.locator('#tileActionSettings').click();assert.equal(await page.locator('#tileAggregate').inputValue(),'live');assert.equal(await page.locator('#tilePeriod').inputValue(),'today');
  await page.locator('#tileAggregate').selectOption('max');await page.locator('#saveTile').click();assert.equal(await number(),'6');
- await solar.click();await page.locator('#tileAggregate').selectOption('live');await page.locator('#tileUnit').selectOption('kW');await page.locator('#saveTile').click();
+ await solar.click();await page.locator('#tileActionSettings').click();await page.locator('#tileAggregate').selectOption('live');await page.locator('#tileUnit').selectOption('kW');await page.locator('#saveTile').click();
  assert.equal(await page.evaluate(()=>window.testConfig.tiles[0].valueMode),'live');assert.equal(await solar.locator('.tile-sparkline').getAttribute('data-scale-max'),'0.0066');
  // All overview blocks can be moved without changing the tile layout.
  const layouts=await page.evaluate(()=>window.testConfig.tiles[0].layouts);
@@ -51,9 +51,10 @@ const fs=require('node:fs');
  // The new independent energy totals work as tiles and in the comparison graph, with coverage.
  await page.locator('#addTile').click();await page.locator('.metric-option[data-metric="solarEnergy"]').click();
  const energyTile=page.locator('[data-tile]').last();assert.equal(await energyTile.locator('.tile-number').textContent(),'3,27');assert.match(await energyTile.locator('.tile-hint').textContent(),/Berechnet.*50 % erfasst/);
- await energyTile.click();assert.equal(await page.locator('#tileAggregate').isDisabled(),true);assert.equal(await page.locator('#tilePeriod option[value="live"]').evaluate(el=>el.disabled),true);await page.locator('#closeModal').click();
+ await energyTile.click();await page.locator('#tileActionSettings').click();assert.equal(await page.locator('#tileAggregate').isDisabled(),true);assert.equal(await page.locator('#tilePeriod option[value="live"]').evaluate(el=>el.disabled),true);await page.locator('#closeModal').click();
  await page.locator('[data-page="history"]').click();await page.locator('#metricButtons [data-metric="energy"]').click();
- assert.equal(await page.locator('#chartLegend span').count(),2);assert.match(await page.locator('#energyNote').textContent(),/3,27 Wh.*50 %.*-1,25 Wh.*50 %/);assert.match(await page.locator('#energyNote').textContent(),/kein Gesamtverbrauch/);assert.ok(await page.evaluate(()=>points.some(p=>p.kind==='shunt'&&p.v===-1.25)));assert.ok(await page.evaluate(()=>scale.low< -1.25));assert.equal(await page.evaluate(()=>dischargeValue(0)),0);assert.equal(await page.evaluate(()=>dischargeValue(null)),null);
+ assert.equal(await page.locator('#chartLegend span').count(),3);await page.locator('#energyBalance').uncheck();
+ assert.equal(await page.locator('#chartLegend span').count(),2);assert.match(await page.locator('#energyNote').textContent(),/3,27 Wh.*50 %.*-1,25 Wh.*50 %/);assert.match(await page.locator('#energyNote').textContent(),/weder der Gesamtverbrauch/);assert.ok(await page.evaluate(()=>points.some(p=>p.kind==='shunt'&&p.v===-1.25)));assert.ok(await page.evaluate(()=>scale.low< -1.25));assert.equal(await page.evaluate(()=>dischargeValue(0)),0);assert.equal(await page.evaluate(()=>dischargeValue(null)),null);
  if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'energy-comparison-dark.png'),fullPage:true});await page.locator('[data-page="overview"]').click();await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'overview-blocks-dark.png'),fullPage:true});}
  assert.equal(await page.evaluate(()=>document.body.scrollWidth>innerWidth),false);
  assert.equal(errors.length,0,errors.join('\n'));await browser.close();console.log('Independent live/chart values, zero/stale/paused/error states, persistence, block ordering, sunrise/6h selection and calculated-energy UI passed.');

@@ -68,7 +68,6 @@ public final class MainActivity extends Activity {
         setContentView(web);
         applyTheme(repository.prefs.getString("theme","dark"));
         web.loadUrl("file:///android_asset/index.html");
-        WeatherClient.refresh(repository,false);
 
     }
 
@@ -77,7 +76,10 @@ public final class MainActivity extends Activity {
         super.onSaveInstanceState(state);
     }
     @Override protected void onStart(){
-        super.onStart();WeatherClient.refresh(repository,false);
+        super.onStart();
+        // Refresh on each foreground entry; WeatherClient skips disabled weather
+        // and coalesces an already running request. Cached data stays available.
+        WeatherClient.refresh(repository,true);
         if(!entered||stoppedAt>0&&SystemClock.elapsedRealtime()-stoppedAt>30000){
             entered=true;web.postDelayed(()->{
                 if(isFinishing()||isDestroyed()||pendingStart)return;

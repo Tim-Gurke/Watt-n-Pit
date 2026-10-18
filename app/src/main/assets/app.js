@@ -28,6 +28,24 @@ let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let currentImport = null, lastHistoryRevision=-1;
 let dashboard = null, extras = null, equipment = null, configuration = null;
+const overviewLandscape = window.matchMedia('(orientation: landscape)');
+
+function syncOverviewHeader() {
+  const compact = page === 'overview' && overviewLandscape.matches;
+  const header = document.querySelector('.topbar'), head = $('overviewHeader'), toolbar = $('dashboardToolbar');
+  header.classList.toggle('with-overview',compact);
+  document.body.classList.toggle('overview-landscape',compact);
+  // Move the same controls so handlers, state and focus survive rotation.
+  if (compact) {
+    header.insertBefore(head,$('themeToggle'));
+    header.insertBefore(toolbar,$('themeToggle'));
+  } else {
+    $('overview').prepend(head);
+    $('welcome').after(toolbar);
+  }
+}
+overviewLandscape.addListener(syncOverviewHeader);
+syncOverviewHeader();
 
 function toast(message) {
   if (!message || (message === previousToast && Date.now()-previousToastTime < 4000)) return;
@@ -36,7 +54,9 @@ function toast(message) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true,5500);
 }
 function showPage(next) {
+  dashboard?.detail?.close();
   page = next;
+  syncOverviewHeader();
   document.querySelectorAll('.page').forEach(el => el.classList.toggle('active',el.id===page));
   document.querySelectorAll('.bottom-nav button').forEach(el => el.classList.toggle('active',el.dataset.page===page));
   window.scrollTo(0,0);
@@ -141,6 +161,7 @@ function closeModal() {
 }
 window.handleBack = () => {
   if (!$('modal').hidden) { closeModal(); return true; }
+  if (dashboard?.detail?.active) { dashboard.detail.close(); return true; }
   if (page !== 'overview') { showPage('overview'); return true; }
   return false;
 };

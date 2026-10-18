@@ -23,7 +23,7 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - name: Dashboard-Berechnungen und Konfiguration prüfen
-        run: node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs tools/settings-backup.test.cjs
+        run: node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs tools/settings-backup.test.cjs tools/tile-detail.test.cjs
       - name: Tests, Lint und Android-Build
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
       - uses: actions/upload-artifact@v4

@@ -24,12 +24,12 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
  const original=await page.evaluate(()=>JSON.parse(localStorage.getItem('wattpit-dashboard-v1')||JSON.stringify(WattDashboardCore.defaults())));
  await page.locator('#editDashboard').click();await weatherTile.focus();await page.keyboard.press('ArrowUp');
  const moved=await page.evaluate(()=>JSON.parse(localStorage.getItem('wattpit-dashboard-v1')));
- assert.equal(moved.tiles.find(t=>t.metric==='weather').layouts.compact.y,original.tiles.find(t=>t.metric==='weather').layouts.compact.y-1);
+ assert.equal(moved.tiles.find(t=>t.metric==='weather').layouts.compact.y,original.tiles.find(t=>t.metric==='weather').layouts.compact.y-.5);
  for(const t of original.tiles.filter(t=>t.metric!=='weather'))assert.deepEqual(moved.tiles.find(x=>x.id===t.id).layouts,t.layouts,'weather move changed another tile');
  await weatherTile.locator('.tile-menu').click();await page.locator('#tileTitle').fill('Meine Sonne');await page.locator('#tileWidth').fill('6');await page.locator('#saveTile').click();await page.locator('#editDashboard').click();
  assert.equal(await page.locator('#weatherPlaceName').textContent(),'Meine Sonne');assert.ok((await weatherTile.boundingBox()).width<180);
  await page.reload();assert.equal(await page.locator('.type-weather').count(),1);assert.equal(await page.locator('#weatherPlaceName').textContent(),'Meine Sonne');assert.ok((await weatherTile.boundingBox()).width<180);
- await weatherTile.click({position:{x:12,y:10}});await page.locator('#tileWidth').fill('12');await page.locator('#tileTitle').fill('');await page.locator('#saveTile').click();
+ await weatherTile.click({position:{x:12,y:10}});await page.locator('#tileActionSettings').click();await page.locator('#tileWidth').fill('12');await page.locator('#tileTitle').fill('');await page.locator('#saveTile').click();
  if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await weatherTile.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'weather-tile-dark.png')});}
  const dashboard=await page.evaluate(()=>document.getElementById('dashboardBoard').innerHTML);
  for(const theme of ['light','dark']){

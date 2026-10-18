@@ -195,7 +195,7 @@ test('legacy weather blocks become one compact tile without moving existing layo
   const board=C.defaults();board.tiles=board.tiles.filter(t=>t.metric!=='weather');board.blockOrder=['record','weather','tiles','history'];board.tiles[0].layouts.compact={x:3,y:21,w:6,h:6};
   const before=structuredClone(board.tiles),migrated=C.normalize(board),weather=migrated.tiles.at(-1);
   assert.deepEqual(migrated.tiles.slice(0,-1),before);assert.equal(weather.metric,'weather');
-  assert.deepEqual(weather.layouts.compact,{x:0,y:27,w:12,h:4});assert.deepEqual(weather.layouts.wide,{x:0,y:25,w:12,h:4});
+  assert.deepEqual(weather.layouts.compact,{x:0,y:27,w:12,h:4});assert.deepEqual(weather.layouts.wide,{x:0,y:8,w:12,h:4});
   assert.deepEqual(migrated.blockOrder,['record','tiles','history']);assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(migrated))),migrated);
   assert.equal(C.windowFor(weather),null);
 });
