@@ -49,4 +49,30 @@ public class EnergyIntegralTest {
         EnergyIntegral.Result r=EnergyIntegral.calculate(data,0,86400000,false);
         assertEquals(240,r.wh,1e-7);assertTrue(r.points.size()<=1202);assertEquals(240,r.points.get(r.points.size()-1).wh,1e-7);
     }
+
+    @Test public void batteryBalanceIntegratesBothDirectionsAndPreservesTheTurningPoint(){
+        List<EnergyIntegral.Sample> data=Arrays.asList(sample(0,120,3600,"archive"),sample(3600,-120,3600,"archive"));
+        EnergyIntegral.Result r=EnergyIntegral.balance(data,0,3600000);
+        assertEquals(0,r.wh,1e-9);assertEquals(30,r.maximumWh,1e-9);assertEquals(0,r.minimumWh,1e-9);
+        assertTrue(r.points.stream().anyMatch(p->p.time==1800000&&Math.abs(p.wh-30)<1e-9));
+        assertEquals(30,EnergyIntegral.calculate(data,0,3600000,true).wh,1e-9);
+    }
+    @Test public void batteryBalanceKeepsNegativeTotalsAndIgnoresOverlappingCopies(){
+        List<EnergyIntegral.Sample> data=Arrays.asList(sample(0,-60,60,"archive"),sample(60,-60,60,"archive"),sample(0,900,60,"csv"),sample(60,900,60,"csv"));
+        EnergyIntegral.Result r=EnergyIntegral.balance(data,0,60000);
+        assertEquals(-1,r.wh,1e-9);assertEquals(-1,r.minimumWh,1e-9);assertEquals(0,r.maximumWh,1e-9);assertEquals(60000,r.coveredMillis);
+        assertEquals(1,EnergyIntegral.calculate(data,0,60000,true).wh,1e-9);
+    }
+    @Test public void batteryBalanceHasKnownZeroButNoInventedEnergyInGaps(){
+        assertEquals(0,EnergyIntegral.balance(Arrays.asList(sample(0,0,30,"archive"),sample(30,0,30,"archive")),0,30000).wh,0);
+        assertNull(EnergyIntegral.balance(Arrays.asList(sample(0,50,0,"live"),sample(300,50,0,"live")),0,300000).wh);
+        List<EnergyIntegral.Sample> data=Arrays.asList(sample(30,60,0,"live"),sample(90,60,0,"live"),sample(600,-120,0,"live"),sample(660,-120,0,"live"));
+        EnergyIntegral.Result r=EnergyIntegral.balance(data,0,720000);
+        assertEquals(-1,r.wh,1e-9);assertEquals(120000,r.coveredMillis);assertEquals(1.0/6,r.coverage(0,720000),1e-9);
+        assertTrue(r.points.stream().anyMatch(p->p.time==600000&&p.gap));
+    }
+    @Test public void batteryBalanceClipsTheSelectedTimeWindow(){
+        EnergyIntegral.Result r=EnergyIntegral.balance(Arrays.asList(sample(0,0,60,"archive"),sample(60,120,60,"archive")),15000,45000);
+        assertEquals(.5,r.wh,1e-9);assertEquals(30000,r.coveredMillis);
+    }
 }

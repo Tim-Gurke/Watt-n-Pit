@@ -41,7 +41,7 @@ test('settings preserve an explicit positive discharge choice after the negative
   assert.equal(C.normalize(backup).dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign,true);
 });
 
-test('comparison tile settings and both layouts survive a portable backup round trip',()=>{
+test('battery balance tile settings and both layouts survive a portable backup round trip',()=>{
   const backup=sample(),tile=D.tile('energyBalance','comparison-test');
   tile.unit='kWh';tile.type='number';tile.title='Mein Energievergleich';tile.period.mode='sunrise';
   tile.layouts={compact:{x:2,y:24,w:8,h:6},wide:{x:4,y:30,w:4,h:4}};

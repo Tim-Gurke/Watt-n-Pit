@@ -70,3 +70,17 @@ jobs:
           gh release create "v${version}" "$apk" .release/SHA256SUMS.txt \
             --target "$(git rev-parse HEAD^)" --title "Watt’n’Pit ${version}" \
             --notes-file "docs/releases/${version}.md"
+      - name: Nur die drei neuesten Releases behalten
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GH_REPO}/releases" \
+            --jq '.[] | select(.draft == false) | [.published_at, .tag_name] | @tsv' \
+            | sort -r | tail -n +4 | cut -f2 > "$RUNNER_TEMP/old-releases.txt"
+          while IFS= read -r tag; do
+            test -n "$tag" || continue
+            gh release delete --yes -- "$tag"
+          done < "$RUNNER_TEMP/old-releases.txt"

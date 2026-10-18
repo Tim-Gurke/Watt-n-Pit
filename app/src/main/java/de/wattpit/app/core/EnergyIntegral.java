@@ -22,6 +22,7 @@ public final class EnergyIntegral {
     }
     public static final class Result {
         public Double wh;
+        public double minimumWh,maximumWh;
         public long coveredMillis;
         public final List<Point> points=new ArrayList<>();
         public double coverage(long from,long to){return to>from?Math.min(1,coveredMillis/(double)(to-from)):0;}
@@ -39,12 +40,19 @@ public final class EnergyIntegral {
     }
     /** One configured device per kind. Overlapping sources/archives contribute once. */
     public static Result calculate(List<Sample> samples,long from,long to,boolean discharge) {
+        return calculate(samples,from,to,discharge,false);
+    }
+    /** Signed energy at the Shunt: charging minus discharging, without a solar input. */
+    public static Result balance(List<Sample> samples,long from,long to) {
+        return calculate(samples,from,to,false,true);
+    }
+    private static Result calculate(List<Sample> samples,long from,long to,boolean discharge,boolean balance) {
         if(from<0||to<=from)throw new IllegalArgumentException("Ungültiger Zeitraum.");
         List<Sample> sorted=new ArrayList<>(samples);sorted.sort(Comparator.comparingLong(s->s.time));
         Map<String,Sample> previous=new HashMap<>();List<Event> events=new ArrayList<>();int id=0;
         for(Sample s:sorted){
             String key=s.device+"\n"+s.origin+"\n"+s.period;Sample a=previous.put(key,s);
-            if(a==null||!Double.isFinite(a.watts)||!Double.isFinite(s.watts)||(!discharge&&(a.watts<0||s.watts<0)))continue;
+            if(a==null||!Double.isFinite(a.watts)||!Double.isFinite(s.watts)||(!discharge&&!balance&&(a.watts<0||s.watts<0)))continue;
             long dt=s.time-a.time,limit=s.period>0?s.period*1500L:90000;
             if(dt<=0||dt>limit)continue;
             long start=Math.max(from,a.time),end=Math.min(to,s.time);if(end<=start)continue;
@@ -60,22 +68,31 @@ public final class EnergyIntegral {
             long end=events.get(i).time;if(end<=time)continue;
             Segment s=active.first();double a=s.value(time),b=s.value(end);
             raw.add(new Point(time,energy,lastEnd!=time));
-            energy+=positiveArea(discharge?-a:a,discharge?-b:b)*(end-time)/3600000.0;
+            if(balance&&a*b<0){
+                long zero=time+Math.round((end-time)*(-a)/(b-a));
+                if(zero>time&&zero<end)raw.add(new Point(zero,energy+a*(zero-time)/7200000.0,false));
+            }
+            energy+=(balance?(a+b)/2:positiveArea(discharge?-a:a,discharge?-b:b))*(end-time)/3600000.0;
             result.coveredMillis+=end-time;raw.add(new Point(end,energy,false));lastEnd=end;
         }
         if(result.coveredMillis==0)return result;
         result.wh=energy;
         // Bound bridge payloads while retaining endpoints and explicit breaks in each bucket.
-        long width=Math.max(1,(to-from)/600);Point first=null,last=null;long bucket=-1;boolean gap=false;
+        long width=Math.max(1,(to-from)/600);Point first=null,last=null,low=null,high=null;long bucket=-1;boolean gap=false;
         for(Point p:raw){long next=(p.time-from)/width;
-            if(first!=null&&next!=bucket){append(result.points,first,last,gap);first=null;gap=false;}
-            if(first==null){first=p;bucket=next;}else if(p.gap&&p.time!=first.time)gap=true;
+            result.minimumWh=Math.min(result.minimumWh,p.wh);result.maximumWh=Math.max(result.maximumWh,p.wh);
+            if(first!=null&&next!=bucket){append(result.points,first,last,low,high,gap);first=null;gap=false;}
+            if(first==null){first=p;low=high=p;bucket=next;}else if(p.gap&&p.time!=first.time)gap=true;
+            if(p.wh<low.wh)low=p;if(p.wh>high.wh)high=p;
             last=p;
         }
-        if(first!=null)append(result.points,first,last,gap);
+        if(first!=null)append(result.points,first,last,low,high,gap);
         return result;
     }
-    private static void append(List<Point> out,Point first,Point last,boolean gap){out.add(first);if(last.time!=first.time){last.gap|=gap;out.add(last);}}
+    private static void append(List<Point> out,Point first,Point last,Point low,Point high,boolean gap){
+        List<Point> selected=new ArrayList<>(Arrays.asList(first,low,high,last));selected.sort(Comparator.comparingLong(p->p.time));
+        long previous=-1;for(Point p:selected)if(p.time!=previous){if(p!=first)p.gap|=gap;out.add(p);previous=p.time;}
+    }
     private static double positiveArea(double a,double b){
         if(a>=0&&b>=0)return (a+b)/2;
         if(a<=0&&b<=0)return 0;

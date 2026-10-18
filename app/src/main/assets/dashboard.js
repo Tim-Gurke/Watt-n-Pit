@@ -117,12 +117,7 @@
       if(this.cache.has(key))return this.cache.get(key);
       let data={points:[],summary:{}};
       try {
-        if(C.CATALOG[t.metric].comparison){
-          const sources=this.a.isDemo()?{solar:this.demoData({...t,metric:'solarEnergy'},window),battery:this.demoData({...t,metric:'dischargeEnergy'},window)}:this.a.native?.energyHistory?JSON.parse(this.a.native.energyHistory(Math.floor(window.from),Math.ceil(window.to),'all')):null;
-          if(!sources||sources.error)throw new Error('Energiewerte nicht verfügbar.');
-          data={...C.energyBalance(sources.solar,sources.battery),coverageSources:{solar:sources.solar?.summary?.coverage,battery:sources.battery?.summary?.coverage}};
-        }
-        else if(this.a.isDemo())data=this.demoData(t,window);
+        if(this.a.isDemo())data=this.demoData(t,window);
         else if(this.a.native?.dashboardHistory)data=JSON.parse(this.a.native.dashboardHistory(Math.floor(window.from),Math.ceil(window.to),backend));
         else if(this.a.native?.history){data=JSON.parse(this.a.native.history(Math.floor(window.from),Math.ceil(window.to),backend,'all'));data.summary=this.summary(data.points || []);}
       } catch(_){data={points:[],summary:{},error:true};}
@@ -141,7 +136,7 @@
         const shunt={soc:70+6*Math.sin((hour-9)/24*Math.PI*2),ttg:480,voltage:13+.15*Math.sin(hour/12*Math.PI),current:(solar*.9-32)/13,power:solar*.9-32,consumed:-23.6,temperature:null,aux:null,alarm:0};
         const reg={solar,voltage:13.08,current:solar/13.08,yieldWh:Math.max(0,Math.min(900,(hour-7)*80)),state:solar>1?3:0,error:0,load:0};
         let value=t.metric==='remainingWh'?shunt.soc*shunt.voltage/100:t.metric==='remainingAh'?shunt.soc:t.metric==='consumed'?Math.abs(shunt.consumed):(m.kind==='shunt'?shunt:reg)[m.field];
-        if(m.energy){const power=t.metric==='solarEnergy'?solar:Math.max(0,-shunt.power);if(previous!=null)energy+=(previous+power)/2*step/3600000;previous=power;value=energy;}
+        if(m.energy){const power=t.metric==='solarEnergy'?solar:t.metric==='energyBalance'?shunt.power:Math.max(0,-shunt.power);if(previous!=null)energy+=(previous+power)/2*step/3600000;previous=power;value=energy;}
         if(C.finite(value))out.push({t:time,last:time,kind:m.kind,device:'demo-'+m.kind,origin:'live',v:value,min:value,max:value,n:1});
       }
       return {points:out,summary:{...this.summary(out),...(m.energy?{coverage:1}:{})}};
@@ -172,10 +167,9 @@
         if(!window && t.metric==='solar' && solar?.state!=null)hint=C.PHASES[solar.state] || 'Ladephase '+solar.state;
         if(!window && t.metric==='power' && C.finite(shunt?.power))hint=shunt.power>.4?'Akku wird geladen':shunt.power<-.4?'Akku wird entladen':'Bilanz ausgeglichen';
         if(m.energy&&!data?.error)hint=t.period.mode==='sunrise'?`${this.periodLabel(t,window)} · ${Math.floor((data?.summary?.coverage||0)*100)} %`:`Berechnet · ${this.periodLabel(t,window)} · ${Math.floor((data?.summary?.coverage||0)*100)} % erfasst`;
-        if(m.comparison&&!data?.error)hint=`${C.finite(data?.summary?.last)?'Berechnet':'Ertrag und Entnahme nötig'} · ${this.periodLabel(t,window)}`;
         if(t.type==='chart'&&C.usesLiveValue(t))hint=`${C.finite(value)?'Aktuell':'Kein Livewert'} · ${data?.error?'Verlauf nicht verfügbar':(t.period.mode==='sunrise'?'':'Verlauf: ')+this.periodLabel(t,window)}`;
         else if(data?.error)hint='Zeitraum nicht verfügbar';
-        const coverage=m.comparison?['solar','battery'].map(key=>`${key==='solar'?'Solar':'Batterie'}: ${C.finite(data?.coverageSources?.[key])?Math.floor(C.clamp(data.coverageSources[key],0,1)*100)+' % der Zeit erfasst':'nicht verfügbar'}`).join(' · '):m.energy?Math.floor((data?.summary?.coverage||0)*100)+' % des Zeitraums erfasst':'';
+        const coverage=m.energy?Math.floor((data?.summary?.coverage||0)*100)+' % des Zeitraums erfasst':'';
         const hintElement=el.querySelector('.tile-hint');hintElement.textContent=hint;hintElement.title=[window?.note||'',coverage].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
         el.classList.toggle('no-value',!C.finite(value));
       }
@@ -281,7 +275,7 @@
         $('tileSunriseHint').hidden=mode!=='sunrise';
         if(mode==='sunrise'){
           const weather=this.a.getSnapshot().weather||{},window=C.windowFor({...t,period:{...t.period,mode:'sunrise'}},Date.now(),weather);
-          $('tileSunriseHint').textContent=window.label==='Seit Sonnenaufgang'?'Ab '+new Date(window.from).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',timeZone:weather.timezone||undefined})+' Uhr am gewählten Wetterort. Ertrag und Batterieentnahme werden für diesen Zeitraum neu berechnet.':window.note+' Es werden ersatzweise die heutigen Daten gezeigt.';
+          $('tileSunriseHint').textContent=window.label==='Seit Sonnenaufgang'?'Ab '+new Date(window.from).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',timeZone:weather.timezone||undefined})+' Uhr am gewählten Wetterort. Energiewerte werden für diesen Zeitraum neu berechnet.':window.note+' Es werden ersatzweise die heutigen Daten gezeigt.';
         }
       };
       const valueOptions=value=>{const chart=$('tileType').value==='chart';$('tileAggregate').innerHTML=(m.energy?[['last','Berechnete Energie']]:m.status?[['last','Letzter Wert']]:[...(chart?[['live','Aktuell (Live)']]:[]),...Object.entries(aggregateNames).map(([key,name])=>[key,key==='last'?'Letzter gespeicherter Wert':name])]).map(x=>option(...x)).join('');$('tileAggregate').value=value;};

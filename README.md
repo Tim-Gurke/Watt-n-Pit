@@ -2,27 +2,27 @@
 
 **Dein Energie-Cockpit.** Solar, Akku und Batteriebilanz auf einen Blick – direkt über Bluetooth, mit lokaler Aufzeichnung und frei gestaltbarer Übersicht.
 
-**[Android-APK 1.2.2 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.2/Watt-n-Pit-v1.2.2.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.2.3 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.3/Watt-n-Pit-v1.2.3.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
 
 ## So sieht es aus
 
-Die Screenshots zeigen die App-Oberfläche von **1.2.2 mit frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind neutral; private Messungen und Verbindungscodes werden nicht veröffentlicht.
+Die Screenshots zeigen die App-Oberfläche von **1.2.3 mit frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind neutral; private Messungen und Verbindungscodes werden nicht veröffentlicht.
 
 | Dunkles Design | Helles Design |
 |---|---|
-| ![Watt’n’Pit 1.2.2: Übersicht mit Solar-, Akku- und Wetterkacheln, dunkel](docs/images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](docs/images/overview-light.png) |
+| ![Watt’n’Pit 1.2.3: Übersicht mit Solar-, Akku- und Wetterkacheln, dunkel](docs/images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](docs/images/overview-light.png) |
 
-*Die Standardübersicht: Ladezustand und aktuelle Solarleistung oben, „Ertrag − Entnahme“ und berechneter Solarertrag darunter. Anschließend stehen Batteriespannung und aktuelle Batteriebilanz links neben der negativen Batterieentnahme. Die flache Wetterkachel schließt den Kachelblock ab.*
+*Die Standardübersicht: Ladezustand und aktuelle Solarleistung oben, „Akkubilanz“ und berechneter Solarertrag darunter. Anschließend stehen Batteriespannung und aktuelle Batteriebilanz links neben der negativen Batterieentnahme. Die flache Wetterkachel schließt den Kachelblock ab.*
 
-Solarleistung und berechneter Solarertrag beginnen standardmäßig **seit Sonnenaufgang**; „Ertrag − Entnahme“ und Batterieentnahme zählen **ab Tagesbeginn**. Alle vier Verlaufskacheln verwenden automatische Skalen. Neue Installationen und „Standardübersicht wiederherstellen“ erhalten diese Anordnung; beim Update bleiben gespeicherte eigene Übersichten erhalten.
+Solarleistung und berechneter Solarertrag beginnen standardmäßig **seit Sonnenaufgang**; „Akkubilanz“ und Batterieentnahme zählen **ab Tagesbeginn**. Alle vier Verlaufskacheln verwenden automatische Skalen. Neue Installationen und „Standardübersicht wiederherstellen“ erhalten diese Anordnung; beim Update bleiben gespeicherte eigene Übersichten erhalten.
 
 Im Hochformat bleibt die bewährte Anordnung erhalten. Im Querformat stehen Appname, Überschrift, Zustand, **+ Kachel**, Ansichtsart und **Anordnen** gemeinsam im flachen Kopf. Das Raster ist in beiden Formaten doppelt so fein. Die Restlaufzeit bleibt unter **+ Kachel → Akku → Restlaufzeit** verfügbar.
 
 ![Querformat mit gemeinsamem, flachem Kopf und unabhängig angeordneten Kacheln](docs/images/overview-landscape.png)
 
-## Das kann 1.2.2
+## Das kann 1.2.3
 
 - **Direkter Empfang:** SmartSolar und SmartShunt liefern Livewerte über die Bluetooth-Sofortanzeige. Messdaten und Geräteschlüssel bleiben auf dem Telefon.
 - **Archive automatisch ergänzen:** Beim App-Start liest Watt’n’Pit vorhandene Gerätearchive nacheinander ein. Vorhandene Werte werden abgeglichen, Lücken ergänzt und Archivpunkte nicht doppelt gespeichert.
@@ -30,8 +30,8 @@ Im Hochformat bleibt die bewährte Anordnung erhalten. Im Querformat stehen Appn
 - **Großansicht:** Kachel antippen und **Großansicht öffnen** wählen. Zeitraum, Einheiten und Skala untersuchen, zoomen und weitere Messgrößen zum Vergleich einblenden. Änderungen in dieser Ansicht sind vorübergehend; **Kachel-Einstellungen** speichert die gewünschte Kacheldarstellung.
 - **Erkennbare Kurven:** Optionale automatische Skalen folgen den bisherigen Messwerten. Die große Livezahl bleibt vom Kurvenzeitraum unabhängig; „Seit Sonnenaufgang“ ist je Kachel wählbar.
 - **Berechnete Energie:** Solarertrag und Batterieentnahme aus erfassten Leistungspunkten, mit sichtbarer zeitlicher Abdeckung. Batterieentnahme erscheint direkt negativ, auch im Energieverlauf.
-- **Ertrag und Entnahme vergleichen:** Unter „Verlauf → Energie berechnet“ ergänzt eine einblendbare dritte Kurve den Wert „Ertrag − Entnahme“ in Wh. Antippen zeigt die drei Werte am gewählten Zeitpunkt.
-- **Vergleich direkt als Kachel:** Über „+ Kachel → Energie → Ertrag − Entnahme“ als Zahlenwert oder Verlauf auf die Übersicht legen. Wh/kWh, Zeitraum, Skala und Darstellung lassen sich anpassen; die bestehende Anordnung bleibt erhalten.
+- **Akkubilanz am Shunt:** Geladene minus entnommene Energie im gewählten Zeitraum, in Wh oder kWh. Positiv bedeutet mehr geladen, negativ mehr entnommen. Die Berechnung benötigt keinen Solarregler und erfasst alle Ladequellen und Verbraucher, die über den Shunt gemessen werden. Unter „Verlauf → Energie berechnet“ lässt sie sich als dritte Kurve einblenden.
+- **Akkubilanz als Kachel:** Über „+ Kachel → Energie → Akkubilanz“ als Zahlenwert oder Verlauf auf die Übersicht legen. Wh/kWh, Zeitraum, Skala und Darstellung lassen sich anpassen; die bestehende Anordnung bleibt erhalten.
 - **Kompaktes Wetter:** 14 Tage mit je einem Symbol und erwarteten Sonnenstunden, seitlich wischbar. Die Wetterkachel lässt sich zwischen den Messkacheln anordnen. Bei aktiviertem Wetter wird die Vorhersage beim Öffnen und bei der Rückkehr aus dem Hintergrund automatisch aktualisiert; gespeicherte Werte bleiben bis dahin sichtbar.
 - **Passend zum Setup:** Solarkreise mit Modulanzahl, Nennleistung, Montage, Regler und Messwertquelle hinterlegen. Sechs Farbdesigns, jeweils hell und dunkel.
 - **Sichern und übertragen:** Einstellungen samt Anordnungen und Wetterort als JSON exportieren und mit Vorschau importieren. Messdaten getrennt als CSV sichern oder einlesen.
@@ -42,7 +42,7 @@ Im Hochformat bleibt die bewährte Anordnung erhalten. Im Querformat stehen Appn
 
 ## In fünf Schritten starten
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.2/Watt-n-Pit-v1.2.2.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.3/Watt-n-Pit-v1.2.3.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.
@@ -64,11 +64,11 @@ Die sechsstellige Bluetooth-PIN für die Android-Kopplung ist **ein anderer Code
 
 *Berechnete Werte entstehen ausschließlich aus vorhandenen Leistungspunkten. Unbeobachtete Zeiträume werden nicht hochgerechnet.*
 
-**Ertrag − Entnahme:** Solarertrag abzüglich der aus dem Akku entnommenen Energie im selben ausgewählten Zeitraum. Die blaue gestrichelte Vergleichskurve lässt sich ein- und ausblenden. Sie beschreibt weder den Gesamtverbrauch noch die Änderung der gespeicherten Akkuenergie; dafür müssten auch Ladeenergie und weitere Quellen berücksichtigt werden. Fehlt eine Messreihe, erscheint kein erfundener Nullwert.
+**Akkubilanz:** Die über den Shunt erfasste geladene Energie minus die entnommene Energie im gewählten Zeitraum. Beispiel: 150 Wh geladen und 100 Wh entnommen ergeben **+50 Wh**. Die blaue gestrichelte Kurve lässt sich ein- und ausblenden. Auch ein mobiles Modul am PWM-Regler zählt mit, sofern dessen Ladestrom über den Shunt erfasst wird. Die Bilanz beschreibt den Energiefluss am Akku; Ladeverluste werden nicht herausgerechnet. Messlücken bleiben sichtbar, fehlende Daten erscheinen als „—“.
 
-![Die zusätzliche Kachel Ertrag minus Entnahme mit Zahlenwert und Verlauf](docs/images/energy-tile.png)
+![Die Akkubilanz als zusätzliche Kachel mit Zahlenwert und Verlauf](docs/images/energy-tile.png)
 
-*Dieselbe Berechnung steht auch als frei platzierbare Kachel zur Verfügung. Der gewählte Zeitraum gilt gemeinsam für beide Quellen; „Seit Sonnenaufgang“ ist ebenfalls möglich.*
+*Die Akkubilanz ist auch als frei platzierbare Kachel verfügbar. Beim Update ersetzt sie die bisherige Kachel „Ertrag − Entnahme“ am selben Platz. „Heute“ und andere Zeiträume sowie Wh/kWh sind wählbar.*
 
 ## Lokal und mit optionalem Wetter
 
@@ -78,11 +78,13 @@ Nur die optionale Ortssuche und Wettervorschau nutzen Internet: Suchtext bzw. Or
 
 ## Kompatibilität und Stand
 
-SmartSolar 75/15 mit Bluetooth und SmartShunt 300 A wurden an realer Hardware erprobt. Der vollständige Archivimport und die Verlaufsanzeige sind seit 0.1.5 bestätigt; Übersicht und kompakte Wetterkachel wurden bis 0.1.9 ebenfalls am Android-Gerät bestätigt. Die Anordnungen und die Großansicht werden zusätzlich automatisiert geprüft. Der Wetterabruf beim Öffnen ist in 1.2.2 ergänzt. Weitere Victron-Geräte sind **nicht pauschal als kompatibel bestätigt**. In dieser Version lässt sich je ein SmartSolar und ein SmartShunt einrichten.
+SmartSolar 75/15 mit Bluetooth und SmartShunt 300 A wurden an realer Hardware erprobt. Der vollständige Archivimport und die Verlaufsanzeige sind seit 0.1.5 bestätigt; Übersicht und kompakte Wetterkachel wurden bis 0.1.9 ebenfalls am Android-Gerät bestätigt. Die Anordnungen und die Großansicht werden zusätzlich automatisiert geprüft. Der Wetterabruf beim Öffnen ist in 1.2.3 ergänzt. Weitere Victron-Geräte sind **nicht pauschal als kompatibel bestätigt**. In dieser Version lässt sich je ein SmartSolar und ein SmartShunt einrichten.
+
+Es bleiben immer die **drei neuesten Releases mit APK-Downloads** verfügbar.
 
 Die App ändert keine Ladeparameter und löscht keine Gerätetrends. Temperatur und Zusatzspannung benötigen einen entsprechend eingerichteten Geräteeingang. Eine lang laufende Aufzeichnung kann durch Android-Energiespareinstellungen begrenzt werden.
 
-Automatisierte Prüfung: **59 JVM-Tests, 50 Node-Tests**, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen, Energiekurven und Farbdesigns. Die neue Vergleichskachel wurde zusätzlich mit Darstellung, Einheitenwechsel, fehlenden Werten und Einstellungsexport/-import geprüft. Die Android-Dateiauswahl für Einstellungssicherungen ist zusätzlich am Gerät zu bestätigen. [Versionshinweise](docs/releases/1.2.2.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
+Automatisierte Prüfung: **63 JVM-Tests, 46 Node-Tests**, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen, Energiekurven und Farbdesigns. Die Akkubilanz wird zusätzlich mit Vorzeichenwechsel, Netto-Null trotz Laden/Entladen, Messlücken, überlappenden Quellen, Einheitenwechsel und Einstellungsexport/-import geprüft. Die Android-Dateiauswahl für Einstellungssicherungen ist zusätzlich am Gerät zu bestätigen. [Versionshinweise](docs/releases/1.2.3.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
 ## Entwicklung
 

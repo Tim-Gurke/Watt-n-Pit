@@ -214,40 +214,17 @@ test('battery discharge is negative immediately for new and upgraded tiles, whil
   assert.equal(C.normalize(JSON.parse(JSON.stringify(upgraded))).tiles.find(t=>t.metric==='dischargeEnergy').reverseSign,false);
 });
 
-const energy=(values,last=values.at(-1)?.[1]??null)=>({points:values.map(([t,v,gap=false])=>({t,v,gap})),summary:{last,from:0,to:20}});
-test('energy comparison aligns differently timed source curves without changing either source',()=>{
-  const solar=energy([[0,0],[10,100],[20,180]]),battery=energy([[0,0],[5,20],[20,80]]),before=structuredClone([solar,battery]);
-  const result=C.energyBalance(solar,battery);
-  assert.deepEqual(result.points.map(p=>p.t),[0,5,10,20]);
-  assert.equal(result.points[1].v,30);assert.ok(Math.abs(result.points[2].v-(100-20-60/3))<1e-9);
-  assert.equal(result.summary.last,100);assert.deepEqual([solar,battery],before);
-});
-test('energy comparison supports negative results and measured zero without sign reversal twice',()=>{
-  const result=C.energyBalance(energy([[0,0],[20,20]]),energy([[0,0],[20,40]]));
-  assert.equal(result.summary.last,-20);assert.equal(result.points.at(-1).v,-20);
-  const zero=C.energyBalance(energy([[0,0],[20,0]]),energy([[0,0],[20,0]]));
-  assert.equal(zero.summary.last,0);assert.equal(Object.is(zero.summary.last,-0),false);assert.equal(zero.points.at(-1).v,0);
-});
-test('missing energy is never treated as zero and comparison never extrapolates before or after a source',()=>{
-  assert.deepEqual(C.energyBalance(energy([[0,0],[20,10]]),null),{points:[],summary:{last:null}});
-  const result=C.energyBalance(energy([[0,0],[20,20]]),energy([[5,0],[15,4]]));
-  assert.deepEqual(result.points.map(p=>p.t),[5,15]);assert.equal(result.points.at(-1).v,11);
-  assert.equal(C.energyBalance(energy([[0,0],[20,10]],null),energy([[0,0],[20,1]])).summary.last,null);
-});
-test('a break or invalid reading in either energy curve stays a break in the comparison',()=>{
-  const solar=energy([[0,0],[5,5],[15,5,true],[20,10]]),battery=energy([[0,0],[10,2],[20,4]]);
-  const result=C.energyBalance(solar,battery);
-  assert.deepEqual(result.points.map(p=>p.t),[0,5,15,20]);assert.equal(result.points.find(p=>p.t===15).gap,true);
-  const invalid=C.energyBalance(energy([[0,0],[5,null],[15,5],[20,10]]),battery);
-  assert.deepEqual(invalid.points.map(p=>p.t),[0,15,20]);assert.equal(invalid.points[1].gap,true);
-});
-test('energy totals from different selected windows cannot be compared',()=>{
-  const solar=energy([[0,0],[20,10]]),battery=energy([[0,0],[20,4]]);
-  battery.summary.from=5;assert.deepEqual(C.energyBalance(solar,battery),{points:[],summary:{last:null}});
-  battery.summary.from=0;battery.summary.to=25;assert.equal(C.energyBalance(solar,battery).summary.last,null);
+test('battery energy balance uses only the Shunt backend and migrates the old title without moving tiles',()=>{
+ const board=C.defaults(),t=board.tiles.find(t=>t.metric==='energyBalance');
+ assert.equal(C.CATALOG.energyBalance.backend,'batteryEnergy');assert.equal(C.CATALOG.energyBalance.kind,'shunt');assert.equal(C.CATALOG.energyBalance.comparison,undefined);
+ t.title='Ertrag − Entnahme';t.unit='kWh';t.layouts.compact={x:.5,y:6.5,w:5.5,h:5.5};
+ const before=structuredClone(t);
+ const migrated=C.normalize(board).tiles.find(t=>t.metric==='energyBalance');
+ assert.equal(migrated.title,'');assert.equal(migrated.unit,'kWh');assert.deepEqual(migrated.layouts,before.layouts);assert.deepEqual(migrated.period,before.period);
+ t.title='Mein Akku';assert.equal(C.normalize(board).tiles.find(t=>t.metric==='energyBalance').title,'Mein Akku');
 });
 
-test('the comparison tile renders signed totals and keeps zero, units and automatic chart bounds meaningful',()=>{
+test('the Shunt energy balance tile renders signed totals and keeps zero, units and automatic chart bounds meaningful',()=>{
   const t=C.normalize({tiles:[C.tile('energyBalance')]}).tiles[0],snapshot={settings:{capacity:100}};
   for(const value of [-30,0,40,null])assert.equal(C.displayValue(t,{last:value},null,null,snapshot),value);
   const points=[{v:-30,min:-30,max:-30},{v:40,min:40,max:40}],range=C.chartRange(t,points);

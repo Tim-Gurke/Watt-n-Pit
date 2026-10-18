@@ -136,7 +136,7 @@
       $('detailCompareCount').textContent=this.selected.size>1?'('+String(this.selected.size-1)+')':'';
       $('detailLegend').innerHTML=this.series.map((s,i)=>`<span><i style="background:${this.color(s,i)}"></i>${esc(label(s.tile))} · ${esc(s.tile.unit)}</span>`).join('');
       const notes=[this.base.note||'',m.hint||''];
-      if(m.energy&&!m.comparison)notes.push(Math.floor((primary.data.summary?.coverage||0)*100)+' % des Zeitraums erfasst.');
+      if(m.energy)notes.push(Math.floor((primary.data.summary?.coverage||0)*100)+' % des Zeitraums erfasst.');
       if(m.liveOnly||m.status)notes.push('Für diesen Wert steht kein gespeicherter Verlauf zur Verfügung.');
       $('detailNote').textContent=notes.filter(Boolean).join(' ');this.draw();
     }

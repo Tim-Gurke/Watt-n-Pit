@@ -229,7 +229,6 @@ function loadHistory() {
     if(metric==='energy'){
       energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo)):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source)):{};
       if(energyData.error)throw new Error();
-      energyData.balance=window.WattDashboardCore.energyBalance(energyData.solar,energyData.battery);
       points=energyPlotPoints(energyData);
     }else points=demo?(source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric)):native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)).points || []:[];
   }catch(error){points=[];energyData=null;toast('Der Verlauf konnte nicht geladen werden.');}
@@ -261,12 +260,12 @@ function energyPlotPoints(data){
 function energyDescription(data){
   const describe=(series,label)=>{const s=series?.summary||{},coverage=Math.floor((s.coverage||0)*100);return `${label}: ${num(s.last,2)} Wh · ${coverage} % der Zeit erfasst`;};
   const battery=data?.battery?{...data.battery,summary:{...data.battery.summary,last:dischargeValue(data.battery.summary?.last)}}:null;
-  return describe(data?.solar,'Solar')+' · '+describe(battery,'Batterieentnahme')+' · Ertrag − Entnahme: '+num(data?.balance?.summary?.last,2)+' Wh. Berechnet aus Leistungsdaten. Lücken werden ausgelassen. Ertrag − Entnahme ist weder der Gesamtverbrauch noch die Änderung der gespeicherten Akkuenergie.';
+  return describe(data?.solar,'Solar')+' · '+describe(battery,'Batterieentnahme')+' · '+describe(data?.balance,'Akkubilanz')+'. + mehr geladen · − mehr entnommen, am Shunt gemessen. Lücken werden ausgelassen; Ladeverluste sind nicht herausgerechnet.';
 }
 function sampleEnergyDemo(from,to){
   const data=sampleDemo(from,to,'power'),result={};
-  for(const [key,kind] of [['solar','solar'],['battery','shunt']]){
-    let total=0,last=null;const points=data.filter(p=>p.kind===kind).map(p=>{const power=Math.max(0,kind==='solar'?p.v:-p.v);if(last)total+=(last.power+power)/2*(p.t-last.t)/3600000;last={t:p.t,power};return {...p,v:total,min:total,max:total,origin:'calculated'};});
+  for(const [key,kind] of [['solar','solar'],['battery','shunt'],['balance','shunt']]){
+    let total=0,last=null;const points=data.filter(p=>p.kind===kind).map(p=>{const power=key==='balance'?p.v:Math.max(0,kind==='solar'?p.v:-p.v);if(last)total+=(last.power+power)/2*(p.t-last.t)/3600000;last={t:p.t,power};return {...p,kind:key==='balance'?'balance':kind,device:'calculated-'+key,v:total,min:total,max:total,origin:'calculated'};});
     result[key]={points,summary:{last:points.length?total:null,coverage:points.length?1:0}};
   }return result;
 }
@@ -276,7 +275,7 @@ function seriesOf(data) {
   return [...groups.values()];
 }
 function seriesLabel(s) {
-  if(s.kind==='balance')return 'Ertrag − Entnahme';
+  if(s.kind==='balance')return 'Akkubilanz';
   if(s.origin==='calculated')return s.kind==='solar'?'Solarertrag berechnet':'Batterieentnahme berechnet';
   const name=snapshot.devices.find(d=>d.mac===s.device)?.name || (s.kind==='solar'?'SmartSolar':'SmartShunt');
   return name + (s.origin==='csv'?' · CSV':s.origin==='archive'?' · Archiv':'');
