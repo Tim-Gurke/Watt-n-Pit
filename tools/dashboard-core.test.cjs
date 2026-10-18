@@ -29,7 +29,7 @@ test('customization preserves intentional overlaps and other tile positions afte
 });
 test('an unavailable or malformed configuration cannot create invalid scales or executable style values',()=>{
   const t=C.tile('power');t.min=NaN;t.max=-Infinity;t.background='url(https://example.com)';t.color='red;display:none';t.layouts.compact={x:999,y:-1,w:100,h:0};
-  const result=C.normalize({tiles:[t]});const saved=result.tiles[0];
+  const result=C.normalize({energyFlowVersion:1,tiles:[t]});const saved=result.tiles[0];
   assert.equal(saved.background,'auto');assert.equal(saved.color,C.CATALOG.power.color);
   assert.ok(Number.isFinite(saved.min)&&saved.max>saved.min);
   assert.equal(saved.layouts.compact.x,0);assert.equal(saved.layouts.compact.w,12);assert.equal(saved.layouts.compact.y,0);
@@ -110,7 +110,7 @@ test('all numeric charts use their own current field and unit',()=>{
 test('calculated energy is a historical total and cannot pretend to be live',()=>{
   for(const metric of ['solarEnergy','dischargeEnergy']){
     const t=C.tile(metric);t.valueMode='live';t.period.mode='live';t.period.aggregate='avg';
-    const saved=C.normalize({tiles:[t]}).tiles[0];assert.equal(saved.period.mode,'today');assert.equal(saved.period.aggregate,'last');assert.equal(C.usesLiveValue(saved),false);
+    const saved=C.normalize({energyFlowVersion:1,tiles:[t]}).tiles[0];assert.equal(saved.period.mode,'today');assert.equal(saved.period.aggregate,'last');assert.equal(C.usesLiveValue(saved),false);
     assert.equal(C.displayValue(saved,{last:3.27},null,null,{settings:{capacity:100}}),metric==='dischargeEnergy'?-3.27:3.27);
   }
 });
@@ -142,7 +142,7 @@ test('readable numbers handle shorthand white, custom dark surfaces and transpar
 });
 test('the standard overview follows the eight-tile settings arrangement',()=>{
   const board=C.defaults();
-  assert.deepEqual(board.tiles.map(t=>t.metric),['soc','solar','energyBalance','solarEnergy','voltage','power','weather','dischargeEnergy']);
+  assert.deepEqual(board.tiles.map(t=>t.metric),['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy']);
   assert.deepEqual(board.tiles.map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:6},{x:4,y:0,w:8,h:6},{x:0,y:6,w:6,h:6},{x:6,y:6,w:6,h:6},{x:0,y:12,w:4,h:3},{x:0,y:15,w:4,h:3},{x:0,y:18,w:12,h:4},{x:4,y:12,w:8,h:6}]);
   assert.equal(board.tiles[1].valueMode,'live');assert.equal(board.tiles[1].scaleMode,'auto');
 });
@@ -182,11 +182,11 @@ test('reversed energy totals and charts retain zero and unavailable values witho
 });
 test('sign reversal survives reload and reflects fixed bounds while existing and non-energy tiles keep their values',()=>{
   const t=C.tile('dischargeEnergy');t.reverseSign=true;t.unit='kWh';t.scaleMode='fixed';
-  const restored=C.normalize(JSON.parse(JSON.stringify({tiles:[t]}))).tiles[0];
+  const restored=C.normalize(JSON.parse(JSON.stringify({energyFlowVersion:1,tiles:[t]}))).tiles[0];
   assert.equal(restored.reverseSign,true);assert.deepEqual(C.fixedRange(restored),{min:-2,max:0});
   assert.deepEqual(C.chartRange(restored,[{v:5}]),{min:-2,max:0,auto:false});
   assert.equal(restored.min,0);assert.equal(restored.max,2000);
-  delete t.reverseSign;assert.equal(C.normalize({tiles:[t]}).tiles[0].reverseSign,true);
+  delete t.reverseSign;assert.equal(C.normalize({energyFlowVersion:1,tiles:[t]}).tiles[0].reverseSign,true);
   const current=C.tile('current');current.reverseSign=true;
   const unchanged=C.normalize({tiles:[current]}).tiles[0];assert.equal(unchanged.reverseSign,false);assert.equal(C.signedValue(unchanged,-8.4),-8.4);
 });
@@ -207,16 +207,16 @@ test('weather removal remains intentional and duplicate widgets or undersized la
 
 test('battery discharge is negative immediately for new and upgraded tiles, while a later explicit choice survives',()=>{
   assert.equal(C.tile('dischargeEnergy').reverseSign,true);
-  const old=C.defaults();delete old.dischargeSignVersion;const t=old.tiles.find(t=>t.metric==='dischargeEnergy');t.reverseSign=false;
+  const old=C.defaults();old.tiles.push(C.tile('dischargeEnergy','optional-discharge'));delete old.dischargeSignVersion;const t=old.tiles.find(t=>t.metric==='dischargeEnergy');t.reverseSign=false;
   const layouts=structuredClone(old.tiles.map(t=>t.layouts)),upgraded=C.normalize(old);
   assert.equal(upgraded.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign,true);assert.deepEqual(upgraded.tiles.map(t=>t.layouts),layouts);
   upgraded.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign=false;
   assert.equal(C.normalize(JSON.parse(JSON.stringify(upgraded))).tiles.find(t=>t.metric==='dischargeEnergy').reverseSign,false);
 });
 
-test('battery energy balance uses only the Shunt backend and migrates the old title without moving tiles',()=>{
+test('the energy balance uses the common-flow backend and migrates the old title without moving tiles',()=>{
  const board=C.defaults(),t=board.tiles.find(t=>t.metric==='energyBalance');
- assert.equal(C.CATALOG.energyBalance.backend,'batteryEnergy');assert.equal(C.CATALOG.energyBalance.kind,'shunt');assert.equal(C.CATALOG.energyBalance.comparison,undefined);
+ assert.equal(C.CATALOG.energyBalance.backend,'flowBalanceEnergy');assert.equal(C.CATALOG.energyBalance.flow,'balance');assert.equal(C.CATALOG.energyBalance.comparison,undefined);
  t.title='Ertrag − Entnahme';t.unit='kWh';t.layouts.compact={x:.5,y:6.5,w:5.5,h:5.5};
  const before=structuredClone(t);
  const migrated=C.normalize(board).tiles.find(t=>t.metric==='energyBalance');
@@ -231,6 +231,31 @@ test('the Shunt energy balance tile renders signed totals and keeps zero, units 
   assert.ok(range.min<-30&&range.max>40);t.unit='kWh';
   assert.equal(C.convert(C.displayValue(t,{last:-30},null,null,snapshot),t.unit,t.metric),-.03);
   assert.equal(C.chartRange(t,points).min,range.min/1000);assert.equal(C.chartRange(t,points).max,range.max/1000);
-  t.valueMode='live';t.period.mode='live';const restored=C.normalize({tiles:[t]}).tiles[0];
+  t.valueMode='live';t.period.mode='live';const restored=C.normalize({energyFlowVersion:1,tiles:[t]}).tiles[0];
   assert.equal(C.usesLiveValue(restored),false);assert.equal(restored.period.mode,'today');
+});
+
+
+test('upgrading the three energy tiles keeps both layouts and uses sunrise yield with full-day consumption',()=>{
+  const old=C.defaults();delete old.energyFlowVersion;delete old.energyPeriod;
+  const consumption=old.tiles.find(t=>t.metric==='consumptionEnergy');consumption.metric='dischargeEnergy';consumption.reverseSign=true;consumption.title='Batterieentnahme berechnet';
+  consumption.layouts={compact:{x:.5,y:12.5,w:7.5,h:6},wide:{x:9.5,y:.5,w:2.5,h:8}};
+  old.tiles.find(t=>t.metric==='energyBalance').title='Akkubilanz';
+  const before=structuredClone(old),board=C.normalize(old),migrated=board.tiles.find(t=>t.id===consumption.id);
+  assert.equal(migrated.metric,'consumptionEnergy');assert.equal(migrated.reverseSign,false);assert.equal(migrated.title,'');
+  assert.deepEqual(board.tiles.map(t=>t.layouts),before.tiles.map(t=>t.layouts));assert.deepEqual(old,before);
+  assert.equal(board.tiles.find(t=>t.metric==='solarEnergy').period.mode,'sunrise');
+  for(const metric of ['consumptionEnergy','energyBalance'])assert.equal(board.tiles.find(t=>t.metric===metric).period.mode,'today');
+  assert.equal(board.tiles.find(t=>t.metric==='energyBalance').title,'');assert.equal(board.energyFlowVersion,1);
+  assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(board))),board);
+});
+test('non-daily comparisons share a period while daily solar may start at sunrise',()=>{
+  const board=C.defaults();board.energyPeriod={...board.energyPeriod,mode:'last',amount:3,unit:'h'};
+  const saved=C.normalize(board);
+  for(const t of saved.tiles.filter(t=>C.CATALOG[t.metric].flow))assert.deepEqual(t.period,saved.energyPeriod);
+  saved.energyPeriod.mode='today';saved.tiles.find(t=>t.metric==='solarEnergy').period.mode='sunrise';
+  const daily=C.normalize(saved);assert.equal(daily.tiles.find(t=>t.metric==='solarEnergy').period.mode,'sunrise');
+  assert.equal(daily.tiles.find(t=>t.metric==='consumptionEnergy').period.mode,'today');
+  const now=Date.parse('2026-10-18T02:00:00Z'),rise=Date.parse('2026-10-18T05:45:00Z');
+  assert.equal(C.miniWindow('sunrise',{timezone:'Europe/Berlin',days:[{day:'2026-10-18',sunrise:rise}]},now).solarFrom,rise);
 });

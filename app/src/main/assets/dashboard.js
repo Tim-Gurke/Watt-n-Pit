@@ -110,18 +110,24 @@
       if(cancelled){this.config.tiles.find(t=>t.id===d.id).layouts[this.profile]=d.origin;this.layout();return;}
       if(d.moved){this.lastDrag=Date.now();this.commit();}
     }
-    data(t,window) {
+    data(t,window,solarFrom=window.from) {
       if(window.to<=window.from)return {points:[],summary:{}};
-      const backend=C.CATALOG[t.metric].backend || C.CATALOG[t.metric].field;
-      const key=[backend,Math.floor(window.from/10000),Math.floor(window.to/10000),this.a.isDemo()].join(':');
-      if(this.cache.has(key))return this.cache.get(key);
+      const m=C.CATALOG[t.metric],backend=m.backend || m.field;
+      const key=[m.flow?'energy-flow':backend,Math.floor(window.from/10000),Math.floor(window.to/10000),m.flow?Math.floor(solarFrom/10000):'',this.a.isDemo()].join(':');
+      if(this.cache.has(key))return m.flow?this.cache.get(key)[m.flow]:this.cache.get(key);
       let data={points:[],summary:{}};
       try {
-        if(this.a.isDemo())data=this.demoData(t,window);
+        if(m.flow){
+          if(this.a.isDemo())data=this.demoFlow(t,window,solarFrom);
+          else if(this.a.native?.energyHistory)data=JSON.parse(this.a.native.energyHistory(Math.floor(window.from),Math.ceil(window.to),'all',solarFrom));
+          else throw new Error('Energieberechnung nicht verfügbar.');
+          if(data.error||!data.solar||!data.consumption||!data.balance)throw new Error('Energiedaten nicht verfügbar.');
+        }
+        else if(this.a.isDemo())data=this.demoData(t,window);
         else if(this.a.native?.dashboardHistory)data=JSON.parse(this.a.native.dashboardHistory(Math.floor(window.from),Math.ceil(window.to),backend));
         else if(this.a.native?.history){data=JSON.parse(this.a.native.history(Math.floor(window.from),Math.ceil(window.to),backend,'all'));data.summary=this.summary(data.points || []);}
-      } catch(_){data={points:[],summary:{},error:true};}
-      if(this.cache.size>128)this.cache.clear();this.cache.set(key,data);return data;
+      } catch(_){const missing={points:[],summary:{},error:true};data=m.flow?{solar:missing,consumption:missing,balance:missing}:missing;}
+      if(this.cache.size>128)this.cache.clear();this.cache.set(key,data);return m.flow?data[m.flow]:data;
     }
     summary(points) {
       const valid=points.filter(p=>C.finite(p.v));if(!valid.length)return {};
@@ -136,14 +142,36 @@
         const shunt={soc:70+6*Math.sin((hour-9)/24*Math.PI*2),ttg:480,voltage:13+.15*Math.sin(hour/12*Math.PI),current:(solar*.9-32)/13,power:solar*.9-32,consumed:-23.6,temperature:null,aux:null,alarm:0};
         const reg={solar,voltage:13.08,current:solar/13.08,yieldWh:Math.max(0,Math.min(900,(hour-7)*80)),state:solar>1?3:0,error:0,load:0};
         let value=t.metric==='remainingWh'?shunt.soc*shunt.voltage/100:t.metric==='remainingAh'?shunt.soc:t.metric==='consumed'?Math.abs(shunt.consumed):(m.kind==='shunt'?shunt:reg)[m.field];
-        if(m.energy){const power=t.metric==='solarEnergy'?solar:t.metric==='energyBalance'?shunt.power:Math.max(0,-shunt.power);if(previous!=null)energy+=(previous+power)/2*step/3600000;previous=power;value=energy;}
+        if(m.energy){const power=t.metric==='solarEnergy'?solar:t.metric==='consumptionEnergy'?solar-shunt.power:['energyBalance','batteryEnergy'].includes(t.metric)?shunt.power:Math.max(0,-shunt.power);if(previous!=null)energy+=(previous+power)/2*step/3600000;previous=power;value=energy;}
         if(C.finite(value))out.push({t:time,last:time,kind:m.kind,device:'demo-'+m.kind,origin:'live',v:value,min:value,max:value,n:1});
       }
       return {points:out,summary:{...this.summary(out),...(m.energy?{coverage:1}:{})}};
     }
+    demoFlow(t,window,solarFrom){
+      const result={solar:{points:[]},consumption:{points:[]},balance:{points:[]}},totals={solar:0,consumption:0,balance:0};
+      const times=Array.from({length:241},(_,i)=>window.from+(window.to-window.from)*i/240);
+      if(solarFrom>window.from&&solarFrom<window.to)times.push(solarFrom);times.sort((a,b)=>a-b);
+      let last=null;
+      for(const time of times){
+        const hour=new Date(time).getHours()+new Date(time).getMinutes()/60,solar=Math.max(0,Math.sin((hour-7)/12*Math.PI))*170,net=solar*.9-32;
+        if(last){
+          const hours=(time-last.time)/3600000;
+          totals.solar+=last.time>=solarFrom?(last.solar+solar)/2*hours:0;
+          totals.balance+=(last.net+net)/2*hours;
+          totals.consumption=totals.solar-totals.balance;
+        }
+        for(const kind of Object.keys(result))if(kind!=='solar'||time>=solarFrom){const v=totals[kind];result[kind].points.push({t:time,last:time,v,min:v,max:v,n:1,gap:false,kind,device:'demo-'+kind,origin:'calculated'});}
+        last={time,solar,net};
+      }
+      for(const kind of Object.keys(result))result[kind].summary={...this.summary(result[kind].points),last:totals[kind],coverage:1};
+      return result;
+    }
     update() {
       if(!this.a.getSnapshot)return;
       const snapshot=this.a.getSnapshot(),shunt=this.a.reading('shunt'),solar=this.a.reading('solar'),now=Date.now();
+      const flowWindow=C.windowFor({metric:'energyBalance',type:'chart',period:this.config.energyPeriod},now,snapshot.weather);
+      const solarTile=this.config.tiles.find(t=>t.metric==='solarEnergy'),solarWindow=solarTile?C.windowFor(solarTile,now,snapshot.weather):flowWindow;
+      const solarFrom=solarTile?.period.mode==='sunrise'?solarWindow.solarFrom??solarWindow.from:flowWindow.from;
       let visibilityChanged=false;
       for(const t of this.config.tiles){
         const el=this.elements.get(t.id);if(!el)continue;
@@ -154,7 +182,7 @@
         }
         el.style.setProperty('--tile-color',this.paint(t.color,t,true));
         el.style.setProperty('--tile-muted',this.paint(getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),t,true));
-        const m=C.CATALOG[t.metric],window=C.windowFor(t,now,snapshot.weather),data=window?this.data(t,window):null;
+        const m=C.CATALOG[t.metric],window=C.windowFor(t,now,snapshot.weather),data=window?this.data(t,m.flow?flowWindow:window,m.flow?solarFrom:window.from):null;
         let value=C.displayValue(t,data?.summary,shunt,solar,snapshot);
         value=C.convert(value,t.unit,t.metric);
         const reading=`<strong class="tile-number">${esc(C.format(value,t))}</strong><span class="tile-unit">${C.finite(value) && !m.status?esc(t.unit):!m.status?esc(t.unit):''}</span>`;
@@ -170,7 +198,7 @@
         if(t.type==='chart'&&C.usesLiveValue(t))hint=`${C.finite(value)?'Aktuell':'Kein Livewert'} · ${data?.error?'Verlauf nicht verfügbar':(t.period.mode==='sunrise'?'':'Verlauf: ')+this.periodLabel(t,window)}`;
         else if(data?.error)hint='Zeitraum nicht verfügbar';
         const coverage=m.energy?Math.floor((data?.summary?.coverage||0)*100)+' % des Zeitraums erfasst':'';
-        const hintElement=el.querySelector('.tile-hint');hintElement.textContent=hint;hintElement.title=[window?.note||'',coverage].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
+        const hintElement=el.querySelector('.tile-hint');hintElement.textContent=t.metric==='consumptionEnergy'&&C.finite(value)&&value<0?'Zusätzliche Einspeisung · '+hint:hint;hintElement.title=[window?.note||'',coverage,m.hint||''].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
         el.classList.toggle('no-value',!C.finite(value));
       }
       if(visibilityChanged)this.layout();else this.fitNumbers();
@@ -210,7 +238,7 @@
     paint(color,t,text=false) {
       if(t.adaptiveColor===false&&!text)return color;
       const css=getComputedStyle(document.documentElement);
-      if(t.adaptiveColor!==false&&color===C.CATALOG[t.metric]?.color){const tone=['solar','yieldWh','solarEnergy','solarVoltage','solarCurrent','pvVoltage','state','error'].includes(t.metric)?'--orange':['energyBalance','temperature','aux','load'].includes(t.metric)?'--blue':'--mint';color=css.getPropertyValue(tone).trim()||color;}
+      if(t.adaptiveColor!==false&&color===C.CATALOG[t.metric]?.color){const tone=['solar','yieldWh','solarEnergy','solarVoltage','solarCurrent','pvVoltage','state','error'].includes(t.metric)?'--orange':['energyBalance','batteryEnergy','temperature','aux','load'].includes(t.metric)?'--blue':'--mint';color=css.getPropertyValue(tone).trim()||color;}
       const background=t.background==='auto'?css.getPropertyValue('--panel').trim():t.background;
       const page=css.getPropertyValue('--bg').trim(),target=text?7:4.5,key=[color,background,page,t.opacity,target].join(':');this.paintCache=this.paintCache || new Map();
       if(this.paintCache.has(key))return this.paintCache.get(key);
@@ -253,7 +281,7 @@
       if(m.widget){this.weatherEditor(t);return;}
       const types=m.status?[['number','Zahlenwert']]:[['number','Zahlenwert'],['gauge','Rundinstrument'],...(!m.liveOnly?[['chart','Verlauf']]:[])];
       const fields=`<div class="form-grid">${field('Messwert',select('tileMetric',Object.entries(C.CATALOG).map(([key,m])=>[key,m.label])))}${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60" placeholder="'+esc(m.label)+'"'))}${field('Darstellung',select('tileType',types))}${field('Einheit',select('tileUnit',m.units.map(u=>[u,u || 'Ohne Einheit'])))}</div><p class="muted tile-explanation">${esc(m.hint || (m.kind==='shunt'?'Messwert vom SmartShunt.':'Messwert vom SmartSolar.'))}</p>`;
-      const period=`<details open><summary>Wert & Zeitraum</summary><div class="form-grid">${field('<span id="tilePeriodLabel">Zeitraum</span>',select('tilePeriod',m.liveOnly?[['live','Aktuell']]:[['live','Aktuell'],['last','Letzte …'],['today','Heute'],['sunrise','Seit Sonnenaufgang'],['reset','Seit Zurücksetzen'],['custom','Freier Zeitraum']]))}${field('<span id="tileAggregateLabel">Auswertung</span>',select('tileAggregate',m.status?[['last','Letzter Wert']]:Object.entries(aggregateNames)))}</div><p class="muted" id="tileLiveHint" hidden>Aktuell zeigt den Liveempfang. Ohne frischen Wert erscheint —; die gespeicherte Kurve bleibt sichtbar.</p><p class="muted" id="tileSunriseHint" hidden></p>${m.energy?'<label class="check-field"><input type="checkbox" id="tileReverseSign"> Vorzeichen umkehren (+/−)</label>':''}<div id="tileLastFields" class="form-grid">${field('Anzahl',input('tileAmount',t.period.amount,'type="number" min="1" max="10000"'))}${field('Zeiteinheit',select('tileTimeUnit',[['min','Minuten'],['h','Stunden'],['d','Tage']]))}</div><div id="tileCustomFields" class="form-grid">${field('Von',input('tileFrom',dateInput(t.period.from || Date.now()-86400000),'type="datetime-local"'))}${field('Bis',input('tileTo',dateInput(t.period.to || Date.now()),'type="datetime-local"'))}</div><div id="tileResetFields"><p class="muted" id="tileResetLabel"></p><button class="quiet" id="tileReset">Jetzt zurücksetzen</button></div></details>`;
+      const period=`<details open><summary>Wert & Zeitraum</summary><div class="form-grid">${field('<span id="tilePeriodLabel">Zeitraum</span>',select('tilePeriod',m.liveOnly?[['live','Aktuell']]:[['live','Aktuell'],['last','Letzte …'],['today','Heute'],['sunrise','Seit Sonnenaufgang'],['reset','Seit Zurücksetzen'],['custom','Freier Zeitraum']]))}${field('<span id="tileAggregateLabel">Auswertung</span>',select('tileAggregate',m.status?[['last','Letzter Wert']]:Object.entries(aggregateNames)))}</div><p class="muted" id="tileLiveHint" hidden>Aktuell zeigt den Liveempfang. Ohne frischen Wert erscheint —; die gespeicherte Kurve bleibt sichtbar.</p><p class="muted" id="tileSunriseHint" hidden></p>${m.energy&&!m.flow?'<label class="check-field"><input type="checkbox" id="tileReverseSign"> Vorzeichen umkehren (+/−)</label>':''}${m.flow?'<p class="muted">Verbrauch und Bilanz verwenden denselben Zeitraum. Bei „Heute“ kann der Solarertrag ab Sonnenaufgang zählen; der nächtliche Verbrauch bleibt enthalten. Der Verbrauch berücksichtigt nur gemessene Einspeisungen; zusätzlicher PWM- oder Landstrom senkt den berechneten Wert.</p>':''}<div id="tileLastFields" class="form-grid">${field('Anzahl',input('tileAmount',t.period.amount,'type="number" min="1" max="10000"'))}${field('Zeiteinheit',select('tileTimeUnit',[['min','Minuten'],['h','Stunden'],['d','Tage']]))}</div><div id="tileCustomFields" class="form-grid">${field('Von',input('tileFrom',dateInput(t.period.from || Date.now()-86400000),'type="datetime-local"'))}${field('Bis',input('tileTo',dateInput(t.period.to || Date.now()),'type="datetime-local"'))}</div><div id="tileResetFields"><p class="muted" id="tileResetLabel"></p><button class="quiet" id="tileReset">Jetzt zurücksetzen</button></div></details>`;
       const appearance=`<details><summary>Farben & Schrift</summary><div class="form-grid">${field('Wertfarbe',input('tileColor',t.color,'type="color"'))}${field('Schriftgröße',input('tileFont',t.fontSize,'type="number" min="18" max="64"'))}${field('Nachkommastellen',select('tileDigits',[[0,'Keine'],[1,'Eine'],[2,'Zwei'],[3,'Drei']]))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}${field('Hintergrund',select('tileBackgroundMode',[['auto','Passend zum Farbschema'],['custom','Eigene Farbe']]))}${field('Eigene Hintergrundfarbe',input('tileBackground',t.background==='auto'?'#18303b':t.background,'type="color"'))}</div><label class="check-field"><input type="checkbox" id="tileAdaptiveColor"> Kurven- und Instrumentfarben an Hell/Dunkel anpassen</label></details>`;
       const scale=`<details><summary>Skala</summary><div id="tileChartScale">${field('Verlaufsskala',select('tileScaleMode',[['fixed','Feste Skala'],['auto','Automatisch nach bisherigen Werten']]))}<p class="muted" id="tileScaleHint" hidden>Passt sich den Messwerten im gewählten Zeitraum an, mit etwas Platz über dem Maximum. Spannung, Temperatur und Akkustand passen auch die Untergrenze an. Für die bisherigen Tageswerte den Zeitraum „Heute“ wählen.</p></div><div class="form-grid">${field('Minimum',input('tileMin',this.shortInput(C.fixedRange(t).min),'type="number" step="any"'))}${field('Maximum',input('tileMax',this.shortInput(C.fixedRange(t).max),'type="number" step="any"'))}</div><label class="check-field"><input type="checkbox" id="tileMulticolor"> Mehrfarbiges Rundinstrument</label><div class="form-grid">${field('Mittlere Farbe',input('tileColorMid',t.colorMid,'type="color"'))}${field('Endfarbe',input('tileColorEnd',t.colorEnd,'type="color"'))}</div><label class="check-field"><input type="checkbox" id="tileInvert"> Farbverlauf umkehren</label></details>`;
       const arrangement=`<details><summary>Größe & Ebene</summary><div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="2" max="12" step="0.5"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="2" max="18" step="0.5"'))}</div><div class="row"><button class="quiet" id="tileBack">Nach hinten</button><button class="quiet" id="tileFront">Nach vorne</button><button class="quiet" id="duplicateTile">Duplizieren</button></div><p class="muted">Gilt für die ${this.profile==='wide'?'breite':'schmale'} Ansicht. Andere Kacheln behalten ihre Position.</p></details>`;
@@ -311,6 +339,10 @@
           t.adaptiveColor=$('tileAdaptiveColor').checked;t.color=$('tileColor').value;t.digits=Number($('tileDigits').value);t.fontSize=Number($('tileFont').value);t.opacity=Number($('tileOpacity').value);t.background=$('tileBackgroundMode').value==='auto'?'auto':$('tileBackground').value;
           t.layouts[this.profile]={...t.layouts[this.profile],w:Number($('tileWidth').value),h:Number($('tileHeight').value)};
           t.layouts[this.profile].x=Math.min(t.layouts[this.profile].x,12-t.layouts[this.profile].w);
+          if(m.flow){
+            this.config.energyPeriod={...t.period,mode:t.metric==='solarEnergy'&&t.period.mode==='sunrise'?'today':t.period.mode};
+            if(t.metric!=='solarEnergy'&&t.period.mode==='today')for(const other of this.config.tiles)if(other.metric==='solarEnergy')other.period.mode='sunrise';
+          }
           this.config.tiles=this.config.tiles.map(old=>old.id===id?t:old);
           if(layer!=='keep'){this.config.tiles=this.config.tiles.filter(old=>old.id!==id);if(layer==='front')this.config.tiles.push(t);else this.config.tiles.unshift(t);}
           if(this.commit()){this.a.closeModal();this.a.toast('Kachel gespeichert.');}

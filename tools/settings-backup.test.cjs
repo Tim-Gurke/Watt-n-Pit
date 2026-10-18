@@ -4,7 +4,7 @@ const C=require('../app/src/main/assets/settings-backup.js');
 const D=require('../app/src/main/assets/dashboard-core.js');
 const sample=()=>C.create({settings:{theme:'light',palette:'green',capacity:150,sampleSeconds:30,miniRange:'sunrise',weatherPlace:{name:'Testort',latitude:48,longitude:8}}},D.defaults(),{version:1,groups:[{id:'test-group',label:'Testmodule',count:2,watts:90,placement:'fixed',controller:'Regler',measurement:'solar'}]});
 test('a JSON round trip preserves every portable setting, tile layout and source assignment',()=>{
-  const backup=sample();backup.dashboard.tiles[1].period.mode='sunrise';backup.dashboard.tiles[1].color='#123456';backup.dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign=true;backup.dashboard.blockOrder=['record','tiles','history'];
+  const backup=sample();backup.dashboard.tiles.push(D.tile('dischargeEnergy','optional-discharge'));backup.dashboard.tiles[1].period.mode='sunrise';backup.dashboard.tiles[1].color='#123456';backup.dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign=true;backup.dashboard.blockOrder=['record','tiles','history'];
   assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(backup))),backup);
 });
 test('exports and imports cannot transfer connection secrets, identities or measurements',()=>{
@@ -35,7 +35,7 @@ test('old settings backups retain custom values while moving weather into the da
   assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(restored))),restored);
 });
 test('settings preserve an explicit positive discharge choice after the negative-default migration',()=>{
-  const backup=sample();backup.dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign=false;
+  const backup=sample();backup.dashboard.tiles.push(D.tile('dischargeEnergy','optional-discharge'));backup.dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign=false;
   assert.equal(C.normalize(JSON.parse(JSON.stringify(backup))).dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign,false);
   delete backup.dashboard.dischargeSignVersion;
   assert.equal(C.normalize(backup).dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign,true);
@@ -43,7 +43,7 @@ test('settings preserve an explicit positive discharge choice after the negative
 
 test('battery balance tile settings and both layouts survive a portable backup round trip',()=>{
   const backup=sample(),tile=D.tile('energyBalance','comparison-test');
-  tile.unit='kWh';tile.type='number';tile.title='Mein Energievergleich';tile.period.mode='sunrise';
+  tile.unit='kWh';tile.type='number';tile.title='Mein Energievergleich';tile.period={...backup.dashboard.energyPeriod};
   tile.layouts={compact:{x:2,y:24,w:8,h:6},wide:{x:4,y:30,w:4,h:4}};
   backup.dashboard.tiles.push(tile);
   const restored=C.normalize(JSON.parse(JSON.stringify(backup)));

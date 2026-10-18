@@ -125,6 +125,7 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
 
     JSONArray query(long from, long to, String metric, String source) throws Exception {
+        if(flowKey(metric)!=null)return energyFlow(from,to,source).getJSONObject(flowKey(metric)).getJSONArray("points");
         if(metric.equals("solarEnergy")||metric.equals("dischargeEnergy")||metric.equals("batteryEnergy"))return energyData(from,to,metric,source).getJSONArray("points");
         HistoryQuery query = HistoryQuery.build(from,to,metric,source);
         JSONArray result = new JSONArray();
@@ -148,6 +149,7 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
 
     JSONObject dashboardData(long from,long to,String metric) throws Exception {
+        if(flowKey(metric)!=null)return energyFlow(from,to,"all").getJSONObject(flowKey(metric));
         if(metric.equals("solarEnergy")||metric.equals("dischargeEnergy")||metric.equals("batteryEnergy"))return energyData(from,to,metric,"all");
         JSONObject summary=new JSONObject();
         HistoryQuery aggregate=HistoryQuery.summary(from,to,metric,"all");
@@ -168,13 +170,39 @@ final class HistoryDb extends SQLiteOpenHelper {
         if(!discharge&&!balance&&!metric.equals("solarEnergy"))throw new IllegalArgumentException("Unbekannte Energiegröße.");
         to=Math.min(to,System.currentTimeMillis());
         if(to<=from)return new JSONObject().put("points",new JSONArray()).put("summary",new JSONObject());
-        HistoryQuery query=HistoryQuery.rawPower(Math.max(0,from-EnergyIntegral.LOOKAROUND),Math.min(System.currentTimeMillis(),to+EnergyIntegral.LOOKAROUND),discharge||balance?"batteryPower":"solar",source);
+        List<EnergyIntegral.Sample> samples=powerSamples(from,to,discharge||balance?"batteryPower":"solar",source);
+        EnergyIntegral.Result result=balance?EnergyIntegral.balance(samples,from,to):EnergyIntegral.calculate(samples,from,to,discharge);
+        return energyJson(result,from,to,balance?"battery-balance":discharge?"shunt":"solar");
+    }
+
+    private static String flowKey(String metric){
+        return metric.equals("flowSolarEnergy")?"solar":metric.equals("consumptionEnergy")?"consumption":metric.equals("flowBalanceEnergy")?"balance":null;
+    }
+
+    JSONObject energyFlow(long from,long to,String source) throws Exception {
+        return energyFlow(from,to,from,source);
+    }
+    JSONObject energyFlow(long from,long to,long solarFrom,String source) throws Exception {
+        to=Math.min(to,System.currentTimeMillis());
+        solarFrom=Math.max(from,solarFrom);
+        EnergyIntegral.Flow flow=to>from?EnergyIntegral.flow(solarFrom<to?powerSamples(solarFrom,to,"solar",source):new ArrayList<>(),powerSamples(from,to,"batteryPower",source),from,to,solarFrom):null;
+        JSONObject out=new JSONObject();String[] kinds={"solar","consumption","balance"};
+        EnergyIntegral.Result[] results=flow==null?new EnergyIntegral.Result[]{new EnergyIntegral.Result(),new EnergyIntegral.Result(),new EnergyIntegral.Result()}:new EnergyIntegral.Result[]{flow.solar,flow.consumption,flow.balance};
+        for(int i=0;i<kinds.length;i++)out.put(kinds[i],energyJson(results[i],i==0?Math.min(solarFrom,to):from,to,kinds[i]));
+        return out;
+    }
+
+    private List<EnergyIntegral.Sample> powerSamples(long from,long to,String metric,String source){
+        HistoryQuery query=HistoryQuery.rawPower(Math.max(0,from-EnergyIntegral.LOOKAROUND),Math.min(System.currentTimeMillis(),to+EnergyIntegral.LOOKAROUND),metric,source);
         List<EnergyIntegral.Sample> samples=new ArrayList<>();
         try(Cursor c=getReadableDatabase().rawQuery(query.sql,query.args)){
             while(c.moveToNext())samples.add(new EnergyIntegral.Sample(c.getLong(0),c.getDouble(1),c.getInt(2),c.getString(3),c.getString(4)));
         }
-        EnergyIntegral.Result result=balance?EnergyIntegral.balance(samples,from,to):EnergyIntegral.calculate(samples,from,to,discharge);
-        JSONArray points=new JSONArray();String kind=balance?"balance":discharge?"shunt":"solar";
+        return samples;
+    }
+
+    private JSONObject energyJson(EnergyIntegral.Result result,long from,long to,String kind)throws Exception{
+        JSONArray points=new JSONArray();
         for(EnergyIntegral.Point p:result.points)points.put(new JSONObject().put("t",p.time).put("last",p.time).put("v",p.wh).put("min",p.wh).put("max",p.wh).put("n",1).put("gap",p.gap).put("kind",kind).put("device","calculated-"+kind).put("origin","calculated"));
         Object total=result.wh==null?JSONObject.NULL:result.wh;
         JSONObject summary=new JSONObject().put("last",total).put("min",result.wh==null?JSONObject.NULL:result.minimumWh).put("max",result.wh==null?JSONObject.NULL:result.maximumWh).put("n",result.points.size()).put("coverage",result.coverage(from,to)).put("coveredMillis",result.coveredMillis).put("from",from).put("to",to);

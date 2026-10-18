@@ -37,6 +37,8 @@ final class ConfigurationBackup {
         if(!blocks.containsAll(Arrays.asList("tiles","history","record")))throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
         JSONObject dashboard=new JSONObject().put("version",1).put("blockOrder",order).put("tiles",tiles);
         if(board.optInt("dischargeSignVersion")==1)dashboard.put("dischargeSignVersion",1);
+        if(board.optInt("energyFlowVersion")==1)dashboard.put("energyFlowVersion",1);
+        if(board.has("energyPeriod"))dashboard.put("energyPeriod",pick(board.getJSONObject("energyPeriod"),"mode","amount","unit","aggregate","resetAt","from","to"));
         JSONObject place=input.optJSONObject("weatherPlace");if(place==null)place=new JSONObject();
         if(place.length()>0)place=WeatherClient.checkedPlace(place);
         JSONObject result=new JSONObject().put("format","wattnpit-settings").put("version",1).put("settings",settings).put("dashboard",dashboard).put("equipment",Repository.checkedEquipment(input.getJSONObject("equipment"))).put("weatherPlace",place);

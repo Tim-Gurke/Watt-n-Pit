@@ -19,9 +19,11 @@
     alarm:        {label:'Shunt-Alarm', group:'Akku', kind:'shunt', field:'alarm', units:['Code'], min:0, max:255, digits:0, color:'#e8bb57', status:true},
     solar:        {label:'Solarleistung', group:'Solar', kind:'solar', field:'solar', units:['W','kW'], min:0, max:300, digits:0, color:'#e8bb57'},
     yieldWh:      {label:'Solarertrag heute', group:'Solar', kind:'solar', field:'yieldWh', units:['kWh','Wh'], min:0, max:2000, digits:2, color:'#e8bb57'},
-    solarEnergy:  {label:'Solarertrag berechnet',group:'Energie',kind:'solar',backend:'solarEnergy',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#e8bb57',energy:true,hint:'Aus gespeicherter Solarleistung berechnet. Nur erfasste Zeitabschnitte; Aufzeichnungslücken werden ausgelassen.'},
-    dischargeEnergy:{label:'Batterieentnahme berechnet',group:'Energie',kind:'shunt',backend:'dischargeEnergy',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#65cbb0',energy:true,hint:'Aus negativer Shunt-Leistung berechnet. Batterieentnahme ist kein Gesamtverbrauch: direkt genutzter Solarstrom fehlt.'},
-    energyBalance:{label:'Akkubilanz',group:'Energie',kind:'shunt',backend:'batteryEnergy',units:['Wh','kWh'],min:-2000,max:2000,digits:2,color:'#81baf4',energy:true,hint:'Geladene minus entnommene Energie am SmartShunt. + mehr geladen · − mehr entnommen. Alle darüber erfassten Ladequellen; keine Solarwerte nötig. Nur erfasste Zeitabschnitte.'},
+    solarEnergy:  {label:'Solarertrag',group:'Energie',kind:'solar',backend:'flowSolarEnergy',flow:'solar',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#e8bb57',energy:true,hint:'Ertrag des gemessenen Solarreglers. Solarertrag, Verbrauch und Bilanz verwenden ab Sonnenaufgang gemeinsam erfasste Solar- und Shuntabschnitte. Ein ungemessener PWM-Regler fehlt im Ertrag.'},
+    consumptionEnergy:{label:'Verbrauch',group:'Energie',kind:'consumption',backend:'consumptionEnergy',flow:'consumption',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#65cbb0',energy:true,hint:'Berechnet: Solarertrag minus Akkubilanz. Enthält direkt genutzten Solarstrom und Energie aus dem Akku. Zusätzliche ungemessene Einspeisung, z. B. PWM oder Landstrom, senkt diesen Wert; er kann negativ werden. Ab Sonnenaufgang nur gemeinsam erfasste Solar- und Shuntabschnitte; der Nachtverbrauch ab Mitternacht bleibt enthalten.'},
+    energyBalance:{label:'Bilanz',group:'Energie',kind:'balance',backend:'flowBalanceEnergy',flow:'balance',units:['Wh','kWh'],min:-2000,max:2000,digits:2,color:'#81baf4',energy:true,hint:'Solarertrag minus berechneter Verbrauch. + Überschuss · − Defizit. Im reinen Solarbetrieb entspricht dies der Akkubilanz auf den gemeinsam erfassten Abschnitten. Ohne Korrektur der Ladeverluste.'},
+    dischargeEnergy:{label:'Batterieentnahme berechnet',group:'Energie',kind:'shunt',backend:'dischargeEnergy',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#65cbb0',energy:true,hint:'Zusatzwert: nur aus dem Akku entnommene Energie. Direkt genutzter Solarstrom fehlt; dies ist kein Gesamtverbrauch.'},
+    batteryEnergy:{label:'Akkubilanz',group:'Energie',kind:'shunt',backend:'batteryEnergy',units:['Wh','kWh'],min:-2000,max:2000,digits:2,color:'#81baf4',energy:true,hint:'Zusatzwert aus dem Shunt allein: geladene minus entnommene Energie, unabhängig vom Solarregler. + Laden · − Entladen. Nur erfasste Zeitabschnitte; ohne Korrektur der Ladeverluste.'},
     pvVoltage: {label:'PV-Eingangsspannung',group:'Solar',kind:'solar',field:'pvVoltage',backend:'pvVoltage',units:['V','mV'],min:0,max:75,digits:2,color:'#efb468',hint:'Spannung am Solareingang des Reglers; aus dem Gerätearchiv.'},
     solarTemperature: {label:'Batterietemperatur am Regler',group:'Solar',kind:'solar',field:'temperature',backend:'solarTemperature',units:['°C'],min:-20,max:60,digits:1,color:'#81baf4',hint:'Nur mit vorhandenem Temperatursensor; aus dem Gerätearchiv.'},
     solarVoltage: {label:'Regler-Batteriespannung', group:'Solar', kind:'solar', field:'voltage', units:['V','mV'], min:10, max:15, digits:2, color:'#81baf4', hint:'Batterieseitige Spannung am SmartSolar; keine PV-Eingangsspannung.'},
@@ -93,7 +95,7 @@
     const fallback=tile(input.metric),m=CATALOG[input.metric],result={...fallback};
     result.id=/^[a-zA-Z0-9_-]{1,90}$/.test(input.id || '') && !seen.has(input.id)?input.id:fallback.id;seen.add(result.id);
     result.title=typeof input.title==='string'?input.title.slice(0,60):'';
-    if(input.metric==='energyBalance'&&/^Ertrag\s*[−–-]\s*Entnahme$/i.test(result.title.trim()))result.title='';
+    if(input.metric==='energyBalance'&&/^(?:Ertrag\s*[−–-]\s*Entnahme|Akkubilanz)$/i.test(result.title.trim()))result.title='';
     result.unit=m.units.includes(input.unit)?input.unit:m.units[0];
     result.type=!m.status && ['number','gauge','chart'].includes(input.type)?input.type:'number';
     result.digits=Math.round(numeric(input.digits,m.digits,0,3));result.fontSize=numeric(input.fontSize,32,18,64);
@@ -103,7 +105,7 @@
     if(result.max<=result.min){result.min=m.min;result.max=m.max;}
     result.scaleMode=input.scaleMode==='auto'?'auto':'fixed';
     result.valueMode=input.valueMode==='live'?'live':'history';
-    result.reverseSign=!!m.energy&&input.reverseSign===true;
+    result.reverseSign=!!m.energy&&!m.flow&&input.reverseSign===true;
     result.opacity=numeric(input.opacity,100,0,100);result.background=input.background==='auto'?'auto':color(input.background,'auto');
     const p=input.period || {};
     result.period={mode:!m.liveOnly && ['live','last','today','sunrise','reset','custom'].includes(p.mode)?p.mode:'live',amount:numeric(p.amount,6,1,10000),unit:['min','h','d'].includes(p.unit)?p.unit:'h',
@@ -115,34 +117,44 @@
     return result;
   }
   function defaults() {
-    const ids=['soc','solar','energyBalance','solarEnergy','voltage','power','weather','dischargeEnergy'];
+    const ids=['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy'];
+    const energyPeriod={...tile('energyBalance').period};
     const layouts={
       compact:[[0,0,4,6],[4,0,8,6],[0,6,6,6],[6,6,6,6],[0,12,4,3],[0,15,4,3],[0,18,12,4],[4,12,8,6]],
       wide:[[0,0,2,4],[2,0,2,8],[7,0,3,8],[4,0,3,8],[0,4,2,2],[0,6,2,2],[0,8,12,4],[10,0,2,8]]
     };
-    return {version:1,dischargeSignVersion:1,blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
+    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
       const t=tile(id,'default-'+id);
       for(const profile of ['compact','wide']){const [x,y,w,h]=layouts[profile][i];t.layouts[profile]={x,y,w,h};}
       if(id==='soc'){t.fontSize=20;t.scaleMode='auto';}
       if(id==='solar'){t.type='chart';t.scaleMode='auto';t.valueMode='live';t.period.mode='sunrise';}
-      if(id==='solarEnergy')t.period.mode='sunrise';
+      if(CATALOG[id].flow)t.period={...energyPeriod,mode:id==='solarEnergy'?'sunrise':energyPeriod.mode};
       if(id==='power')t.title='Aktuell';
       return t;
     })};
   }
   function normalize(input) {
     if (!input || !Array.isArray(input.tiles)) return defaults();
-    const seen=new Set();
+    const seen=new Set(),migrating=input.energyFlowVersion!==1;
+    const energyPeriod=normalizeTile({metric:'energyBalance',period:migrating?{mode:'today'}:input.energyPeriod||input.tiles.find(t=>CATALOG[t?.metric]?.flow)?.period},new Set()).period;
+    const migrate=t=>{
+      if(!migrating||t?.metric!=='dischargeEnergy')return t;
+      return {...t,metric:'consumptionEnergy',reverseSign:false,title:/^Batterieentnahme(?: berechnet)?$/i.test(t.title?.trim()||'')?'':t.title};
+    };
     const order=Array.isArray(input.blockOrder)?input.blockOrder.filter(k=>BLOCK_ORDER.includes(k)):[];
     let weatherSeen=false;
-    const tiles=input.tiles.slice(0,64).map(t=>normalizeTile(t,seen)).filter(t=>{if(!t)return false;if(t.metric!=='weather')return true;if(weatherSeen)return false;weatherSeen=true;return true;});
+    const tiles=input.tiles.slice(0,64).map(t=>normalizeTile(migrate(t),seen)).filter(t=>{if(!t)return false;if(t.metric!=='weather')return true;if(weatherSeen)return false;weatherSeen=true;return true;});
     if(Array.isArray(input.blockOrder)&&input.blockOrder.includes('weather')&&!weatherSeen&&tiles.length<64){
       const w=tile('weather',seen.has('default-weather')?undefined:'default-weather');
       for(const profile of ['compact','wide'])w.layouts[profile].y=tiles.length?Math.max(...tiles.map(t=>t.layouts[profile].y+t.layouts[profile].h)):0;
       tiles.push(w);
     }
     if(input.dischargeSignVersion!==1)for(const t of tiles)if(t.metric==='dischargeEnergy')t.reverseSign=true;
-    return {version:1,dischargeSignVersion:1,blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles};
+    for(const t of tiles)if(CATALOG[t.metric].flow){
+      const sunrise=t.metric==='solarEnergy'&&energyPeriod.mode==='today'&&(migrating||t.period.mode==='sunrise');
+      t.period={...energyPeriod,mode:sunrise?'sunrise':energyPeriod.mode};
+    }
+    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles};
   }
   function windowFor(t,now=Date.now(),weather={}) {
     if(CATALOG[t.metric].widget)return null;
@@ -200,7 +212,7 @@
     const dataLow=Math.min(...values),dataHigh=Math.max(...values);
     const upper=v=>{const step=10**(Math.floor(Math.log10(v))-1);return Number((Math.ceil(v/step-1e-9)*step).toPrecision(12));};
     let low,high;
-    if(['solar','yieldWh','solarEnergy','dischargeEnergy','energyBalance','solarCurrent','load','remaining','remainingAh','remainingWh','consumed','power','current'].includes(t.metric)){
+    if(['solar','yieldWh','solarEnergy','consumptionEnergy','dischargeEnergy','energyBalance','batteryEnergy','solarCurrent','load','remaining','remainingAh','remainingWh','consumed','power','current'].includes(t.metric)){
       low=dataLow<0?-upper(-dataLow*1.1):0;high=dataHigh>0?upper(dataHigh*1.1):dataLow<0?0:1;
     }else{
       const span=dataHigh-dataLow||Math.max(Math.abs(dataHigh)*.02,.1),step=10**(Math.floor(Math.log10(span))-1),pad=span*.1;
@@ -223,8 +235,8 @@
       const dayFormat=new Intl.DateTimeFormat('en-CA',{timeZone:weather.timezone||undefined,year:'numeric',month:'2-digit',day:'2-digit'});
       const day=dayFormat.format(new Date(now)),rise=(weather.days||[]).find(d=>d.day===day)?.sunrise;
       if(finite(rise)&&Number(rise)>0&&dayFormat.format(new Date(Number(rise)))===day){
-        if(Number(rise)<now)return {from:Number(rise),to:now,label:'Seit Sonnenaufgang',note:'Sonnenaufgang am gewählten Wetterort.'};
-        return {...today,note:'Heute: Der Sonnenaufgang am Wetterort steht noch bevor.'};
+        if(Number(rise)<now)return {from:Number(rise),to:now,solarFrom:Number(rise),label:'Seit Sonnenaufgang',note:'Sonnenaufgang am gewählten Wetterort.'};
+        return {...today,solarFrom:Number(rise),note:'Heute: Der Sonnenaufgang am Wetterort steht noch bevor.'};
       }
     }catch(_){}
     return {...today,note:'Heute: Sonnenaufgang nicht verfügbar. Wetterort wählen oder Wetter aktualisieren.'};

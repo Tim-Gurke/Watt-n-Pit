@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.2.3** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.3/Watt-n-Pit-v1.2.3.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.2.4** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.4/Watt-n-Pit-v1.2.4.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -35,17 +35,17 @@ Falls nichts ankommt: Bluetooth und Reichweite prüfen, VictronConnect vom Gerä
 
 | Dunkles Design | Helles Design |
 |---|---|
-| ![Übersicht mit Messkacheln, negativer Batterieentnahme und Wetterkachel, dunkel](images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](images/overview-light.png) |
+| ![Übersicht mit Messkacheln, berechnetem Verbrauch und Wetterkachel, dunkel](images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](images/overview-light.png) |
 
 *Sieben Messkacheln und die kompakte Wetterkachel bilden den Standard. Werte, Farben, Größe und Position lassen sich anpassen.*
 
-Auf schmalen Bildschirmen stehen der schmale Ladezustand und die breitere Solarleistung oben. Darunter folgen „Akkubilanz“ und berechneter Solarertrag nebeneinander. Batteriespannung und die mit „Aktuell“ beschriftete Batteriebilanz stehen links übereinander; rechts liegt die größere negative Batterieentnahme. Das Wetter liegt flach über die gesamte Breite. Anschließend folgen Verlauf und Start/Pause. Im Hochformat bleibt diese Anordnung erhalten. Im Querformat wechseln **+ Kachel**, **Anordnen**, Empfangszustand und Ansichtsart zusammen mit „Energie im Blick“ in den kompakten Appkopf. Ab 760 Pixel Breite stehen sie gemeinsam in einer Zeile.
+Auf schmalen Bildschirmen stehen der schmale Ladezustand und die breitere Solarleistung oben. Darunter folgen „Bilanz“ und Solarertrag nebeneinander. Batteriespannung und die mit „Aktuell“ beschriftete Batteriebilanz stehen links übereinander; rechts liegt der größere berechnete Verbrauch. Das Wetter liegt flach über die gesamte Breite. Anschließend folgen Verlauf und Start/Pause. Im Hochformat bleibt diese Anordnung erhalten. Im Querformat wechseln **+ Kachel**, **Anordnen**, Empfangszustand und Ansichtsart zusammen mit „Energie im Blick“ in den kompakten Appkopf. Ab 760 Pixel Breite stehen sie gemeinsam in einer Zeile.
 
 ![Breite Ansicht mit Werkzeugen und Empfangszustand oben im kompakten Kopf](images/overview-landscape.png)
 
 Die Restlaufzeit kann über **+ Kachel → Akku → Restlaufzeit** ergänzt werden; Stunden sind weiterhin die voreingestellte Einheit.
 
-Solarleistung und berechneter Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. „Akkubilanz“ und Batterieentnahme beziehen sich auf **heute ab Mitternacht**. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
+Solarleistung und Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. Verbrauch und Bilanz beziehen sich auf **heute ab Mitternacht** und enthalten damit auch die Nacht. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
 
 **+ Kachel** öffnet die Auswahl. Neue Kacheln erscheinen am Ende des Rasters. Eine Messkachel antippen und **Kachel-Einstellungen** wählen, um Beschriftung, Einheit, Darstellung und Zeitraum dauerhaft zu ändern. **Großansicht öffnen** zeigt dieselbe Messgröße zum Untersuchen in groß. Als Darstellung stehen je nach Messgröße Zahl, Rundinstrument oder Verlauf zur Wahl.
 
@@ -87,33 +87,41 @@ Unter **Vergleichswerte** weitere Messgrößen einschalten. Gleiche Einheiten we
 
 Diese Änderungen gelten nur in der geöffneten Großansicht. **×** oder Android-Zurück schließt sie; die gespeicherte Kachel und ihre Anordnung bleiben erhalten. Für bleibende Änderungen **Kachel-Einstellungen** verwenden. Im Anordnungsmodus öffnet Antippen direkt den Kacheleditor.
 
-## 5. Ertrag und Batterieentnahme verstehen
+## 5. Solarertrag, Verbrauch und Bilanz verstehen
 
-**Solarertrag berechnet** summiert die gespeicherte Solarleistung über die erfasste Zeit. **Batterieentnahme berechnet** summiert die über den Shunt erfasste Entladeleistung. Beide Werte werden in Wh oder kWh dargestellt. Größere Messlücken werden ausgelassen; die Anzeige nennt den erfassten Anteil des Zeitraums.
+| Kachel | Bedeutung | Standardzeitraum |
+|---|---|---|
+| **Solarertrag** | Aus der gemessenen Solarleistung berechnete Energie | Seit Sonnenaufgang |
+| **Verbrauch** | Solarertrag minus Akkubilanz; direkt genutzter Solarstrom ist enthalten | Heute ab Mitternacht |
+| **Bilanz** | Solarertrag minus berechneter Verbrauch | Heute ab Mitternacht |
 
-Batterieentnahme erscheint standardmäßig **negativ**. Eine Kurve unter null zeigt die wachsende Entnahme aus dem Akku. In der Energiekachel lässt sich unter **Wert & Zeitraum → Vorzeichen umkehren (+/−)** weiterhin die gewünschte Darstellung wählen. Die gespeicherten Messwerte werden dadurch nicht verändert.
+Beispiel: **100 Wh Solarertrag − 150 Wh Verbrauch = −50 Wh Bilanz**. Plus bedeutet Überschuss, Minus Defizit. Wh und kWh sind wählbar. Die Rechnung verwendet die tatsächlichen Zeitabstände der erfassten Leistungspunkte und ist eine Näherung aus Regler und Shunt einschließlich der Verluste zwischen den Messstellen.
 
-![Berechneter Solarertrag oberhalb und Batterieentnahme unterhalb von null](images/energy-history.png)
+Der nächtliche Verbrauch bleibt enthalten: Vor Sonnenaufgang zählt der beobachtete Shunt-Verlauf, während der Solarertrag des gewählten Sonnenaufgangsfensters null ist. Nach Sonnenaufgang werden nur Zeitabschnitte verwendet, in denen Solarregler **und** Shunt verwertbare Daten haben. Es werden keine unbekannten Tageslücken mit null aufgefüllt. Die Prozentangabe nennt die erfasste Zeit des jeweiligen Fensters; fehlende Messintervalle erscheinen als **—**, erfasste Null als **0,00**. Ohne gültige Sonnenaufgangszeit wird ausdrücklich **heute (Ersatz)** verwendet. Vor dem bekannten Sonnenaufgang steht der Ertrag bei 0 Wh.
 
-*Verlauf → Energie berechnet: Solarertrag, negative Batterieentnahme und die vorzeichenbehaftete Akkubilanz am Shunt. Die Prozentangaben beziehen sich auf die erfasste Zeit.*
+![Solarertrag, Verbrauch und gestrichelte Bilanz im berechneten Energieverlauf](images/energy-history.png)
 
-**Akkubilanz** ist die geladene Energie minus die entnommene Energie **am SmartShunt**, jeweils im gewählten Zeitraum. Zum Beispiel ergeben **150 Wh Ladung − 100 Wh Entnahme = +50 Wh**. Bei einem negativen Ergebnis wurde mehr entnommen als geladen. Gemessene Null bleibt **0,00**; ohne verwertbare Messpunkte erscheint **—**.
+Unter **Verlauf → Energie berechnet** erscheinen diese drei Kurven für die dortige Zeit- und Quellenwahl. **Kurve „Bilanz“ anzeigen** blendet die dritte Kurve ein oder aus. Antippen des Diagramms zeigt die Werte am ausgewählten Zeitpunkt. Überlappende Aufzeichnungen, Archive und CSV-Werte werden einmal gezählt; eigene Aufzeichnungen und feinere Archive haben Vorrang. Die Bilanz beschreibt den Energiefluss und keine genaue Änderung der chemisch gespeicherten Akkuenergie; Ladeverluste werden nicht korrigiert.
 
-Die Berechnung braucht keine Daten des Solarreglers. Auch ein zweiter Regler oder das mobile Modul am PWM-Regler wird berücksichtigt, sofern sein Ladestrom über den Shunt erfasst wird. Direkt genutzter Solarstrom, der den Akku weder lädt noch entlädt, gehört nicht zur Akkubilanz. Die Bilanz zeigt den Energiefluss am Akku; Ladeverluste werden nicht herausgerechnet. Sie ist kein Gesamtverbrauch und keine genaue Berechnung des chemischen Akkuinhalts.
+### Zusätzlicher PWM-Regler und andere Einspeisungen
 
-Unter **Kurve „Akkubilanz“ anzeigen** die dritte Kurve ein- und ausblenden. Der Wert steht außerdem über dem Diagramm. Antippen des Diagramms zeigt die drei Werte am gewählten Zeitpunkt. Die Akkubilanz verwendet dieselbe Quellenwahl und denselben Zeitraum wie der angezeigte Verlauf. Aufzeichnungslücken werden ausgelassen; überlappende Quellen zählen nur einmal, eigene Aufzeichnungen haben Vorrang.
+Ein Regler ohne eigenen Ertragsmesswert entlastet den Akku, fehlt aber im angezeigten Solarertrag. Dadurch fällt auch der **berechnete Verbrauch um diesen Ertrag zu niedrig aus**.
 
-### Die Akkubilanz als Kachel verwenden
+Beispiel: Der SmartSolar liefert **20 Wh**, ein ungemessener PWM-Regler **30 Wh**, die Verbraucher nutzen tatsächlich **100 Wh**. Die App zeigt **20 Wh Solarertrag, 70 Wh Verbrauch und −50 Wh Bilanz**. Im reinen Solarbetrieb bleibt die Differenz richtig, obwohl Ertrag und Verbrauch unvollständig sind. Das setzt voraus, dass die Batteriezweige korrekt über den Shunt erfasst werden.
 
-Unter **+ Kachel → Energie → Akkubilanz** hinzufügen. Beim Update ersetzt dieser Wert die bisherige Kachel **„Ertrag − Entnahme“** automatisch. Position, Größe in beiden Ansichten, Farben, Einheiten und Zeitraum bleiben erhalten; eine unveränderte alte Beschriftung wird aktualisiert. Eigene Beschriftungen bleiben bestehen.
+Ungemessener Landstrom oder andere Ladegeräte beeinflussen den Rechenwert ebenfalls. Bei starker zusätzlicher Einspeisung kann er negativ werden. Die Verbrauchskachel meldet dann **Zusätzliche Einspeisung**; der Wert wird nicht auf null begrenzt. Der Hinweis steht auch in den Kacheleinstellungen, in der Großansicht und unter **Verlauf → Energie berechnet → Berechnung und zusätzliche Einspeisung**.
 
-![Akkubilanz in Wh mit Verlauf und automatischer Skala](images/energy-tile.png)
+### Die drei Kacheln einstellen
 
-Unter **Kachel antippen → Kachel-Einstellungen** zwischen **Zahlenwert**, **Rundinstrument** und **Verlauf** sowie **Wh/kWh** wählen. **Heute**, **Seit Sonnenaufgang**, **Letzte …**, **Seit Zurücksetzen** und freie Zeiträume sind möglich. Standardmäßig gilt **Heute ab Mitternacht**. Die automatische Skala zeigt positive und negative Werte; feste Grenzen und die gewünschte Vorzeichendarstellung sind ebenfalls wählbar. **Großansicht öffnen** vergrößert denselben Wert mit zusätzlichen Vergleichswerten.
+Die vorhandene Batterieentnahme-Kachel wird beim Update zu **Verbrauch**, die bisherige Akkubilanz zu **Bilanz**. Position, Größe in beiden Ansichten, Farben, Einheiten und eigene Beschriftungen bleiben erhalten. Unveränderte alte Standardbeschriftungen werden aktualisiert. Der Tagesstandard ist Solarertrag ab Sonnenaufgang und Verbrauch/Bilanz ab Mitternacht.
 
-Die Prozentangabe nennt die erfasste Zeit. Bei Lücken bezieht sich die Summe nur auf vorhandene Daten. Alle Einstellungen einschließlich beider Anordnungen sind in der JSON-Einstellungssicherung enthalten.
+![Bilanz in Wh mit Verlauf und automatischer Skala](images/energy-tile.png)
 
-**Batterieentnahme ist kein Gesamtverbrauch.** Solarstrom, der direkt einen Verbraucher versorgt, muss nicht aus dem Akku entnommen werden. Ein weiterer Regler kann die Batteriebilanz beeinflussen, ohne seinen eigenen Solarertrag separat zu melden. Der grobe Tageszähler des SmartSolar bleibt als **Solarertrag heute** zusätzlich auswählbar.
+Unter **+ Kachel → Energie** sind alle drei Werte einzeln ergänzbar. **Kachel antippen → Kachel-Einstellungen** bietet Zahlenwert, Rundinstrument oder Verlauf sowie Wh/kWh, Farben und Skala. Verbrauch und Bilanz verwenden einen gemeinsamen Zeitraum. Bei **Heute** kann Solar seit Sonnenaufgang zählen; bei **Letzte …**, **Seit Zurücksetzen** und freien Zeiträumen wechseln die drei Werte gemeinsam. Eine dauerhaft geänderte Sonnenaufgangsauswahl an der Solarkachel lässt Verbrauch und Bilanz auf Heute stehen. Vorzeichen der drei Hauptwerte bleiben ihrer Bedeutung entsprechend; in der Großansicht gelten Änderungen weiterhin nur vorübergehend.
+
+Die bisherigen Werte **Batterieentnahme berechnet** und **Akkubilanz** bleiben unter **+ Kachel → Energie** als unabhängige Zusatzwerte verfügbar. Batterieentnahme summiert nur Energie aus dem Akku und erscheint standardmäßig negativ; die Akkubilanz summiert Laden minus Entladen allein aus dem Shunt. Deren Vorzeichen lassen sich weiterhin umkehren. Der grobe Tageszähler des SmartSolar bleibt unter **Solarertrag heute** auswählbar.
+
+Alle Einstellungen einschließlich beider Anordnungen und des gemeinsamen Vergleichszeitraums sind in der JSON-Einstellungssicherung enthalten.
 
 ## 6. Den Verlauf untersuchen
 
@@ -139,7 +147,7 @@ Die Wetterkachel liegt im selben Raster wie die Messkacheln. **Anordnen** macht 
 
 *Einstellungen → Deine Solaranlage → Bearbeiten: Modulgruppen beschreiben und ihre Messwertquelle zuordnen. Die gezeigten Angaben sind frei erfunden.*
 
-Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.2.3 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
+Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.2.4 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
 
 ## 8. Einstellungen und Messdaten sichern
 

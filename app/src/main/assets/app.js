@@ -188,7 +188,7 @@ function deviceForm(device={},found=false) {
   };
 }
 
-const metrics = {power:{title:'Solar & Batteriebilanz',unit:'W'},soc:{title:'Ladezustand',unit:'%'},voltage:{title:'Batteriespannung',unit:'V'},current:{title:'Strom am Gerät',unit:'A'},yieldWh:{title:'Tagesertrag des SmartSolar',unit:'Wh'},energy:{title:'Solarertrag & Batterieentnahme',unit:'Wh'}};
+const metrics = {power:{title:'Solar & Batteriebilanz',unit:'W'},soc:{title:'Ladezustand',unit:'%'},voltage:{title:'Batteriespannung',unit:'V'},current:{title:'Strom am Gerät',unit:'A'},yieldWh:{title:'Tagesertrag des SmartSolar',unit:'Wh'},energy:{title:'Ertrag, Verbrauch & Bilanz',unit:'Wh'}};
 function selectRange(next) {
   range=next; const now=new Date(), end=new Date(now); end.setHours(24,0,0,0);
   const begin=new Date(now);begin.setHours(0,0,0,0);
@@ -227,7 +227,8 @@ function loadHistory() {
   energyData=null;
   try{
     if(metric==='energy'){
-      energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo)):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source)):{};
+      const solarFrom=range==='today'?Math.max(viewFrom,window.WattDashboardCore.miniWindow('sunrise',snapshot.weather||{}).solarFrom??viewFrom):viewFrom;
+      energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo,solarFrom)):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom))):{};
       if(energyData.error)throw new Error();
       points=energyPlotPoints(energyData);
     }else points=demo?(source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric)):native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)).points || []:[];
@@ -252,22 +253,15 @@ function loadMini(force=false) {
   catch(error){miniPoints=[];}
   drawMini();
 }
-function dischargeValue(v){return window.WattDashboardCore.finite(v)?-Math.abs(Number(v))||0:null;}
 function energyPlotPoints(data){
-  const battery=(data?.battery?.points||[]).map(p=>({...p,v:dischargeValue(p.v),min:dischargeValue(p.max),max:dischargeValue(p.min)}));
-  return [...(data?.solar?.points||[]),...battery,...($('energyBalance').checked?data?.balance?.points||[]:[])].sort((a,b)=>a.t-b.t);
+  return [...(data?.solar?.points||[]),...(data?.consumption?.points||[]),...($('energyBalance').checked?data?.balance?.points||[]:[])].sort((a,b)=>a.t-b.t);
 }
 function energyDescription(data){
   const describe=(series,label)=>{const s=series?.summary||{},coverage=Math.floor((s.coverage||0)*100);return `${label}: ${num(s.last,2)} Wh · ${coverage} % der Zeit erfasst`;};
-  const battery=data?.battery?{...data.battery,summary:{...data.battery.summary,last:dischargeValue(data.battery.summary?.last)}}:null;
-  return describe(data?.solar,'Solar')+' · '+describe(battery,'Batterieentnahme')+' · '+describe(data?.balance,'Akkubilanz')+'. + mehr geladen · − mehr entnommen, am Shunt gemessen. Lücken werden ausgelassen; Ladeverluste sind nicht herausgerechnet.';
+  return describe(data?.solar,'Solarertrag')+' · '+describe(data?.consumption,'Verbrauch')+' · '+describe(data?.balance,'Bilanz')+'. + Überschuss · − Defizit.';
 }
-function sampleEnergyDemo(from,to){
-  const data=sampleDemo(from,to,'power'),result={};
-  for(const [key,kind] of [['solar','solar'],['battery','shunt'],['balance','shunt']]){
-    let total=0,last=null;const points=data.filter(p=>p.kind===kind).map(p=>{const power=key==='balance'?p.v:Math.max(0,kind==='solar'?p.v:-p.v);if(last)total+=(last.power+power)/2*(p.t-last.t)/3600000;last={t:p.t,power};return {...p,kind:key==='balance'?'balance':kind,device:'calculated-'+key,v:total,min:total,max:total,origin:'calculated'};});
-    result[key]={points,summary:{last:points.length?total:null,coverage:points.length?1:0}};
-  }return result;
+function sampleEnergyDemo(from,to,solarFrom=from){
+  return dashboard.demoFlow(null,{from,to:Math.min(to,Date.now())},solarFrom);
 }
 function seriesOf(data) {
   const groups=new Map();
@@ -275,8 +269,9 @@ function seriesOf(data) {
   return [...groups.values()];
 }
 function seriesLabel(s) {
-  if(s.kind==='balance')return 'Akkubilanz';
-  if(s.origin==='calculated')return s.kind==='solar'?'Solarertrag berechnet':'Batterieentnahme berechnet';
+  if(s.kind==='balance')return 'Bilanz';
+  if(s.kind==='consumption')return 'Verbrauch';
+  if(s.origin==='calculated')return s.kind==='solar'?'Solarertrag':'Batterieentnahme berechnet';
   const name=snapshot.devices.find(d=>d.mac===s.device)?.name || (s.kind==='solar'?'SmartSolar':'SmartShunt');
   return name + (s.origin==='csv'?' · CSV':s.origin==='archive'?' · Archiv':'');
 }

@@ -38,6 +38,41 @@ public final class EnergyIntegral {
         final long time;final Segment segment;final boolean start;
         Event(long time,Segment segment,boolean start){this.time=time;this.segment=segment;this.start=start;}
     }
+    private static final class Interval {
+        final long from,to;final double a,b;
+        Interval(long from,long to,double a,double b){this.from=from;this.to=to;this.a=a;this.b=b;}
+        double value(long time){return a+(b-a)*(time-from)/(to-from);}
+    }
+    public static final class Flow {
+        public final Result solar,consumption,balance;
+        Flow(Result solar,Result consumption,Result balance){this.solar=solar;this.consumption=consumption;this.balance=balance;}
+    }
+    /** All three values use only the intersection of observed Solar and Shunt intervals. */
+    public static Flow flow(List<Sample> solar,List<Sample> battery,long from,long to) {
+        return flow(solar,battery,from,to,from);
+    }
+    /** Solar starts at solarFrom; earlier consumption is derived from observed Shunt data alone. */
+    public static Flow flow(List<Sample> solar,List<Sample> battery,long from,long to,long solarFrom) {
+        if(from<0||to<=from)throw new IllegalArgumentException("Ungültiger Zeitraum.");
+        solarFrom=Math.max(from,solarFrom);
+        List<Interval> s=solarFrom<to?intervals(solar,solarFrom,to,false):new ArrayList<>(),b=intervals(battery,from,to,true);
+        if(solarFrom>from)s.add(0,new Interval(from,Math.min(solarFrom,to),0,0));
+        List<Interval> generation=new ArrayList<>(),loads=new ArrayList<>(),net=new ArrayList<>();
+        int i=0,j=0;
+        while(i<s.size()&&j<b.size()){
+            Interval x=s.get(i),y=b.get(j);long start=Math.max(x.from,y.from),end=Math.min(x.to,y.to);
+            if(end>start){
+                double sa=x.value(start),sb=x.value(end),ba=y.value(start),bb=y.value(end);
+                if(end>solarFrom)generation.add(new Interval(start,end,sa,sb));
+                // Keep signed residuals: an unmetered charger can make calculated consumption negative.
+                loads.add(new Interval(start,end,sa-ba,sb-bb));net.add(new Interval(start,end,ba,bb));
+            }
+            if(x.to<=y.to)i++;if(y.to<=x.to)j++;
+        }
+        Result yield=integrate(generation,Math.min(solarFrom,to),to,false,true);
+        if(solarFrom>=to)yield.wh=0.0;
+        return new Flow(yield,integrate(loads,from,to,false,true),integrate(net,from,to,false,true));
+    }
     /** One configured device per kind. Overlapping sources/archives contribute once. */
     public static Result calculate(List<Sample> samples,long from,long to,boolean discharge) {
         return calculate(samples,from,to,discharge,false);
@@ -47,12 +82,15 @@ public final class EnergyIntegral {
         return calculate(samples,from,to,false,true);
     }
     private static Result calculate(List<Sample> samples,long from,long to,boolean discharge,boolean balance) {
+        return integrate(intervals(samples,from,to,discharge||balance),from,to,discharge,balance);
+    }
+    private static List<Interval> intervals(List<Sample> samples,long from,long to,boolean signed) {
         if(from<0||to<=from)throw new IllegalArgumentException("Ungültiger Zeitraum.");
         List<Sample> sorted=new ArrayList<>(samples);sorted.sort(Comparator.comparingLong(s->s.time));
         Map<String,Sample> previous=new HashMap<>();List<Event> events=new ArrayList<>();int id=0;
         for(Sample s:sorted){
             String key=s.device+"\n"+s.origin+"\n"+s.period;Sample a=previous.put(key,s);
-            if(a==null||!Double.isFinite(a.watts)||!Double.isFinite(s.watts)||(!discharge&&!balance&&(a.watts<0||s.watts<0)))continue;
+            if(a==null||!Double.isFinite(a.watts)||!Double.isFinite(s.watts)||(!signed&&(a.watts<0||s.watts<0)))continue;
             long dt=s.time-a.time,limit=s.period>0?s.period*1500L:90000;
             if(dt<=0||dt>limit)continue;
             long start=Math.max(from,a.time),end=Math.min(to,s.time);if(end<=start)continue;
@@ -60,13 +98,21 @@ public final class EnergyIntegral {
         }
         events.sort(Comparator.comparingLong(e->e.time));
         TreeSet<Segment> active=new TreeSet<>(Comparator.<Segment>comparingInt(s->s.rank).reversed().thenComparingInt(s->s.a.period).thenComparingInt(s->s.id));
-        Result result=new Result();List<Point> raw=new ArrayList<>();double energy=0;long lastEnd=-1;
+        List<Interval> result=new ArrayList<>();
         for(int i=0;i<events.size();){
             long time=events.get(i).time;
             while(i<events.size()&&events.get(i).time==time){Event e=events.get(i++);if(e.start)active.add(e.segment);else active.remove(e.segment);}
             if(i==events.size()||active.isEmpty())continue;
             long end=events.get(i).time;if(end<=time)continue;
             Segment s=active.first();double a=s.value(time),b=s.value(end);
+            result.add(new Interval(time,end,a,b));
+        }
+        return result;
+    }
+    private static Result integrate(List<Interval> intervals,long from,long to,boolean discharge,boolean balance) {
+        Result result=new Result();List<Point> raw=new ArrayList<>();double energy=0;long lastEnd=-1;
+        for(Interval interval:intervals){
+            long time=interval.from,end=interval.to;double a=interval.a,b=interval.b;
             raw.add(new Point(time,energy,lastEnd!=time));
             if(balance&&a*b<0){
                 long zero=time+Math.round((end-time)*(-a)/(b-a));
