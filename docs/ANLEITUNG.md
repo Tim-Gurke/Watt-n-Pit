@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.2.4** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.4/Watt-n-Pit-v1.2.4.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.2.5** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.5/Watt-n-Pit-v1.2.5.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -13,6 +13,10 @@ Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe d
 3. Bei **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen. Jeder Schlüssel gehört zu genau einem Gerät.
 4. In Watt’n’Pit **Geräte → Suche starten** wählen. Das gefundene Gerät einrichten oder über **+** manuell hinzufügen. Gerätetyp, Name, Adresse und Schlüssel eintragen und speichern.
 5. Die aktive Verbindung in VictronConnect trennen und in Watt’n’Pit die Aufzeichnung starten. In Reichweite der Geräte bleiben.
+
+Beim ersten Öffnen erscheint der Hinweis **Dein Energie-Cockpit**. Mit **Verstanden** bestätigen. Bestehende Installationen zeigen ihn nach diesem Update ebenfalls einmal; anschließend bleibt er bei unverändertem Text bestätigt. Ein Schließen ohne Bestätigung zählt nicht. Die Bestätigung wird nur auf diesem Gerät gespeichert und nicht mit Einstellungen übertragen. Der Hinweis bleibt auch unter **Geräte** und **Einstellungen** nachlesbar.
+
+![Einmaliger Hinweis zur Rolle als Cockpit und zu VictronConnect](images/cockpit-notice.png)
 
 Die sechsstellige **Bluetooth-PIN** wird für die Android-Kopplung verwendet. Sie ist ein anderer Code als der 32-stellige Schlüssel der Sofortanzeige. Eine bereits vorhandene Android-Kopplung benötigt keine erneute PIN-Abfrage.
 
@@ -27,9 +31,11 @@ Beim App-Start ergänzt Watt’n’Pit die Archive der eingerichteten Geräte na
 *Beispiel einer eingerichteten Anlage: Importstatus, vorhandene Android-Kopplung und manueller Archivabruf stehen auf der Geräteseite.*
 
 - Vorhandene Daten werden abgeglichen. Ein erneuter Import ergänzt fehlende Werte, statt denselben Archivpunkt mehrfach abzulegen.
-- Fortschritt und **Import abbrechen** stehen oben auf der Geräteseite. Bereits abgeschlossene Datenblöcke bleiben nach einem Abbruch gespeichert und sind im Verlauf verfügbar.
+- Während des Imports erscheint auf jeder Seite **Synchronisation läuft**. Die übrige Oberfläche ist gedimmt und gesperrt. Gerät und Arbeitsschritt werden genannt; bei bekanntem Umfang erscheint der tatsächliche Fortschritt für das aktuelle Gerät, ansonsten eine Aktivitätsanzeige. **Synchronisation abbrechen** bleibt erreichbar. Bereits abgeschlossene Datenblöcke bleiben nach einem Abbruch gespeichert. Beim nächsten Öffnen beziehungsweise nach mehr als 30 Sekunden im Hintergrund wird erneut ergänzt; ein manueller Abruf ist jederzeit unter **Geräte → Gerätearchiv ergänzen** möglich, sobald der laufende Import beendet ist. Nach Erfolg, Abbruch oder Fehler wird die Bedienung automatisch wieder freigegeben. Offene Eingaben bleiben erhalten.
 - Archivwerte und selbst aufgezeichnete Werte können unterschiedlich fein sein. Die Standardansicht führt die Quellen zusammen; feinere vorhandene Messwerte haben Vorrang.
 - Leere Archivfelder werden nicht als gemessene Nullwerte ausgegeben. Lücken können deshalb sichtbar bleiben.
+
+![Warteanzeige mit aktuellem Gerät, Fortschritt und Abbrechen](images/synchronisation.png)
 
 Falls nichts ankommt: Bluetooth und Reichweite prüfen, VictronConnect vom Gerät trennen und den Import erneut versuchen. **Liveempfang** bestätigt den Empfang der Sofortanzeige; der aktive Archivabruf ist ein eigener Vorgang. Über **Verbindungsdetails → Diagnose kopieren** lässt sich ein Bericht ohne Geräteadressen, Schlüssel oder Messwerte kopieren.
 
@@ -47,7 +53,7 @@ Auf schmalen Bildschirmen stehen der schmale Ladezustand und die breitere Solarl
 
 Die Restlaufzeit kann über **+ Kachel → Akku → Restlaufzeit** ergänzt werden; Stunden sind weiterhin die voreingestellte Einheit.
 
-Solarleistung und Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. Verbrauch und Bilanz beziehen sich auf **heute ab Mitternacht** und enthalten damit auch die Nacht. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
+Solarleistung und Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. Nach Sonnenuntergang endet ihre Zeitachse dort; der erreichte Wh-Ertrag bleibt sichtbar. Verwertbare Erzeugung davor oder danach erweitert das Fenster und wird mitgezählt. Die Aufzeichnung läuft weiter. Ohne gültigen Sonnenuntergang reicht das Solarfenster mit erkennbarem Hinweis bis jetzt. Verbrauch und Bilanz beziehen sich auf **heute ab Mitternacht** und enthalten damit auch die Nacht. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
 
 **+ Kachel** öffnet die Auswahl. Neue Kacheln erscheinen am Ende des Rasters. Eine Messkachel antippen und **Kachel-Einstellungen** wählen, um Beschriftung, Einheit, Darstellung und Zeitraum dauerhaft zu ändern. **Großansicht öffnen** zeigt dieselbe Messgröße zum Untersuchen in groß. Als Darstellung stehen je nach Messgröße Zahl, Rundinstrument oder Verlauf zur Wahl.
 
@@ -68,7 +74,7 @@ Bei einer Verlaufskachel sind **die große Zahl und die Kurve getrennt einstellb
 | Große Zahl: **Aktuell (Live)** | Frischer Empfang des Geräts; ohne frischen Wert erscheint „—“. |
 | Große Zahl: **Letzter gespeicherter Wert** | Letzter gespeicherter Wert im gewählten Zeitraum. |
 | Durchschnitt / Minimum / Maximum | Auswertung vorhandener Werte im gewählten Zeitraum. |
-| Kurvenzeitraum: **Seit Sonnenaufgang** | Beginn am heutigen Sonnenaufgang des eingestellten Wetterorts. |
+| Kurvenzeitraum: **Seit Sonnenaufgang** | Regulär Sonnenaufgang bis jetzt, nach Sonnenuntergang nur bis Sonnenuntergang; gemessene frühere oder spätere Erzeugung erweitert das Fenster. |
 | Skala: **Automatisch nach bisherigen Werten** | Grenzen folgen den Messwerten des gewählten Zeitraums. |
 
 ![Kacheleinstellungen mit Sonnenaufgang als Kurvenzeitraum und aktueller Livezahl](images/tile-sunrise.png)
@@ -85,7 +91,7 @@ Unter **Skala** zwischen festen Grenzen und automatischer Skalierung wählen. Be
 
 ![Großansicht der Solarleistung mit Batteriebilanz und Batteriespannung als Vergleich](images/tile-detail.png)
 
-Unter **Vergleichswerte** weitere Messgrößen einschalten. Gleiche Einheiten werden gemeinsam dargestellt; unterschiedliche Einheiten erhalten eigene Werteskalen bei derselben Zeitachse. **+ / −** zoomt die Zeitachse. Mit einem Finger verschieben, mit zwei Fingern zoomen. **Gesamter Zeitraum** stellt das vollständige gewählte Zeitfenster wieder her. Berechnete Energiesummen bleiben auf den gewählten Zeitraum bezogen.
+Unter **Vergleichswerte** weitere Messgrößen einschalten. Gleiche Einheiten werden gemeinsam dargestellt; unterschiedliche Einheiten erhalten eigene Werteskalen bei derselben Zeitachse. **+ / −** zoomt die Zeitachse. Einen Messpunkt antippen oder kurz gedrückt halten: Ein farbiger **Punkt** auf der Kurve und eine **senkrechte Linie** zeigen die Auswahl. Die Auswahl mit einem Finger ziehen; Markierung, Uhrzeit und Messwerte folgen. Bei Vergleichskurven erscheinen Punkte nur an tatsächlich vorhandenen nahen Messwerten; in Messlücken wird kein Wert erfunden. **Auswahl aufheben** beendet die Auswahl. Danach verschiebt ein Finger wieder den Zeitraum; zwei Finger zoomen auch während einer Auswahl. **Gesamter Zeitraum** stellt das vollständige gewählte Zeitfenster wieder her. Berechnete Energiesummen bleiben auf den gewählten Zeitraum bezogen.
 
 Diese Änderungen gelten nur in der geöffneten Großansicht. **×** oder Android-Zurück schließt sie; die gespeicherte Kachel und ihre Anordnung bleiben erhalten. Für bleibende Änderungen **Kachel-Einstellungen** verwenden. Im Anordnungsmodus öffnet Antippen direkt den Kacheleditor.
 
@@ -99,7 +105,7 @@ Diese Änderungen gelten nur in der geöffneten Großansicht. **×** oder Androi
 
 Beispiel: **100 Wh Solarertrag − 150 Wh Verbrauch = −50 Wh Bilanz**. Plus bedeutet Überschuss, Minus Defizit. Wh und kWh sind wählbar. Die Rechnung verwendet die tatsächlichen Zeitabstände der erfassten Leistungspunkte und ist eine Näherung aus Regler und Shunt einschließlich der Verluste zwischen den Messstellen.
 
-Der nächtliche Verbrauch bleibt enthalten: Vor Sonnenaufgang zählt der beobachtete Shunt-Verlauf, während der Solarertrag des gewählten Sonnenaufgangsfensters null ist. Nach Sonnenaufgang werden nur Zeitabschnitte verwendet, in denen Solarregler **und** Shunt verwertbare Daten haben. Es werden keine unbekannten Tageslücken mit null aufgefüllt. Die Prozentangabe nennt die erfasste Zeit des jeweiligen Fensters; fehlende Messintervalle erscheinen als **—**, erfasste Null als **0,00**. Ohne gültige Sonnenaufgangszeit wird ausdrücklich **heute (Ersatz)** verwendet. Vor dem bekannten Sonnenaufgang steht der Ertrag bei 0 Wh.
+Der nächtliche Verbrauch bleibt enthalten: Außerhalb des Solarfensters zählt der beobachtete Shunt-Verlauf mit Solar null. Tatsächlich erfasste frühe oder späte Erzeugung erweitert das Fenster und wird in Ertrag und Verbrauch mitgeführt. Innerhalb dieses Fensters werden nur Zeitabschnitte verwendet, in denen Solarregler **und** Shunt verwertbare Daten haben. Es werden keine unbekannten Tageslücken mit null aufgefüllt. Die Prozentangabe nennt die erfasste Zeit des jeweiligen Fensters; fehlende Messintervalle erscheinen als **—**, erfasste Null als **0,00**. Ohne gültige Sonnenaufgangszeit wird ausdrücklich **heute (Ersatz)** verwendet. Vor dem bekannten Sonnenaufgang steht der Ertrag ohne verwertbare frühere Erzeugung bei 0 Wh. Verbrauch und Bilanz zählen auch nach Sonnenuntergang weiter; die Differenz bleibt Ertrag minus Verbrauch.
 
 ![Solarertrag, Verbrauch und gestrichelte Bilanz im berechneten Energieverlauf](images/energy-history.png)
 
@@ -149,7 +155,7 @@ Die Wetterkachel liegt im selben Raster wie die Messkacheln. **Anordnen** macht 
 
 *Einstellungen → Deine Solaranlage → Bearbeiten: Modulgruppen beschreiben und ihre Messwertquelle zuordnen. Die gezeigten Angaben sind frei erfunden.*
 
-Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.2.4 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
+Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.2.5 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
 
 ## 8. Einstellungen und Messdaten sichern
 

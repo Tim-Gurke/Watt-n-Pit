@@ -27,7 +27,7 @@ let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastM
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let currentImport = null, lastHistoryRevision=-1;
-let dashboard = null, extras = null, equipment = null, configuration = null;
+let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null;
 const overviewLandscape = window.matchMedia('(orientation: landscape)');
 
 function syncOverviewHeader() {
@@ -125,9 +125,11 @@ function renderSettings() {
   document.querySelectorAll('#themeButtons button').forEach(b => b.classList.toggle('selected',b.dataset.theme===snapshot.settings.theme));
 }
 function poll() {
+  if(lifecycle?.poll())return;
   if (native) {
     try {
       const result = JSON.parse(native.snapshot());
+      if(result.syncing&&lifecycle?.poll())return;
       if (result.devices) snapshot = result;
       if(snapshot.historyRevision!=null&&snapshot.historyRevision!==lastHistoryRevision){lastHistoryRevision=snapshot.historyRevision;dashboard?.clearCache();lastMiniLoad=0;if(page==='history'&&!demo)loadHistory();}
       if (snapshot.eventId && snapshot.eventId !== lastEvent) { toast(snapshot.event); lastEvent = snapshot.eventId; }
@@ -160,6 +162,7 @@ function closeModal() {
   currentImport = null; $('modal').hidden = true; $('modalBody').innerHTML = ''; document.body.style.overflow = '';
 }
 window.handleBack = () => {
+  if(lifecycle?.blocked)return true;
   if (!$('modal').hidden) { closeModal(); return true; }
   if (dashboard?.detail?.active) { dashboard.detail.close(); return true; }
   if (page !== 'overview') { showPage('overview'); return true; }
@@ -222,13 +225,13 @@ function sampleDemo(from,to,chosen) {
   return out;
 }
 function loadHistory() {
-  if(!viewFrom)return;
+  if(lifecycle?.blocked||!viewFrom)return;
   clearTimeout(loadTimer);
   energyData=null;
   try{
     if(metric==='energy'){
-      const solarFrom=range==='today'?Math.max(viewFrom,window.WattDashboardCore.miniWindow('sunrise',snapshot.weather||{}).solarFrom??viewFrom):viewFrom;
-      energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo,solarFrom)):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom))):{};
+      const sun=window.WattDashboardCore.miniWindow('sunrise',snapshot.weather||{}),solarFrom=range==='today'?Math.max(viewFrom,sun.solarFrom??viewFrom):viewFrom,solarTo=range==='today'?sun.solarTo??viewTo:viewTo;
+      energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo,solarFrom,solarTo)):native?.energyHistoryWindow?JSON.parse(native.energyHistoryWindow(Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom),Math.ceil(solarTo))):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom))):{};
       if(energyData.error)throw new Error();
       points=energyPlotPoints(energyData);
     }else points=demo?(source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric)):native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)).points || []:[];
@@ -242,6 +245,7 @@ function loadHistory() {
 }
 function delayedHistory(){clearTimeout(loadTimer);loadTimer=setTimeout(loadHistory,300);}
 function loadMini(force=false) {
+  if(lifecycle?.blocked)return;
   const mode=native?snapshot.settings.miniRange||'sunrise':localStorage.getItem('wattpit-mini-range')||'sunrise';
   miniWindow=window.WattDashboardCore.miniWindow(mode,snapshot.weather);
   $('miniRange').value=mode;$('miniPeriodLabel').textContent=miniWindow.label.toLocaleUpperCase('de-DE');
@@ -249,8 +253,10 @@ function loadMini(force=false) {
   const key=[mode,Math.floor(miniWindow.from/60000)].join(':');
   if(!force&&key===miniKey&&Date.now()-lastMiniLoad<20000)return;
   miniKey=key;lastMiniLoad=Date.now();
-  try{miniPoints=demo?sampleDemo(miniWindow.from,miniWindow.to,'power'):native?JSON.parse(native.history(miniWindow.from,miniWindow.to,'power','all')).points||[]:[];}
+  const query=window.WattDashboardCore.solarQueryWindow(miniWindow);
+  try{miniPoints=demo?sampleDemo(query.from,query.to,'power'):native?JSON.parse(native.history(query.from,query.to,'power','all')).points||[]:[];}
   catch(error){miniPoints=[];}
+  miniWindow=window.WattDashboardCore.solarPlotWindow(miniWindow,miniPoints);
   drawMini();
 }
 function energyPlotPoints(data){
@@ -260,8 +266,8 @@ function energyDescription(data){
   const describe=(series,label)=>{const s=series?.summary||{},coverage=Math.floor((s.coverage||0)*100);return `${label}: ${num(s.last,2)} Wh · ${coverage} % der Zeit erfasst`;};
   return describe(data?.solar,'Solarertrag')+' · '+describe(data?.consumption,'Verbrauch')+' · '+describe(data?.balance,'Bilanz')+'. + Überschuss · − Defizit.';
 }
-function sampleEnergyDemo(from,to,solarFrom=from){
-  return dashboard.demoFlow(null,{from,to:Math.min(to,Date.now())},solarFrom);
+function sampleEnergyDemo(from,to,solarFrom=from,solarTo=to){
+  return dashboard.demoFlow(null,{from,to:Math.min(to,Date.now())},solarFrom,solarTo);
 }
 function seriesOf(data) {
   const groups=new Map();
@@ -411,7 +417,9 @@ $('saveSettings').onclick=()=>{const settings={capacity:Number($('capacitySettin
 $('miniRange').onchange=()=>{const miniRange=$('miniRange').value,error=native?native.settings(JSON.stringify({miniRange})):'';if(error){toast(error);loadMini(true);return;}snapshot.settings.miniRange=miniRange;if(!native)localStorage.setItem('wattpit-mini-range',miniRange);loadMini(true);};
 $('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus');
 for(const [id,name] of [['navOverview','overview'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
-dashboard = new window.WattDashboard({native,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
+lifecycle=new window.WattLifecycle({native,toast,poll,completed:()=>{lastHistoryRevision=-1;lastMiniLoad=0;dashboard?.cache.clear();}});
+lifecycle.poll();
+dashboard = new window.WattDashboard({native,isBlocked:()=>lifecycle.blocked,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
 extras = new window.WattExtras({native,getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
 configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,dashboard,equipment,openModal,closeModal,toast,applied:backup=>{
@@ -422,5 +430,5 @@ configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,d
 theme(!native?localStorage.getItem('wattpit-preview-theme')||'dark':'dark',false);
 selectRange('today');poll();renderSettings();
 if(new URLSearchParams(location.search).get('demo')==='1')setDemo(true);
-setInterval(poll,2000);setInterval(()=>{if(page==='history'&&snapshot.running&&!demo)loadHistory();},20000);
+setInterval(poll,2000);setInterval(()=>{if(!lifecycle.blocked&&page==='history'&&snapshot.running&&!demo)loadHistory();},20000);
 window.addEventListener('resize',()=>{drawHistory();drawMini();});

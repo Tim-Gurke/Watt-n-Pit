@@ -110,15 +110,16 @@
       if(cancelled){this.config.tiles.find(t=>t.id===d.id).layouts[this.profile]=d.origin;this.layout();return;}
       if(d.moved){this.lastDrag=Date.now();this.commit();}
     }
-    data(t,window,solarFrom=window.from) {
-      if(window.to<=window.from)return {points:[],summary:{}};
+    data(t,window,solarFrom=window.from,solarTo=window.to) {
+      if(this.a.isBlocked?.()||window.to<=window.from)return {points:[],summary:{}};
       const m=C.CATALOG[t.metric],backend=m.backend || m.field;
-      const key=[m.flow?'energy-flow':backend,Math.floor(window.from/10000),Math.floor(window.to/10000),m.flow?Math.floor(solarFrom/10000):'',this.a.isDemo()].join(':');
+      const key=[m.flow?'energy-flow':backend,Math.floor(window.from/10000),Math.floor(window.to/10000),m.flow?Math.floor(solarFrom/10000):'',m.flow?Math.floor(solarTo/10000):'',this.a.isDemo()].join(':');
       if(this.cache.has(key))return m.flow?this.cache.get(key)[m.flow]:this.cache.get(key);
       let data={points:[],summary:{}};
       try {
         if(m.flow){
-          if(this.a.isDemo())data=this.demoFlow(t,window,solarFrom);
+          if(this.a.isDemo())data=this.demoFlow(t,window,solarFrom,solarTo);
+          else if(this.a.native?.energyHistoryWindow)data=JSON.parse(this.a.native.energyHistoryWindow(Math.floor(window.from),Math.ceil(window.to),'all',Math.floor(solarFrom),Math.ceil(solarTo)));
           else if(this.a.native?.energyHistory)data=JSON.parse(this.a.native.energyHistory(Math.floor(window.from),Math.ceil(window.to),'all',solarFrom));
           else throw new Error('Energieberechnung nicht verfügbar.');
           if(data.error||!data.solar||!data.consumption||!data.balance)throw new Error('Energiedaten nicht verfügbar.');
@@ -147,31 +148,34 @@
       }
       return {points:out,summary:{...this.summary(out),...(m.energy?{coverage:1}:{})}};
     }
-    demoFlow(t,window,solarFrom){
+    demoFlow(t,window,solarFrom,solarTo=window.to){
       const result={solar:{points:[]},consumption:{points:[]},balance:{points:[]}},totals={solar:0,consumption:0,balance:0};
       const times=Array.from({length:241},(_,i)=>window.from+(window.to-window.from)*i/240);
-      if(solarFrom>window.from&&solarFrom<window.to)times.push(solarFrom);times.sort((a,b)=>a-b);
+      const productionStart=new Date(window.from);productionStart.setHours(7,0,0,0);const productionEnd=productionStart.getTime()+12*3600000;
+      solarFrom=Math.max(window.from,Math.min(solarFrom,productionStart.getTime(),window.to));solarTo=Math.min(window.to,Math.max(solarTo,productionEnd));
+      if(solarFrom>window.from&&solarFrom<window.to)times.push(solarFrom);if(solarTo>window.from&&solarTo<window.to)times.push(solarTo);times.sort((a,b)=>a-b);
       let last=null;
       for(const time of times){
-        const hour=new Date(time).getHours()+new Date(time).getMinutes()/60,solar=Math.max(0,Math.sin((hour-7)/12*Math.PI))*170,net=solar*.9-32;
+        const d=new Date(time),hour=d.getHours()+d.getMinutes()/60+d.getSeconds()/3600,solar=hour>=7&&hour<=19?Math.max(0,Math.sin((hour-7)/12*Math.PI))*170:0,net=solar*.9-32;
         if(last){
           const hours=(time-last.time)/3600000;
-          totals.solar+=last.time>=solarFrom?(last.solar+solar)/2*hours:0;
+          totals.solar+=(last.solar+solar)/2*hours;
           totals.balance+=(last.net+net)/2*hours;
           totals.consumption=totals.solar-totals.balance;
         }
-        for(const kind of Object.keys(result))if(kind!=='solar'||time>=solarFrom){const v=totals[kind];result[kind].points.push({t:time,last:time,v,min:v,max:v,n:1,gap:false,kind,device:'demo-'+kind,origin:'calculated'});}
+        for(const kind of Object.keys(result))if(kind!=='solar'||time>=solarFrom&&time<=solarTo){const v=totals[kind];result[kind].points.push({t:time,last:time,v,min:v,max:v,n:1,gap:false,kind,device:'demo-'+kind,origin:'calculated'});}
         last={time,solar,net};
       }
-      for(const kind of Object.keys(result))result[kind].summary={...this.summary(result[kind].points),last:totals[kind],coverage:1};
+      for(const kind of Object.keys(result))result[kind].summary={...this.summary(result[kind].points),last:totals[kind],coverage:1,from:kind==='solar'?solarFrom:window.from,to:kind==='solar'?solarTo:window.to};
       return result;
     }
     update() {
-      if(!this.a.getSnapshot)return;
+      if(this.a.isBlocked?.()||!this.a.getSnapshot)return;
       const snapshot=this.a.getSnapshot(),shunt=this.a.reading('shunt'),solar=this.a.reading('solar'),now=Date.now();
       const flowWindow=C.windowFor({metric:'energyBalance',type:'chart',period:this.config.energyPeriod},now,snapshot.weather);
       const solarTile=this.config.tiles.find(t=>t.metric==='solarEnergy'),solarWindow=solarTile?C.windowFor(solarTile,now,snapshot.weather):flowWindow;
       const solarFrom=solarTile?.period.mode==='sunrise'?solarWindow.solarFrom??solarWindow.from:flowWindow.from;
+      const solarTo=solarTile?.period.mode==='sunrise'?solarWindow.solarTo??flowWindow.to:flowWindow.to;
       let visibilityChanged=false;
       for(const t of this.config.tiles){
         const el=this.elements.get(t.id);if(!el)continue;
@@ -182,7 +186,11 @@
         }
         el.style.setProperty('--tile-color',this.paint(t.color,t,true));
         el.style.setProperty('--tile-muted',this.paint(getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),t,true));
-        const m=C.CATALOG[t.metric],window=C.windowFor(t,now,snapshot.weather),data=window?this.data(t,m.flow?flowWindow:window,m.flow?solarFrom:window.from):null;
+        const m=C.CATALOG[t.metric];let window=C.windowFor(t,now,snapshot.weather);
+        const query=window&&t.metric==='solar'&&t.period.mode==='sunrise'?C.solarQueryWindow(window):window;
+        let data=window?this.data(t,m.flow?flowWindow:query,m.flow?solarFrom:query.from,m.flow?solarTo:query.to):null;
+        if(window&&t.period.mode==='sunrise'&&(t.metric==='solar'||m.flow==='solar'))window=C.solarPlotWindow(window,data?.points||[],m.flow==='solar'?data?.summary:null);
+        if(window?.solarFrom!=null&&t.metric==='solar'&&!m.flow&&data){const points=(data.points||[]).filter(p=>p.t>=window.from&&p.t<=window.to);data={...data,points,summary:this.summary(points)};}
         let value=C.displayValue(t,data?.summary,shunt,solar,snapshot);
         value=C.convert(value,t.unit,t.metric);
         const reading=`<strong class="tile-number">${esc(C.format(value,t))}</strong><span class="tile-unit">${C.finite(value) && !m.status?esc(t.unit):!m.status?esc(t.unit):''}</span>`;
@@ -303,7 +311,7 @@
         $('tileSunriseHint').hidden=mode!=='sunrise';
         if(mode==='sunrise'){
           const weather=this.a.getSnapshot().weather||{},window=C.windowFor({...t,period:{...t.period,mode:'sunrise'}},Date.now(),weather);
-          $('tileSunriseHint').textContent=window.label==='Seit Sonnenaufgang'?'Ab '+new Date(window.from).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',timeZone:weather.timezone||undefined})+' Uhr am gewählten Wetterort. Energiewerte werden für diesen Zeitraum neu berechnet.':window.note+' Es werden ersatzweise die heutigen Daten gezeigt.';
+          $('tileSunriseHint').textContent=window.label==='Seit Sonnenaufgang'?'Ab '+new Date(window.from).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',timeZone:weather.timezone||undefined})+' Uhr am gewählten Wetterort. '+window.note:window.note+' Es werden ersatzweise die heutigen Daten gezeigt.';
         }
       };
       const valueOptions=value=>{const chart=$('tileType').value==='chart';$('tileAggregate').innerHTML=(m.energy?[['last','Berechnete Energie']]:m.status?[['last','Letzter Wert']]:[...(chart?[['live','Aktuell (Live)']]:[]),...Object.entries(aggregateNames).map(([key,name])=>[key,key==='last'?'Letzter gespeicherter Wert':name])]).map(x=>option(...x)).join('');$('tileAggregate').value=value;};

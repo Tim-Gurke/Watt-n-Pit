@@ -10,7 +10,7 @@ const path=require('node:path');
   const now=Date.now(),rise=Date.parse('2026-10-18T05:48:00Z');window.saves=0;window.calls=[];window.missing=false;
   window.mock={running:true,status:'Live',devices:[{mac:'SHUNT',kind:'shunt',name:'Testshunt'},{mac:'SOLAR',kind:'solar',name:'Testregler'}],readings:[{device:'SHUNT',t:now,soc:76.5,voltage:12.92,power:-109,current:-8.4},{device:'SOLAR',t:now,solar:5}],found:[],historyRevision:0,stats:{count:400},equipment:{version:1,groups:[]},settings:{theme:'dark',palette:'classic',capacity:100,sampleSeconds:10,miniRange:'today',weatherPlace:{name:'Testort',latitude:50,longitude:10}},weather:{timezone:'Europe/Berlin',updated:now,days:Array.from({length:14},(_,i)=>({day:'2026-10-'+String(18+i).padStart(2,'0'),sunrise:rise+i*86400000,code:2,hours:5}))}};
   const series=(from,to,metric)=>{
-   const points=window.missing?[]:Array.from({length:241},(_,i)=>{const v=metric==='voltage'?12.9+i/1000:metric==='soc'?76-i/100:metric==='dischargeEnergy'?i/3:metric==='solarEnergy'?i/4:Math.sin(i/14)*15+20;return {t:from+(to-from)*i/240,v,min:v-1,max:v+1,n:1,device:'test',origin:'live'};});
+   const points=window.missing?[]:Array.from({length:241},(_,i)=>{const v=metric==='solar'&&from+(to-from)*i/240<rise?0:metric==='voltage'?12.9+i/1000:metric==='soc'?76-i/100:metric==='dischargeEnergy'?i/3:metric==='solarEnergy'?i/4:Math.sin(i/14)*15+20;return {t:from+(to-from)*i/240,v,min:v===0?0:v-1,max:v===0?0:v+1,n:1,device:'test',origin:'live'};});
    return {points,summary:{from,to,last:points.at(-1)?.v??null,avg:20,min:4,max:36,coverage:1}};
   };
   window.WattPit={snapshot:()=>JSON.stringify(window.mock),dashboard:()=>localStorage.getItem('detail-board')||'{}',saveDashboard:json=>{window.saves++;localStorage.setItem('detail-board',json);return '';},settings:json=>{Object.assign(window.mock.settings,JSON.parse(json));return '';},history:()=>'{"points":[]}',dashboardHistory:(from,to,metric)=>{window.calls.push({from,to,metric});return JSON.stringify(series(from,to,metric));},energyHistory:(from,to)=>JSON.stringify({solar:series(from,to,'solarEnergy'),consumption:series(from,to,'consumptionEnergy'),balance:series(from,to,'batteryEnergy')})};
@@ -41,6 +41,24 @@ const path=require('node:path');
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cx-30,y,id:1},{x:cx+30,y,id:2}]});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:cx-60,y,id:1},{x:cx+60,y,id:2}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.ok((await view()).to-(await view()).from<before.to-before.from,'pinch did not zoom');
  await page.locator('#detailReset').click();assert.deepEqual(await view(),full);await verifyUnchanged();
+ // A selected point stays visible and can be scrubbed without panning the time window.
+ await page.locator('#detailCanvas').scrollIntoViewIfNeeded();box=await page.locator('#detailCanvas').boundingBox();
+ const imageBefore=await page.locator('#detailCanvas').evaluate(el=>el.toDataURL());
+ await page.mouse.click(box.x+box.width*.55,box.y+80);
+ assert.equal(await page.locator('#detailTooltip').isVisible(),true);assert.ok(Number(await page.locator('#detailCanvas').getAttribute('data-selected-points'))>=2);
+ assert.notEqual(await page.locator('#detailCanvas').evaluate(el=>el.toDataURL()),imageBefore,'selected point and vertical line were not painted');
+ const selectedBefore=Number(await page.locator('#detailCanvas').getAttribute('data-selected-time')),tooltipBefore=await page.locator('#detailTooltip').textContent();
+ const selectionView=await view(),sy=Math.round(box.y+80),sx=Math.round(box.x+box.width*.55);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:sx,y:sy,id:1}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:sx+60,y:sy,id:1}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ assert.ok(Number(await page.locator('#detailCanvas').getAttribute('data-selected-time'))>selectedBefore,'touch drag did not move the selection');
+ assert.notEqual(await page.locator('#detailTooltip').textContent(),tooltipBefore);assert.deepEqual(await view(),selectionView,'selection drag panned instead');
+ const kept=await page.locator('#detailCanvas').getAttribute('data-selected-time');await page.setViewportSize({width:832,height:390});
+ assert.equal(await page.locator('#detailCanvas').getAttribute('data-selected-time'),kept,'rotation lost selection');
+ await page.evaluate(()=>dashboard.detail.refresh(false));assert.equal(await page.locator('#detailTooltip').isVisible(),true,'refresh erased selection');
+ await page.locator('#detailClearSelection').click();assert.equal(await page.locator('#detailTooltip').isVisible(),false);assert.equal(await page.locator('#detailCanvas').getAttribute('data-selected-time'),'');await verifyUnchanged();
+
  for(const width of [320,360,390,700,832,1100]){
   await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.getElementById('tileDetail').scrollWidth>innerWidth),false,'detail overflow '+width);
  }

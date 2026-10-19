@@ -82,15 +82,18 @@ public final class MainActivity extends Activity {
         WeatherClient.refresh(repository,true);
         if(!entered||stoppedAt>0&&SystemClock.elapsedRealtime()-stoppedAt>30000){
             entered=true;web.postDelayed(()->{
-                if(isFinishing()||isDestroyed()||pendingStart)return;
-                try{
-                    if(repository.configs().length()>0&&!repositoryArchiveActive())pendingArchive="AUTO";
-                    if(pendingArchive!=null||repository.prefs.getBoolean("recording",false)&&!repository.running)requestStart();
-                }catch(Exception ignored){}
+                startAutomaticImport();
             },800);
         }
     }
     @Override protected void onStop(){stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
+    private void startAutomaticImport(){
+        if(isFinishing()||isDestroyed()||pendingStart||!repository.prefs.getBoolean("cockpitNotice-v1",false))return;
+        try{
+            if(repository.configs().length()>0&&!repositoryArchiveActive())pendingArchive="AUTO";
+            if(pendingArchive!=null||repository.prefs.getBoolean("recording",false)&&!repository.running)requestStart();
+        }catch(Exception ignored){}
+    }
     private void applyTheme(String theme) {
         boolean light = theme.equals("light");
         String palette=repository.prefs.getString("palette","classic");
@@ -218,10 +221,16 @@ public final class MainActivity extends Activity {
         } catch (Exception ignored) { return "CSV-Datei"; }
     }
 
-    private boolean repositoryArchiveActive(){try{return repository.snapshot().optJSONObject("archive").optBoolean("active");}catch(Exception e){return false;}}
+    private boolean repositoryArchiveActive(){return repository.archiveBusy;}
     final class Bridge {
-        @JavascriptInterface public String snapshot() { try { return repository.snapshot().toString(); } catch (Exception e) { return "{}"; } }
+        @JavascriptInterface public String syncState(){return repository.syncState();}
+        @JavascriptInterface public String acknowledgeCockpit(){
+            if(!repository.prefs.edit().putBoolean("cockpitNotice-v1",true).commit())return "Der Hinweis konnte nicht bestätigt werden. Bitte erneut versuchen.";
+            runOnUiThread(()->web.postDelayed(MainActivity.this::startAutomaticImport,250));return "";
+        }
+        @JavascriptInterface public String snapshot() { if(repository.archiveBusy)return "{\"syncing\":true}";try { return repository.snapshot().toString(); } catch (Exception e) { return "{}"; } }
         @JavascriptInterface public String history(long from, long to, String metric, String source) {
+            if(repository.archiveBusy)return "{\"points\":[]}";
             try { return new JSONObject().put("points",repository.db.query(from,to,metric,source)).toString(); }
             catch (Exception e) { return "{\"points\":[],\"error\":\"Verlauf konnte nicht geladen werden.\"}"; }
         }
@@ -236,11 +245,18 @@ public final class MainActivity extends Activity {
             } catch(Exception e) { return Repository.safeError(e); }
         }
         @JavascriptInterface public String dashboardHistory(long from,long to,String metric) {
+            if(repository.archiveBusy)return "{\"points\":[],\"summary\":{}}";
             try { return repository.db.dashboardData(from,to,metric).toString(); }
             catch(Exception e) { return "{\"points\":[],\"summary\":{},\"error\":\"Zeitraum konnte nicht geladen werden.\"}"; }
         }
         @JavascriptInterface public String energyHistory(long from,long to,String source,long solarFrom) {
+            if(repository.archiveBusy)return "{\"error\":\"Synchronisation läuft.\"}";
             try {return repository.db.energyFlow(from,to,solarFrom,source).toString();}
+            catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
+        }
+        @JavascriptInterface public String energyHistoryWindow(long from,long to,String source,long solarFrom,long solarTo) {
+            if(repository.archiveBusy)return "{\"error\":\"Synchronisation läuft.\"}";
+            try{return repository.db.energyFlow(from,to,solarFrom,solarTo,source).toString();}
             catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
         }
         @JavascriptInterface public void searchWeather(String query){files.execute(()->{try{call("onWeatherSearch",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onWeatherSearch",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte Verbindung prüfen und erneut suchen."));}catch(JSONException ignored){}}});}

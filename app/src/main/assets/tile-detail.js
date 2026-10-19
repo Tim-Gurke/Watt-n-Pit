@@ -47,7 +47,7 @@
       this.root.setAttribute('role','dialog');this.root.setAttribute('aria-modal','true');this.root.setAttribute('aria-labelledby','tileDetailTitle');document.body.append(this.root);
       this.observer=new ResizeObserver(()=>{if(this.active)this.draw();});this.observer.observe(this.root);
       document.addEventListener('keydown',e=>{
-        if(!this.active)return;
+        if(!this.active||this.a.isBlocked?.())return;
         if(e.key==='Escape'){e.preventDefault();this.close();}
         if(e.key==='Tab'){
           const nodes=[...this.root.querySelectorAll('button,input,select,summary,[tabindex="0"]')].filter(n=>!n.disabled&&n.getClientRects().length);
@@ -61,9 +61,9 @@
       const source=this.d.config.tiles.find(t=>t.id===id);if(!source)return;
       this.close();this.tile=copy(source);this.tiles=new Map([[source.metric,this.tile]]);this.selected=new Set([source.metric]);
       this.period=copy(source.period);if(this.period.mode==='live')this.period.mode='last';
-      this.scaleMode='auto';this.manual=C.fixedRange(this.tile);this.valueMode=C.usesLiveValue(source)?'live':source.period.aggregate;
+      this.selectedTime=null;this.scaleMode='auto';this.manual=C.fixedRange(this.tile);this.valueMode=C.usesLiveValue(source)?'live':source.period.aggregate;
       this.active=true;this.previousOverflow=document.body.style.overflow;document.body.style.overflow='hidden';this.root.hidden=false;this.pointers.clear();
-      this.root.innerHTML=`<div class="detail-top"><div><h2 id="tileDetailTitle">${esc(label(source))}</h2><span>Änderungen gelten nur in dieser Großansicht.</span></div><button id="detailClose" class="iconbutton" aria-label="Großansicht schließen">×</button></div><div class="detail-content"><div class="detail-toolbar"><label>Zeitraum<select id="detailPeriod">${[['last','Letzte …'],['today','Heute'],['yesterday','Gestern'],['week','Woche'],['month','Monat'],['sunrise','Seit Sonnenaufgang'],['reset','Seit Zurücksetzen'],['custom','Von / bis']].map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select></label><div class="detail-zoom"><button id="detailZoomIn" aria-label="Vergrößern">+</button><button id="detailZoomOut" aria-label="Verkleinern">−</button><button id="detailReset">Gesamter Zeitraum</button></div></div><div id="detailLast" class="detail-period-fields"><label>Anzahl<input id="detailAmount" type="number" min="1" max="10000"></label><label>Einheit<select id="detailTimeUnit"><option value="min">Minuten</option><option value="h">Stunden</option><option value="d">Tage</option></select></label></div><div id="detailCustom" class="detail-period-fields"><label>Von<input id="detailFrom" type="datetime-local"></label><label>Bis<input id="detailTo" type="datetime-local"></label><button id="detailApplyPeriod" class="secondary">Anzeigen</button></div><p id="detailError" class="form-error" hidden></p><details id="detailSettings" class="detail-options"><summary>Ansicht einstellen</summary><div class="form-grid"><label>Darstellung<select id="detailType"><option value="number">Zahlenwert</option><option value="gauge">Rundinstrument</option><option value="chart">Verlauf</option></select></label><label>Einheit<select id="detailUnit">${C.CATALOG[source.metric].units.map(u=>`<option>${esc(u)}</option>`).join('')}</select></label><label>Große Zahl<select id="detailValue">${[['live','Aktuell'],['last','Letzter Wert'],['avg','Durchschnitt'],['min','Minimum'],['max','Maximum']].filter(([v])=>!C.CATALOG[source.metric].energy||v==='last').map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select></label><label>Skala<select id="detailScale"><option value="auto">Automatisch</option><option value="fixed">Feste Grenzen</option></select></label><label>Minimum<input id="detailMin" type="number" step="any"></label><label>Maximum<input id="detailMax" type="number" step="any"></label><label>Nachkommastellen<select id="detailDigits"><option value="0">Keine</option><option value="1">Eine</option><option value="2">Zwei</option><option value="3">Drei</option></select></label><label>Farbe<input id="detailColor" type="color"></label></div>${C.CATALOG[source.metric].energy&&!C.CATALOG[source.metric].flow?'<label class="detail-check"><input id="detailReverse" type="checkbox"> Vorzeichen umkehren (+/−)</label>':''}</details><details id="detailComparisons" class="detail-options"><summary>Vergleichswerte <span id="detailCompareCount"></span></summary><div id="detailCompareOptions" class="detail-compare-options"></div><p>Werte mit gleicher Einheit liegen übereinander. Andere Einheiten erhalten eigene Skalen mit gemeinsamer Zeitachse.</p></details><div class="detail-main"><div id="detailReading" class="detail-reading"></div><div class="detail-plot"><p id="detailWindow" class="detail-window"></p><div id="detailLegend" class="detail-legend"></div><canvas id="detailCanvas" aria-label="Verlauf; mit zwei Fingern zoomen, mit einem Finger verschieben" tabindex="0"></canvas><div id="detailTooltip" class="detail-tooltip" hidden></div><p id="detailNote" class="detail-note"></p></div></div><div id="detailWeather" hidden></div></div>`;
+      this.root.innerHTML=`<div class="detail-top"><div><h2 id="tileDetailTitle">${esc(label(source))}</h2><span>Änderungen gelten nur in dieser Großansicht.</span></div><button id="detailClose" class="iconbutton" aria-label="Großansicht schließen">×</button></div><div class="detail-content"><div class="detail-toolbar"><label>Zeitraum<select id="detailPeriod">${[['last','Letzte …'],['today','Heute'],['yesterday','Gestern'],['week','Woche'],['month','Monat'],['sunrise','Seit Sonnenaufgang'],['reset','Seit Zurücksetzen'],['custom','Von / bis']].map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select></label><div class="detail-zoom"><button id="detailZoomIn" aria-label="Vergrößern">+</button><button id="detailZoomOut" aria-label="Verkleinern">−</button><button id="detailReset">Gesamter Zeitraum</button></div></div><div id="detailLast" class="detail-period-fields"><label>Anzahl<input id="detailAmount" type="number" min="1" max="10000"></label><label>Einheit<select id="detailTimeUnit"><option value="min">Minuten</option><option value="h">Stunden</option><option value="d">Tage</option></select></label></div><div id="detailCustom" class="detail-period-fields"><label>Von<input id="detailFrom" type="datetime-local"></label><label>Bis<input id="detailTo" type="datetime-local"></label><button id="detailApplyPeriod" class="secondary">Anzeigen</button></div><p id="detailError" class="form-error" hidden></p><details id="detailSettings" class="detail-options"><summary>Ansicht einstellen</summary><div class="form-grid"><label>Darstellung<select id="detailType"><option value="number">Zahlenwert</option><option value="gauge">Rundinstrument</option><option value="chart">Verlauf</option></select></label><label>Einheit<select id="detailUnit">${C.CATALOG[source.metric].units.map(u=>`<option>${esc(u)}</option>`).join('')}</select></label><label>Große Zahl<select id="detailValue">${[['live','Aktuell'],['last','Letzter Wert'],['avg','Durchschnitt'],['min','Minimum'],['max','Maximum']].filter(([v])=>!C.CATALOG[source.metric].energy||v==='last').map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select></label><label>Skala<select id="detailScale"><option value="auto">Automatisch</option><option value="fixed">Feste Grenzen</option></select></label><label>Minimum<input id="detailMin" type="number" step="any"></label><label>Maximum<input id="detailMax" type="number" step="any"></label><label>Nachkommastellen<select id="detailDigits"><option value="0">Keine</option><option value="1">Eine</option><option value="2">Zwei</option><option value="3">Drei</option></select></label><label>Farbe<input id="detailColor" type="color"></label></div>${C.CATALOG[source.metric].energy&&!C.CATALOG[source.metric].flow?'<label class="detail-check"><input id="detailReverse" type="checkbox"> Vorzeichen umkehren (+/−)</label>':''}</details><details id="detailComparisons" class="detail-options"><summary>Vergleichswerte <span id="detailCompareCount"></span></summary><div id="detailCompareOptions" class="detail-compare-options"></div><p>Werte mit gleicher Einheit liegen übereinander. Andere Einheiten erhalten eigene Skalen mit gemeinsamer Zeitachse.</p></details><div class="detail-main"><div id="detailReading" class="detail-reading"></div><div class="detail-plot"><p id="detailWindow" class="detail-window"></p><div id="detailLegend" class="detail-legend"></div><canvas id="detailCanvas" aria-label="Verlauf; antippen oder gedrückt halten und Messpunktauswahl ziehen; mit zwei Fingern zoomen" tabindex="0"></canvas><button id="detailClearSelection" class="textbutton" hidden>Auswahl aufheben</button><div id="detailTooltip" class="detail-tooltip" hidden></div><p class="detail-note">Antippen oder gedrückt halten wählt einen Messpunkt. Die Auswahl lässt sich ziehen. Nach „Auswahl aufheben“ verschiebt ein Finger den Zeitraum; zwei Finger zoomen.</p><p id="detailNote" class="detail-note"></p></div></div><div id="detailWeather" hidden></div></div>`;
       $('detailClose').onclick=()=>this.close();$('detailPeriod').value=this.period.mode;
       $('detailAmount').value=this.period.amount;$('detailTimeUnit').value=this.period.unit;
       $('detailFrom').value=local(this.period.from||Date.now()-86400000);$('detailTo').value=local(this.period.to||Date.now());
@@ -87,12 +87,13 @@
         this.error('');this.scaleMode=$('detailScale').value;this.manual={min,max};this.scaleControls();this.draw();
       };
       $('detailZoomIn').onclick=()=>this.zoom(.5);$('detailZoomOut').onclick=()=>this.zoom(2);$('detailReset').onclick=()=>{this.view={from:this.base.from,to:this.base.to};this.draw();};
+      $('detailClearSelection').onclick=()=>{this.selectedTime=null;this.draw();};
       this.renderComparisons();this.scaleControls();this.bindGestures();this.changePeriod();
       if(C.CATALOG[source.metric].widget)this.weather();
       this.timer=setInterval(()=>this.refresh(true),5000);$('detailClose').focus();
     }
     close(){
-      if(!this.active)return;this.active=false;clearInterval(this.timer);this.root.hidden=true;this.root.innerHTML='';document.body.style.overflow=this.previousOverflow||'';this.pointers.clear();
+      if(!this.active)return;this.active=false;clearTimeout(this.pickTimer);clearInterval(this.timer);this.root.hidden=true;this.root.innerHTML='';document.body.style.overflow=this.previousOverflow||'';this.pointers.clear();
       this.d.elements.get(this.tile.id)?.focus({preventScroll:true});
     }
     error(message){$('detailError').textContent=message;$('detailError').hidden=!message;}
@@ -102,7 +103,7 @@
       const window=periodWindow(this.period,this.a.getSnapshot().weather||{});
       if(!window||this.period.mode==='custom'&&window.to<=window.from){this.error('Bitte einen gültigen Zeitraum wählen.');return;}
       if(this.period.mode==='last'&&(!Number.isFinite(this.period.amount)||this.period.amount<1||this.period.amount>10000)){this.error('Bitte eine Anzahl zwischen 1 und 10.000 wählen.');return;}
-      this.error('');this.base=window;this.view={from:window.from,to:window.to};this.refresh(false);
+      this.selectedTime=null;this.error('');this.base=window;this.view={from:window.from,to:window.to};this.refresh(false);
     }
     renderComparisons(){
       const options=$('detailCompareOptions');
@@ -114,7 +115,7 @@
       options.querySelectorAll('[data-compare-unit]').forEach(input=>input.onchange=()=>{this.tiles.get(input.dataset.compareUnit).unit=input.value;this.refresh(false);});
     }
     refresh(follow=false){
-      if(!this.active)return;
+      if(!this.active||this.a.isBlocked?.())return;
       if(C.CATALOG[this.tile.metric].widget){this.weather();return;}
       if(follow&&this.period.mode!=='custom'&&this.period.mode!=='yesterday'){
         const next=periodWindow(this.period,this.a.getSnapshot().weather||{});
@@ -123,10 +124,13 @@
       const snapshot=this.a.getSnapshot();this.series=[];
       for(const metric of this.selected){
         const t=this.tiles.get(metric),m=C.CATALOG[metric];
-        const data=m.status||m.liveOnly?{points:[],summary:{}}:this.d.data(t,this.base,this.period.mode==='today'?Math.max(this.base.from,C.miniWindow('sunrise',snapshot.weather||{}).solarFrom??this.base.from):this.base.from);
+        const sun=C.miniWindow('sunrise',snapshot.weather||{}),daily=['today','sunrise'].includes(this.period.mode);
+        const query=this.period.mode==='sunrise'&&(t.metric==='solar'||m.flow)?C.solarQueryWindow(this.base):this.base;
+        const data=m.status||m.liveOnly?{points:[],summary:{}}:this.d.data(t,query,daily?Math.max(query.from,sun.solarFrom??query.from):query.from,daily?sun.solarTo??query.to:query.to);
         this.series.push({tile:t,data,points:seriesPoints(t,data.points||[],snapshot.settings.capacity||100)});
       }
       const primary=this.series[0],m=C.CATALOG[this.tile.metric];
+      if(this.period.mode==='sunrise'&&(this.tile.metric==='solar'||m.flow==='solar')){const full=this.view.from===this.base.from&&this.view.to===this.base.to;this.base=C.solarPlotWindow(this.base,primary.data.points||[],m.flow==='solar'?primary.data.summary:null);if(full)this.view={from:this.base.from,to:this.base.to};}
       let value=this.valueMode==='live'?C.signedValue(this.tile,C.liveValue(this.tile.metric,this.a.reading('shunt'),this.a.reading('solar'),snapshot)):C.signedValue(this.tile,C.historicalValue(this.tile.metric,primary.data.summary?.[this.valueMode],snapshot.settings.capacity||100));
       value=C.convert(value,this.tile.unit,this.tile.metric);
       const color=this.d.paint(this.tile.color,this.tile,true),reading=$('detailReading');reading.style.setProperty('--tile-color',color);reading.style.setProperty('--number-size','42px');
@@ -168,6 +172,9 @@
       const css=getComputedStyle(document.documentElement),muted=css.getPropertyValue('--muted').trim(),border=css.getPropertyValue('--border').trim();
       const left=48,right=13,bottom=28,pane=(h-bottom)/Math.max(1,groups.size),span=Math.max(1,this.view.to-this.view.from),plot=Math.max(1,w-left-right),x=t=>left+(t-this.view.from)/span*plot;
       this.plot={left,right,plot,w};canvas.dataset.from=this.view.from;canvas.dataset.to=this.view.to;canvas.dataset.units=[...groups.keys()].join(',');
+      if(this.selectedTime!=null&&(this.selectedTime<this.view.from||this.selectedTime>this.view.to))this.selectedTime=null;
+      const selection=this.selection();
+      canvas.dataset.selectedTime=this.selectedTime??'';canvas.dataset.selectedPoints=selection.filter(s=>s.point).length;
       ctx.font='10px sans-serif';let groupIndex=0,hasValues=false;
       for(const [unit,series] of groups){
         const top=groupIndex*pane+20,height=Math.max(30,pane-29);
@@ -194,36 +201,60 @@
           ctx.stroke();ctx.setLineDash([]);
           for(const p of points.filter(p=>C.finite(p.v))){if(points.length===1){ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(x(p.t),y(p.v),3,0,Math.PI*2);ctx.fill();}}
         }
+        if(this.selectedTime!=null){
+          const px=x(this.selectedTime);ctx.strokeStyle=css.getPropertyValue('--text').trim();ctx.globalAlpha=.65;ctx.lineWidth=1.25;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(px,top);ctx.lineTo(px,top+height);ctx.stroke();ctx.globalAlpha=1;
+          for(const selected of selection){
+            if(!selected.point||!series.some(s=>s.tile.metric===selected.series.tile.metric))continue;
+            const p=selected.point,color=this.color(selected.series,selected.index);ctx.beginPath();ctx.arc(x(p.t),y(p.v),5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.strokeStyle=css.getPropertyValue('--panel').trim();ctx.lineWidth=2;ctx.stroke();
+          }
+        }
         ctx.restore();groupIndex++;
       }
       ctx.fillStyle=muted;
       for(let i=0;i<4;i++){const t=this.view.from+span*i/3;ctx.textAlign=i===0?'left':i===3?'right':'center';ctx.fillText(span>172800000?new Date(t).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}):new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}),x(t),h-7);}
       if(!hasValues){ctx.textAlign='center';ctx.fillText('Keine gespeicherten Werte im sichtbaren Zeitraum.',left+plot/2,h/2);}
-      $('detailWindow').textContent=stamp(this.view.from)+' – '+stamp(this.view.to);$('detailTooltip').hidden=true;
+      $('detailWindow').textContent=stamp(this.view.from)+' – '+stamp(this.view.to);
+      $('detailTooltip').hidden=this.selectedTime==null;$('detailClearSelection').hidden=this.selectedTime==null;
+      if(this.selectedTime!=null)$('detailTooltip').innerHTML=selection.map(({series:s,point:p})=>esc(label(s.tile))+': '+(p?esc(C.format(p.v,s.tile))+' '+esc(s.tile.unit)+' · '+esc(stamp(p.t)):'—')).join('<br>');
       if(this.tile.type==='gauge')$('detailReading').querySelector('.tile-gauge').outerHTML=this.gauge();
     }
     zoom(factor,anchor=.5){if(!this.base)return;this.view=zoomView(this.view,this.base,factor,anchor);this.draw();}
+    selection(){
+      if(this.selectedTime==null)return [];
+      const tolerance=Math.max((this.view.to-this.view.from)/30,10000);
+      return this.series.map((series,index)=>{
+        const point=series.points.filter(p=>C.finite(p.v)&&p.t>=this.view.from&&p.t<=this.view.to).reduce((a,p)=>!a||Math.abs(p.t-this.selectedTime)<Math.abs(a.t-this.selectedTime)?p:a,null);
+        return {series,index,point:point&&Math.abs(point.t-this.selectedTime)<=tolerance?point:null};
+      });
+    }
     pick(clientX){
-      if(!this.plot)return;const canvas=$('detailCanvas'),rect=canvas.getBoundingClientRect(),fraction=C.clamp((clientX-rect.left-this.plot.left)/this.plot.plot,0,1),time=this.view.from+fraction*(this.view.to-this.view.from),span=this.view.to-this.view.from;
-      const rows=this.series.map(s=>{
-        const p=s.points.filter(p=>C.finite(p.v)&&p.t>=this.view.from&&p.t<=this.view.to).reduce((a,p)=>!a||Math.abs(p.t-time)<Math.abs(a.t-time)?p:a,null);
-        return esc(label(s.tile))+': '+(p&&Math.abs(p.t-time)<=Math.max(span/30,10000)?esc(C.format(p.v,s.tile))+' '+esc(s.tile.unit)+' · '+esc(stamp(p.t)):'—');
-      });$('detailTooltip').innerHTML=rows.join('<br>');$('detailTooltip').hidden=false;
+      if(!this.plot)return;
+      const rect=$('detailCanvas').getBoundingClientRect(),fraction=C.clamp((clientX-rect.left-this.plot.left)/this.plot.plot,0,1),time=this.view.from+fraction*(this.view.to-this.view.from);
+      this.selectedTime=time;
+      const nearest=this.selection().find(s=>s.point)?.point;if(nearest)this.selectedTime=nearest.t;
+      this.draw();
     }
     bindGestures(){
       const canvas=$('detailCanvas');
       const start=()=>{const points=[...this.pointers.values()];this.gesture={view:{...this.view},points:copy(points),distance:points.length>1?Math.hypot(points[1].x-points[0].x,points[1].y-points[0].y):0,moved:false};};
-      canvas.onpointerdown=e=>{this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});canvas.setPointerCapture(e.pointerId);start();};
+      canvas.onpointerdown=e=>{
+        clearTimeout(this.pickTimer);this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});canvas.setPointerCapture(e.pointerId);start();
+        this.gesture.selecting=this.pointers.size===1&&this.selectedTime!=null;
+        if(this.pointers.size>1){this.selectedTime=null;this.draw();}
+        else if(this.gesture.selecting)this.pick(e.clientX);
+        else this.pickTimer=setTimeout(()=>{if(this.gesture&&!this.gesture.moved&&this.pointers.size===1){this.gesture.selecting=true;this.pick(e.clientX);}},350);
+      };
       canvas.onpointermove=e=>{
         if(!this.pointers.has(e.pointerId)||!this.gesture||!this.plot)return;e.preventDefault();this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});const points=[...this.pointers.values()],g=this.gesture;
-        if(points.length===1){const dx=points[0].x-g.points[0].x;if(Math.abs(dx)>3)g.moved=true;this.view=panView(g.view,this.base,-dx/this.plot.plot*(g.view.to-g.view.from));}
+        if(points.length===1&&g.selecting){this.pick(points[0].x);return;}
+        if(points.length===1){const dx=points[0].x-g.points[0].x;if(Math.abs(dx)>3){g.moved=true;clearTimeout(this.pickTimer);}this.view=panView(g.view,this.base,-dx/this.plot.plot*(g.view.to-g.view.from));}
         else if(g.points.length>1){
           const distance=Math.max(1,Math.hypot(points[1].x-points[0].x,points[1].y-points[0].y)),center=(g.points[0].x+g.points[1].x)/2,current=(points[0].x+points[1].x)/2;
           const anchor=C.clamp((center-canvas.getBoundingClientRect().left-this.plot.left)/this.plot.plot,0,1),zoomed=zoomView(g.view,this.base,g.distance/distance,anchor);
           this.view=panView(zoomed,this.base,-(current-center)/this.plot.plot*(zoomed.to-zoomed.from));g.moved=true;
         }this.draw();
       };
-      const end=e=>{if(!this.pointers.has(e.pointerId))return;const tap=this.pointers.size===1&&!this.gesture?.moved;this.pointers.delete(e.pointerId);if(tap&&e.type!=='pointercancel')this.pick(e.clientX);if(this.pointers.size)start();else this.gesture=null;};
+      const end=e=>{clearTimeout(this.pickTimer);if(!this.pointers.has(e.pointerId))return;const tap=this.pointers.size===1&&!this.gesture?.moved;this.pointers.delete(e.pointerId);if((tap||this.gesture?.selecting)&&e.type!=='pointercancel')this.pick(e.clientX);if(this.pointers.size)start();else this.gesture=null;};
       canvas.onpointerup=end;canvas.onpointercancel=end;
       canvas.addEventListener('wheel',e=>{e.preventDefault();const rect=canvas.getBoundingClientRect();this.zoom(Math.exp(C.clamp(e.deltaY,-400,400)*.003),C.clamp((e.clientX-rect.left-this.plot.left)/this.plot.plot,0,1));},{passive:false});
     }

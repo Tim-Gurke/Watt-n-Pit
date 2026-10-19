@@ -233,13 +233,31 @@
     if(mode==='today')return today;
     try {
       const dayFormat=new Intl.DateTimeFormat('en-CA',{timeZone:weather.timezone||undefined,year:'numeric',month:'2-digit',day:'2-digit'});
-      const day=dayFormat.format(new Date(now)),rise=(weather.days||[]).find(d=>d.day===day)?.sunrise;
+      const day=dayFormat.format(new Date(now)),sun=(weather.days||[]).find(d=>d.day===day),rise=sun?.sunrise,set=sun?.sunset;
       if(finite(rise)&&Number(rise)>0&&dayFormat.format(new Date(Number(rise)))===day){
-        if(Number(rise)<now)return {from:Number(rise),to:now,solarFrom:Number(rise),label:'Seit Sonnenaufgang',note:'Sonnenaufgang am gewählten Wetterort.'};
-        return {...today,solarFrom:Number(rise),note:'Heute: Der Sonnenaufgang am Wetterort steht noch bevor.'};
+        const validSet=finite(set)&&Number(set)>Number(rise)&&dayFormat.format(new Date(Number(set)))===day;
+        const bounds={solarFrom:Number(rise),solarTo:validSet?Number(set):now,dayFrom:today.from,dayTo:now};
+        if(Number(rise)<now)return {from:Number(rise),to:validSet?Math.min(now,Number(set)):now,...bounds,label:'Seit Sonnenaufgang',note:validSet?'Solarfenster am Wetterort; gemessener Ertrag davor oder danach wird mitgezählt.':'Sonnenuntergang nicht verfügbar: Solarfenster bis jetzt. Gemessener früher Ertrag zählt mit.'};
+        return {...today,...bounds,note:'Heute: Der Sonnenaufgang am Wetterort steht noch bevor. Gemessener früher Ertrag zählt mit.'};
       }
     }catch(_){}
     return {...today,note:'Heute: Sonnenaufgang nicht verfügbar. Wetterort wählen oder Wetter aktualisieren.'};
   }
-  return {CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow};
+  function solarQueryWindow(window){return {from:window.dayFrom??window.from,to:window.dayTo??window.to};}
+  function solarPlotWindow(window,points=[],summary=null){
+    if(window.solarFrom==null)return window;
+    if(summary&&finite(summary.from)&&finite(summary.to))return {...window,from:Number(summary.from),to:Number(summary.to)};
+    let from=window.from,to=window.to;
+    const solar=points.filter(p=>(!p.kind||p.kind==='solar')&&finite(p.v)&&Number(p.v)>=0).sort((a,b)=>a.t-b.t);
+    for(let i=0;i<solar.length;i++){
+      const p=solar[i];if(Math.max(Number(p.v),Number(p.max)||0)<=0)continue;
+      let start=p.t,end=p.last||p.t;
+      const before=solar[i-1],after=solar[i+1],limit=Math.max(90000,(p.period||0)*1500);
+      if(before&&p.t-(before.last||before.t)<=limit)start=before.t;
+      if(after&&after.t-end<=limit)end=after.last||after.t;
+      from=Math.min(from,start);to=Math.max(to,end);
+    }
+    return {...window,from:Math.max(window.dayFrom??window.from,from),to:Math.min(window.dayTo??window.to,to)};
+  }
+  return {CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow,solarQueryWindow,solarPlotWindow};
 });

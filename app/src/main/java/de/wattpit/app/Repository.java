@@ -28,9 +28,17 @@ final class Repository {
     private String event = "";
     private Repository(Context context) { this.context=context;prefs = context.getSharedPreferences("wattpit", Context.MODE_PRIVATE); db = new HistoryDb(context); }
 
-    private JSONObject archive=new JSONObject();
+    private volatile JSONObject archive=new JSONObject();
+    /** No database or Repository monitor: progress/cancellation must survive expensive imports. */
+    String syncState(){
+        try{return new JSONObject().put("busy",archiveBusy).put("archive",archive)
+                .put("cockpitNoticeAccepted",prefs.getBoolean("cockpitNotice-v1",false))
+                .put("theme",prefs.getString("theme","dark")).put("palette",prefs.getString("palette","classic")).toString();}
+        catch(JSONException e){return "{}";}
+    }
     synchronized void archiveState(String mac,boolean active,String text,int done,int total){
-        try{archive=new JSONObject().put("mac",mac).put("active",active).put("text",text).put("done",done).put("total",total).put("updated",System.currentTimeMillis());}catch(JSONException ignored){}
+        try{String device="";JSONArray list=configs();for(int i=0;i<list.length();i++){JSONObject c=list.getJSONObject(i);if(mac.equals(c.optString("mac"))){device=(c.optString("kind").equals("solar")?"SmartSolar":"SmartShunt")+" · "+c.optString("name");break;}}
+            archive=new JSONObject().put("mac",mac).put("device",device).put("active",active).put("text",text).put("done",done).put("total",total).put("updated",System.currentTimeMillis());}catch(JSONException ignored){}
     }
     synchronized void finishArchiveIfActive(){
         if(archive.optBoolean("active"))archiveState(archive.optString("mac"),false,"Archivimport beendet. Bereits gelesene Werte bleiben gespeichert.",archive.optInt("done"),archive.optInt("total"));
@@ -40,7 +48,7 @@ final class Repository {
         JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));all.put(kind,result);prefs.edit().putString("archiveDiagnostics",all.toString()).apply();
     }
     synchronized String diagnosticText()throws JSONException{
-        JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));StringBuilder text=new StringBuilder("Watt’n’Pit 1.2.3 · Archivdiagnose\n");
+        JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));StringBuilder text=new StringBuilder("Watt’n’Pit "+BuildConfig.VERSION_NAME+" · Archivdiagnose\n");
         for(String kind:new String[]{"solar","shunt"}){
             JSONObject d=all.optJSONObject(kind);if(d==null)continue;text.append(kind.equals("solar")?"\nSolarladeregler\n":"\nBatteriewächter\n");
             text.append(d.optString("result")).append('\n');JSONArray lines=d.optJSONArray("steps");if(lines!=null)for(int i=0;i<lines.length();i++)text.append("· ").append(lines.getString(i)).append('\n');

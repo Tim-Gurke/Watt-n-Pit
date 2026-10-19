@@ -259,3 +259,28 @@ test('non-daily comparisons share a period while daily solar may start at sunris
   const now=Date.parse('2026-10-18T02:00:00Z'),rise=Date.parse('2026-10-18T05:45:00Z');
   assert.equal(C.miniWindow('sunrise',{timezone:'Europe/Berlin',days:[{day:'2026-10-18',sunrise:rise}]},now).solarFrom,rise);
 });
+
+test('sunset caps the solar axis while the query still includes the entire day',()=>{
+ const now=Date.parse('2026-10-18T20:00:00Z'),rise=Date.parse('2026-10-18T05:45:00Z'),set=Date.parse('2026-10-18T16:15:00Z');
+ const weather={timezone:'Europe/Berlin',days:[{day:'2026-10-18',sunrise:rise,sunset:set}]},w=C.miniWindow('sunrise',weather,now);
+ assert.equal(w.from,rise);assert.equal(w.to,set);assert.equal(w.solarTo,set);
+ assert.equal(C.solarQueryWindow(w).to,now);assert.ok(C.solarQueryWindow(w).from<rise);
+ const early=rise-60000,late=set+60000;
+ const extended=C.solarPlotWindow(w,[{t:early,v:10,kind:'solar'},{t:late,v:5,kind:'solar'},{t:now,v:-50,kind:'shunt'}]);
+ assert.equal(extended.from,early);assert.equal(extended.to,late);
+ assert.equal(C.solarPlotWindow(w,[{t:now,v:0,kind:'solar'}]).to,set);
+ assert.equal(C.solarPlotWindow(w,[{t:now,v:NaN,kind:'solar'}]).to,set);
+ assert.equal(C.miniWindow('today',weather,now).to,now);
+});
+test('missing sunset uses a labeled fallback and unrelated custom windows keep their bounds',()=>{
+ const now=Date.parse('2026-10-18T20:00:00Z'),rise=Date.parse('2026-10-18T05:45:00Z');
+ for(const sunset of [null,0,NaN,rise-1,Date.parse('2026-10-19T16:15:00Z')]){
+  const w=C.miniWindow('sunrise',{timezone:'Europe/Berlin',days:[{day:'2026-10-18',sunrise:rise,sunset}]},now);
+  assert.equal(w.to,now);assert.match(w.note,/Sonnenuntergang nicht verfügbar/);
+ }
+ const custom={from:100,to:200};assert.deepEqual(C.solarPlotWindow(custom,[{t:90,v:99}]),custom);
+});
+test('solar energy axis uses native observed bounds without reading cumulative Wh as ongoing production',()=>{
+ const w={from:100,to:200,solarFrom:100,solarTo:200,dayFrom:0,dayTo:300};
+ assert.deepEqual(C.solarPlotWindow(w,[{t:300,v:200}],{from:50,to:250}),{...w,from:50,to:250});
+});

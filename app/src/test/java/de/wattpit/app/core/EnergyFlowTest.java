@@ -55,7 +55,7 @@ public class EnergyFlowTest {
         assertTrue(f.balance.points.stream().anyMatch(p->p.time==1800000&&Math.abs(p.wh-7.5)<1e-9));
     }
     @Test public void sunriseYieldStillIncludesThePreviousNightInConsumptionAndBalance(){
-        EnergyIntegral.Flow f=EnergyIntegral.flow(constant(100),constant(-50),0,3600000,1800000);
+        EnergyIntegral.Flow f=EnergyIntegral.flow(Arrays.asList(sample(1800,100,1800,"archive"),sample(3600,100,1800,"archive")),constant(-50),0,3600000,1800000);
         assertEquals(50,f.solar.wh,1e-9);assertEquals(100,f.consumption.wh,1e-9);assertEquals(-50,f.balance.wh,1e-9);
         assertEquals(1800000,f.solar.coveredMillis);assertEquals(3600000,f.consumption.coveredMillis);
         assertEquals(1800000,f.solar.points.get(0).time);
@@ -69,5 +69,48 @@ public class EnergyFlowTest {
         EnergyIntegral.Flow f=EnergyIntegral.flow(Collections.emptyList(),constant(-60),0,1200000,1800000);
         assertEquals(0,f.solar.wh,0);assertEquals(20,f.consumption.wh,1e-9);assertEquals(-20,f.balance.wh,1e-9);
         assertEquals(1200000,f.balance.coveredMillis);
+    }
+
+    @Test public void positiveProductionBeforeSunriseAlwaysCounts(){
+        EnergyIntegral.Flow f=EnergyIntegral.flow(constant(100),constant(-50),0,3600000,1800000);
+        totals(f,100,150,-50,3600000);assertEquals(0,f.solarFrom);
+    }
+    @Test public void sunsetStopsSolarButNeverStopsEveningConsumption(){
+        List<EnergyIntegral.Sample> s=Arrays.asList(sample(900,100,1800,"archive"),sample(2700,100,1800,"archive"));
+        EnergyIntegral.Flow f=EnergyIntegral.flow(s,constant(-50),0,3600000,900000,2700000);
+        assertEquals(50,f.solar.wh,1e-9);assertEquals(100,f.consumption.wh,1e-9);assertEquals(-50,f.balance.wh,1e-9);
+        assertEquals(1800000,f.solar.coveredMillis);assertEquals(3600000,f.consumption.coveredMillis);assertEquals(2700000,f.solarTo);
+        assertEquals(f.solar.wh-f.consumption.wh,f.balance.wh,1e-9);
+    }
+    @Test public void measuredEarlyAndLateProductionExtendBothBoundsWithoutDoubleCounting(){
+        List<EnergyIntegral.Sample> s=Arrays.asList(sample(0,0,900,"archive"),sample(900,100,900,"archive"),sample(1800,100,900,"archive"),sample(2700,0,900,"archive"),sample(3600,0,900,"archive"));
+        EnergyIntegral.Flow f=EnergyIntegral.flow(s,constant(-50),0,3600000,1200000,2100000);
+        assertEquals(50,f.solar.wh,1e-9);assertEquals(100,f.consumption.wh,1e-9);assertEquals(-50,f.balance.wh,1e-9);
+        assertEquals(0,f.solarFrom);assertEquals(2700000,f.solarTo);assertEquals(3600000,f.balance.coveredMillis);
+    }
+    @Test public void earlyRealProductionBeforeFutureSunriseIsNotDiscarded(){
+        EnergyIntegral.Flow f=EnergyIntegral.flow(constant(100),constant(-50),0,1200000,1800000,3000000);
+        assertEquals(100.0/3,f.solar.wh,1e-9);assertEquals(50,f.consumption.wh,1e-9);assertEquals(-50.0/3,f.balance.wh,1e-9);
+        assertEquals(0,f.solarFrom);assertEquals(1200000,f.solarTo);
+    }
+    @Test public void internalDaylightGapsStayUnknownWithNightZeroesOnEitherSide(){
+        List<EnergyIntegral.Sample> s=Arrays.asList(sample(600,60,0,"live"),sample(660,60,0,"live"),sample(1200,60,0,"live"),sample(1260,60,0,"live"));
+        EnergyIntegral.Flow f=EnergyIntegral.flow(s,constant(-60),0,3600000,600000,1260000);
+        assertEquals(2,f.solar.wh,1e-9);assertEquals(3060000,f.balance.coveredMillis);
+        assertEquals(f.solar.wh-f.consumption.wh,f.balance.wh,1e-9);
+        assertTrue(f.solar.points.stream().anyMatch(p->p.time==1200000&&p.gap));
+    }
+    @Test public void lowerPriorityPositiveArchiveCannotExtendAZeroLiveWindow(){
+        List<EnergyIntegral.Sample> s=new ArrayList<>(constant(900));s.add(sample(0,0,3600,"live"));s.add(sample(3600,0,3600,"live"));
+        EnergyIntegral.Flow f=EnergyIntegral.flow(s,constant(-50),0,3600000,900000,2700000);
+        assertEquals(0,f.solar.wh,1e-9);assertEquals(900000,f.solarFrom);assertEquals(2700000,f.solarTo);
+    }
+    @Test public void anIsolatedPointOrInvalidPowerCannotInventSolarEnergy(){
+        EnergyIntegral.Flow f=EnergyIntegral.flow(Arrays.asList(sample(300,200,0,"live"),sample(600,Double.NaN,0,"live")),constant(-50),0,3600000,900000,2700000);
+        assertNull(f.solar.wh);assertEquals(900000,f.solarFrom);assertEquals(2700000,f.solarTo);
+    }
+    @Test public void aWindowEntirelyAfterSunsetHasZeroSolarAndStillCountsConsumption(){
+        EnergyIntegral.Flow f=EnergyIntegral.flow(Collections.emptyList(),constant(-60),1800000,3600000,900000,1200000);
+        assertEquals(0,f.solar.wh,0);assertEquals(30,f.consumption.wh,1e-9);assertEquals(-30,f.balance.wh,1e-9);
     }
 }

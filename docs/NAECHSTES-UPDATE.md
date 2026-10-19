@@ -1,4 +1,4 @@
-# Für das nächste Update vorgemerkt
+# Mit 1.2.5 umgesetzt
 
 ## Solarfenster an Sonnenzeiten und tatsächliche Erzeugung anpassen
 
@@ -21,7 +21,7 @@ Wunsch vom 19. Oktober 2026: Watt’n’Pit ergänzt die Victron-Software als En
 - Diesen Hinweis gut sichtbar auf der Geräteseite und bei den App-Einstellungen aufnehmen, ohne die Übersicht mit einer zusätzlichen dauerhaften Kachel zu belegen.
 - Geplanter Wortlaut: „Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht. Einstellungen an Solarregler und SmartShunt werden weiterhin in VictronConnect vorgenommen. Die Einstellungen hier betreffen nur Watt’n’Pit.“
 - Bei der Batteriekapazität und den Angaben zur Solaranlage ausdrücklich erklären, dass diese nur der Auswertung und Darstellung in der App dienen und nicht in die Geräte geschrieben werden.
-- Der entsprechende Hinweis steht bereits am Anfang der Projektbeschreibung und Anleitung. Die Ergänzung der App-Oberfläche folgt mit dem nächsten Update.
+- Der entsprechende Hinweis steht bereits am Anfang der Projektbeschreibung und Anleitung. Die App-Oberfläche enthält den Hinweis ab 1.2.5.
 
 ## Synchronisation deutlich anzeigen; normale Bedienung darf pausieren
 
@@ -34,4 +34,8 @@ Beobachtung vom 19. Oktober 2026: Während der Synchronisation reagieren Schaltf
 - Warteanzeige und Fortschritt müssen weiter aktualisiert werden. Eine absichtliche Bedienungssperre ist akzeptiert; eine vollständig eingefrorene Statusanzeige oder ein unwirksames Abbrechen bleiben zu untersuchen.
 - Status zuerst sichtbar rendern und Datenbankarbeit sowie Neuberechnungen so organisieren, dass Warteanzeige und Abbrechen auch bei größeren Importen reagieren. Synchrone Snapshot-/Verlaufs-/Energieabfragen und Neuberechnungen nach jeder importbedingten Datenrevision als mögliche Engpässe prüfen; die konkrete Ursache ist noch nicht nachgewiesen. Eine generell uneingeschränkte Bedienbarkeit aller App-Seiten ist für diese Änderung nicht erforderlich.
 
-Status: vorgemerkt; noch nicht in der veröffentlichten Version 1.2.4 umgesetzt.
+Status: in 1.2.5 umgesetzt. Siehe [Versionshinweise](releases/1.2.5.md) und [Anleitung](ANLEITUNG.md).
+
+## Verschiebbare Messpunktauswahl in der Großansicht
+
+Wunsch vom 19. Oktober 2026: Ein ausgewählter Kurvenwert erhält einen Punkt und eine senkrechte Linie. Während der Auswahl lässt sich die Markierung mit dem Finger verschieben; Uhrzeit und Werte folgen. **Auswahl aufheben** gibt das Verschieben des Zeitraums wieder frei.

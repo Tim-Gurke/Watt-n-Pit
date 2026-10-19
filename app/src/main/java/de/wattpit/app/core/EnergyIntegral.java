@@ -45,7 +45,8 @@ public final class EnergyIntegral {
     }
     public static final class Flow {
         public final Result solar,consumption,balance;
-        Flow(Result solar,Result consumption,Result balance){this.solar=solar;this.consumption=consumption;this.balance=balance;}
+        public final long solarFrom,solarTo;
+        Flow(Result solar,Result consumption,Result balance,long from,long to){this.solar=solar;this.consumption=consumption;this.balance=balance;solarFrom=from;solarTo=to;}
     }
     /** All three values use only the intersection of observed Solar and Shunt intervals. */
     public static Flow flow(List<Sample> solar,List<Sample> battery,long from,long to) {
@@ -53,25 +54,33 @@ public final class EnergyIntegral {
     }
     /** Solar starts at solarFrom; earlier consumption is derived from observed Shunt data alone. */
     public static Flow flow(List<Sample> solar,List<Sample> battery,long from,long to,long solarFrom) {
+        return flow(solar,battery,from,to,solarFrom,to);
+    }
+    /** Sun times bound assumed night-time zeroes; observed production always extends them. */
+    public static Flow flow(List<Sample> solar,List<Sample> battery,long from,long to,long solarFrom,long solarTo) {
         if(from<0||to<=from)throw new IllegalArgumentException("Ungültiger Zeitraum.");
-        solarFrom=Math.max(from,solarFrom);
-        List<Interval> s=solarFrom<to?intervals(solar,solarFrom,to,false):new ArrayList<>(),b=intervals(battery,from,to,true);
-        if(solarFrom>from)s.add(0,new Interval(from,Math.min(solarFrom,to),0,0));
+        solarFrom=Math.max(from,Math.min(to,solarFrom));solarTo=Math.max(solarFrom,Math.min(to,solarTo));
+        List<Interval> observed=intervals(solar,from,to,false),s=new ArrayList<>(),b=intervals(battery,from,to,true);
+        for(Interval x:observed)if(x.a>0||x.b>0){solarFrom=Math.min(solarFrom,x.from);solarTo=Math.max(solarTo,x.to);}
+        if(solarFrom>from)s.add(new Interval(from,solarFrom,0,0));
+        for(Interval x:observed){long start=Math.max(solarFrom,x.from),end=Math.min(solarTo,x.to);if(end>start)s.add(new Interval(start,end,x.value(start),x.value(end)));}
+        if(solarTo<to)s.add(new Interval(solarTo,to,0,0));
         List<Interval> generation=new ArrayList<>(),loads=new ArrayList<>(),net=new ArrayList<>();
         int i=0,j=0;
         while(i<s.size()&&j<b.size()){
             Interval x=s.get(i),y=b.get(j);long start=Math.max(x.from,y.from),end=Math.min(x.to,y.to);
             if(end>start){
                 double sa=x.value(start),sb=x.value(end),ba=y.value(start),bb=y.value(end);
-                if(end>solarFrom)generation.add(new Interval(start,end,sa,sb));
+                long gs=Math.max(start,solarFrom),ge=Math.min(end,solarTo);
+                if(ge>gs)generation.add(new Interval(gs,ge,x.value(gs),x.value(ge)));
                 // Keep signed residuals: an unmetered charger can make calculated consumption negative.
                 loads.add(new Interval(start,end,sa-ba,sb-bb));net.add(new Interval(start,end,ba,bb));
             }
             if(x.to<=y.to)i++;if(y.to<=x.to)j++;
         }
-        Result yield=integrate(generation,Math.min(solarFrom,to),to,false,true);
-        if(solarFrom>=to)yield.wh=0.0;
-        return new Flow(yield,integrate(loads,from,to,false,true),integrate(net,from,to,false,true));
+        Result yield=integrate(generation,solarFrom,solarTo,false,true);
+        if(solarFrom==solarTo)yield.wh=0.0;
+        return new Flow(yield,integrate(loads,from,to,false,true),integrate(net,from,to,false,true),solarFrom,solarTo);
     }
     /** One configured device per kind. Overlapping sources/archives contribute once. */
     public static Result calculate(List<Sample> samples,long from,long to,boolean discharge) {

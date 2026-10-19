@@ -183,12 +183,15 @@ final class HistoryDb extends SQLiteOpenHelper {
         return energyFlow(from,to,from,source);
     }
     JSONObject energyFlow(long from,long to,long solarFrom,String source) throws Exception {
+        return energyFlow(from,to,solarFrom,to,source);
+    }
+    JSONObject energyFlow(long from,long to,long solarFrom,long solarTo,String source) throws Exception {
         to=Math.min(to,System.currentTimeMillis());
         solarFrom=Math.max(from,solarFrom);
-        EnergyIntegral.Flow flow=to>from?EnergyIntegral.flow(solarFrom<to?powerSamples(solarFrom,to,"solar",source):new ArrayList<>(),powerSamples(from,to,"batteryPower",source),from,to,solarFrom):null;
+        EnergyIntegral.Flow flow=to>from?EnergyIntegral.flow(powerSamples(from,to,"solar",source),powerSamples(from,to,"batteryPower",source),from,to,solarFrom,solarTo):null;
         JSONObject out=new JSONObject();String[] kinds={"solar","consumption","balance"};
         EnergyIntegral.Result[] results=flow==null?new EnergyIntegral.Result[]{new EnergyIntegral.Result(),new EnergyIntegral.Result(),new EnergyIntegral.Result()}:new EnergyIntegral.Result[]{flow.solar,flow.consumption,flow.balance};
-        for(int i=0;i<kinds.length;i++)out.put(kinds[i],energyJson(results[i],i==0?Math.min(solarFrom,to):from,to,kinds[i]));
+        for(int i=0;i<kinds.length;i++)out.put(kinds[i],energyJson(results[i],i==0&&flow!=null?flow.solarFrom:from,i==0&&flow!=null?flow.solarTo:to,kinds[i]));
         return out;
     }
 

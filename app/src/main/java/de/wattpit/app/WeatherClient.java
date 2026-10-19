@@ -52,19 +52,20 @@ final class WeatherClient {
         NETWORK.execute(()->{
             try {
                 JSONObject cached=new JSONObject(repository.prefs.getString("weatherCache","{}"));
-                if(!force&&cached.optInt("version")==2&&System.currentTimeMillis()-cached.optLong("updated")<6*3600000L)return;
+                if(!force&&cached.optInt("version")==3&&System.currentTimeMillis()-cached.optLong("updated")<6*3600000L)return;
                 JSONObject p=new JSONObject(place);
-                JSONObject result=get("https://api.open-meteo.com/v1/forecast?latitude="+p.getDouble("latitude")+"&longitude="+p.getDouble("longitude")+"&daily=weather_code,sunshine_duration,sunrise&forecast_days=14&timezone=auto");
+                JSONObject result=get("https://api.open-meteo.com/v1/forecast?latitude="+p.getDouble("latitude")+"&longitude="+p.getDouble("longitude")+"&daily=weather_code,sunshine_duration,sunrise,sunset&forecast_days=14&timezone=auto");
                 JSONObject daily=result.getJSONObject("daily");JSONArray dates=daily.getJSONArray("time"),codes=daily.getJSONArray("weather_code"),sun=daily.getJSONArray("sunshine_duration"),days=new JSONArray();
-                JSONArray rises=daily.optJSONArray("sunrise");
+                JSONArray rises=daily.optJSONArray("sunrise"),sets=daily.optJSONArray("sunset");
                 for(int i=0;i<Math.min(14,dates.length());i++){
                     String date=dates.getString(i);LocalDate.parse(date);
                     Object hours=JSONObject.NULL;if(!sun.isNull(i)){double seconds=sun.getDouble(i);if(Double.isFinite(seconds)&&seconds>=0&&seconds<=86400)hours=seconds/3600;}
                     long sunrise=SunriseTime.parse(date,rises==null?"":rises.optString(i),result.optString("timezone"));
-                    days.put(new JSONObject().put("day",date).put("code",codes.isNull(i)?JSONObject.NULL:codes.getInt(i)).put("hours",hours).put("sunrise",sunrise>0?sunrise:JSONObject.NULL));
+                    long sunset=SunriseTime.parse(date,sets==null?"":sets.optString(i),result.optString("timezone"));
+                    days.put(new JSONObject().put("day",date).put("code",codes.isNull(i)?JSONObject.NULL:codes.getInt(i)).put("hours",hours).put("sunrise",sunrise>0?sunrise:JSONObject.NULL).put("sunset",sunset>sunrise&&sunrise>0?sunset:JSONObject.NULL));
                 }
                 if(days.length()==0)throw new IOException();
-                JSONObject cache=new JSONObject().put("version",2).put("place",p).put("updated",System.currentTimeMillis()).put("days",days).put("timezone",result.optString("timezone"));
+                JSONObject cache=new JSONObject().put("version",3).put("place",p).put("updated",System.currentTimeMillis()).put("days",days).put("timezone",result.optString("timezone"));
                 if(place.equals(repository.prefs.getString("weatherPlace","")))repository.prefs.edit().putString("weatherCache",cache.toString()).remove("weatherError").apply();
             }catch(Exception e){if(place.equals(repository.prefs.getString("weatherPlace","")))repository.prefs.edit().putString("weatherError","Wetter gerade nicht erreichbar. Gespeicherte Vorschau bleibt verfügbar.").apply();}
             finally {BUSY.set(false);if(!place.equals(repository.prefs.getString("weatherPlace","")))refresh(repository,false);}

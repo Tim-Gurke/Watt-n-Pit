@@ -3,12 +3,13 @@ plugins { id 'com.android.application' }
 android {
     namespace 'de.wattpit.app'
     compileSdk 35
+    buildFeatures { buildConfig true }
     defaultConfig {
         applicationId 'de.wattpit.app'
         minSdk 26
         targetSdk 35
-        versionCode 18
-        versionName '1.2.4'
+        versionCode 19
+        versionName '1.2.5'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
     compileOptions {
