@@ -22,6 +22,9 @@ final class Repository {
     private final Map<String,Long> stored = new HashMap<>();
     volatile boolean running = false;
     volatile boolean archiveBusy=false;
+    final ArchiveRun archiveRun=new ArchiveRun();
+    private volatile String lastSnapshot="{}";
+    private volatile long lastSnapshotAt;
     volatile String status = "Aufzeichnung pausiert";
     private JSONObject cachedStats = new JSONObject();
     private long statsTime, eventId,historyRevision;
@@ -31,10 +34,33 @@ final class Repository {
     private volatile JSONObject archive=new JSONObject();
     /** No database or Repository monitor: progress/cancellation must survive expensive imports. */
     String syncState(){
-        try{return new JSONObject().put("busy",archiveBusy).put("archive",archive)
+        try{ArchiveRun.State run=archiveRun.state();return new JSONObject().put("busy",run.busy).put("runId",run.id).put("startedAt",run.startedAt).put("background",run.background).put("archive",archive)
                 .put("cockpitNoticeAccepted",prefs.getBoolean("cockpitNotice-v1",false))
                 .put("theme",prefs.getString("theme","dark")).put("palette",prefs.getString("palette","classic")).toString();}
         catch(JSONException e){return "{}";}
+    }
+    private JSONObject settingsSnapshot()throws JSONException{
+        return new JSONObject().put("theme",prefs.getString("theme","dark")).put("palette",prefs.getString("palette","classic"))
+            .put("miniRange",prefs.getString("miniRange","sunrise")).put("weatherPlace",new JSONObject(prefs.getString("weatherPlace","{}")))
+            .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10));
+    }
+    /** Frozen history/statistics plus current app settings, without database or monitor waits. */
+    String backgroundSnapshot(){
+        try{
+            JSONObject result=new JSONObject(lastSnapshot);
+            JSONArray devices=new JSONArray(),list=new JSONArray(prefs.getString("devices","[]")),previous=result.optJSONArray("devices");
+            for(int i=0;i<list.length();i++){
+                JSONObject c=list.getJSONObject(i),device=new JSONObject();
+                if(previous!=null)for(int j=0;j<previous.length();j++)if(c.optString("mac").equals(previous.getJSONObject(j).optString("mac"))){device=new JSONObject(previous.getJSONObject(j).toString());break;}
+                devices.put(device.put("mac",c.optString("mac")).put("name",c.optString("name")).put("kind",c.optString("kind")).put("hasKey",true));
+            }
+            result.put("devices",devices);
+            if(!result.has("readings"))result.put("found",new JSONArray()).put("readings",new JSONArray()).put("stats",new JSONObject());
+            return result.put("syncing",true).put("dataAt",lastSnapshotAt).put("settings",settingsSnapshot()).put("running",running).put("status",status)
+                .put("equipment",new JSONObject(prefs.getString("equipment-v1","{\"version\":1,\"groups\":[]}")))
+                .put("archive",archive).put("archiveBusy",archiveBusy).put("weather",new JSONObject(prefs.getString("weatherCache","{}")))
+                .put("weatherError",prefs.getString("weatherError","")).toString();
+        }catch(JSONException e){return "{\"syncing\":true}";}
     }
     synchronized void archiveState(String mac,boolean active,String text,int done,int total){
         try{String device="";JSONArray list=configs();for(int i=0;i<list.length();i++){JSONObject c=list.getJSONObject(i);if(mac.equals(c.optString("mac"))){device=(c.optString("kind").equals("solar")?"SmartSolar":"SmartShunt")+" · "+c.optString("name");break;}}
@@ -164,11 +190,11 @@ final class Repository {
             if (now - f.getLong("seen") > 120_000) iterator.remove(); else discovery.put(f);
         }
         if (now - statsTime > 30_000) { cachedStats = db.stats(); statsTime = now; }
-        return new JSONObject().put("historyRevision",historyRevision).put("running",running).put("status",status).put("devices",devices).put("found",discovery)
+        JSONObject result=new JSONObject().put("dataAt",now).put("archiveBusy",archiveBusy).put("historyRevision",historyRevision).put("running",running).put("status",status).put("devices",devices).put("found",discovery)
                 .put("equipment",equipment()).put("archiveDiagnostics",new JSONObject(prefs.getString("archiveDiagnostics","{}"))).put("archive",archive).put("deviceHistory",db.histories()).put("weatherError",prefs.getString("weatherError","")).put("weather",new JSONObject(prefs.getString("weatherCache","{}"))).put("readings",readings).put("stats",cachedStats).put("solarDaily",db.daily()).put("event",event).put("eventId",eventId)
-                .put("settings",new JSONObject().put("theme",prefs.getString("theme","dark"))
-                    .put("palette",prefs.getString("palette","classic")).put("miniRange",prefs.getString("miniRange","sunrise")).put("weatherPlace",new JSONObject(prefs.getString("weatherPlace","{}")))
-                    .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10)));
+                .put("settings",settingsSnapshot());
+        if(!archiveBusy){lastSnapshot=result.toString();lastSnapshotAt=now;}
+        return result;
     }
     synchronized void invalidateStats() { statsTime = 0;historyRevision++; }
     void saveSettings(JSONObject settings) throws Exception { settingsEditor(settings).apply(); }

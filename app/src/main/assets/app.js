@@ -1,6 +1,20 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const native = window.WattPit || null;
+const deviceNative=window.WattPit||null;
+let readRepaint,readsDirty=false;
+function repaintReads(){
+  if(!readsDirty||lifecycle?.blocked)return;
+  readsDirty=false;dashboard?.cache.clear();lastMiniLoad=0;
+  if(page==='overview'){renderOverview();loadMini(true);}
+  if(page==='history')loadHistory();
+  dashboard?.detail?.refresh(false);
+}
+const reads=deviceNative&&window.WattReadBridge?new window.WattReadBridge(deviceNative,()=>{
+  readsDirty=true;clearTimeout(readRepaint);readRepaint=setTimeout(repaintReads,80);
+}):null;
+const native=reads?.bridge||deviceNative;
+window.onHistoryResult=result=>reads?.result(result);
+const dataTime=()=>lifecycle?.busy?lifecycle.startedAt||Date.now():Date.now();
 const icons = {
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/>',
   moon:'<path d="M20 14a8.2 8.2 0 0 1-10-10A8.5 8.5 0 1 0 20 14Z"/>',
@@ -26,7 +40,7 @@ let snapshot = {running:false,status:'Aufzeichnung pausiert',devices:[],found:[]
 let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastMiniLoad = 0, miniPoints = [], miniWindow = null, miniKey = '', energyData = null;
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
-let currentImport = null, lastHistoryRevision=-1;
+let currentImport = null, lastHistoryRevision=-1, historyPending=false;
 let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null;
 const overviewLandscape = window.matchMedia('(orientation: landscape)');
 
@@ -145,6 +159,7 @@ function poll() {
     const count = snapshot.stats?.count || 0;
     $('historyStats').innerHTML = `<span class="info-symbol">i</span><p>${demo?'Demo zeigt erfundene Beispieldaten.':count?`${num(count)} gespeicherte Messpunkte${snapshot.stats.archiveCount?` · ${num(snapshot.stats.archiveCount)} aus dem Gerätearchiv`:''}${snapshot.stats.from?` · ab ${date(snapshot.stats.from)}`:''}. Der Export enthält alle gespeicherten Daten.`:'Noch keine gespeicherten Messpunkte. Starte die Aufzeichnung oder ergänze das Gerätearchiv.'}</p>`;
   }
+  repaintReads();
 }
 function toggleRecord() {
   if (!native) { toast('Bluetooth-Empfang ist in der Android-App verfügbar.'); return; }
@@ -162,7 +177,7 @@ function closeModal() {
   currentImport = null; $('modal').hidden = true; $('modalBody').innerHTML = ''; document.body.style.overflow = '';
 }
 window.handleBack = () => {
-  if(lifecycle?.blocked)return true;
+  if(lifecycle?.back())return true;
   if (!$('modal').hidden) { closeModal(); return true; }
   if (dashboard?.detail?.active) { dashboard.detail.close(); return true; }
   if (page !== 'overview') { showPage('overview'); return true; }
@@ -227,15 +242,17 @@ function sampleDemo(from,to,chosen) {
 function loadHistory() {
   if(lifecycle?.blocked||!viewFrom)return;
   clearTimeout(loadTimer);
-  energyData=null;
+  energyData=null;historyPending=false;
   try{
     if(metric==='energy'){
-      const sun=window.WattDashboardCore.miniWindow('sunrise',snapshot.weather||{}),solarFrom=range==='today'?Math.max(viewFrom,sun.solarFrom??viewFrom):viewFrom,solarTo=range==='today'?sun.solarTo??viewTo:viewTo;
+      const sun=window.WattDashboardCore.miniWindow('sunrise',snapshot.weather||{},dataTime()),solarFrom=range==='today'?Math.max(viewFrom,sun.solarFrom??viewFrom):viewFrom,solarTo=range==='today'?sun.solarTo??viewTo:viewTo;
       energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo,solarFrom,solarTo)):native?.energyHistoryWindow?JSON.parse(native.energyHistoryWindow(Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom),Math.ceil(solarTo))):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom))):{};
-      if(energyData.error)throw new Error();
+      if(energyData.error)throw new Error();historyPending=!!energyData.pending;
       points=energyPlotPoints(energyData);
-    }else points=demo?(source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric)):native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)).points || []:[];
+    }else if(demo)points=source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric);
+    else{const data=native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)):{};if(data.error)throw new Error();points=data.points||[];historyPending=!!data.pending;}
   }catch(error){points=[];energyData=null;toast('Der Verlauf konnte nicht geladen werden.');}
+  $('historyReadNote').hidden=!historyPending;$('historyReadNote').textContent=historyPending?'Daten werden im Hintergrund geladen …':'';
   $('energyNote').hidden=metric!=='energy';
   $('energyOptions').hidden=metric!=='energy';
   $('energyNote').textContent=metric==='energy'?energyDescription(energyData):'';
@@ -247,14 +264,14 @@ function delayedHistory(){clearTimeout(loadTimer);loadTimer=setTimeout(loadHisto
 function loadMini(force=false) {
   if(lifecycle?.blocked)return;
   const mode=native?snapshot.settings.miniRange||'sunrise':localStorage.getItem('wattpit-mini-range')||'sunrise';
-  miniWindow=window.WattDashboardCore.miniWindow(mode,snapshot.weather);
+  miniWindow=window.WattDashboardCore.miniWindow(mode,snapshot.weather,dataTime());
   $('miniRange').value=mode;$('miniPeriodLabel').textContent=miniWindow.label.toLocaleUpperCase('de-DE');
   $('miniPeriodNote').textContent=miniWindow.note;$('miniPeriodNote').hidden=!miniWindow.note;
   const key=[mode,Math.floor(miniWindow.from/60000)].join(':');
   if(!force&&key===miniKey&&Date.now()-lastMiniLoad<20000)return;
   miniKey=key;lastMiniLoad=Date.now();
   const query=window.WattDashboardCore.solarQueryWindow(miniWindow);
-  try{miniPoints=demo?sampleDemo(query.from,query.to,'power'):native?JSON.parse(native.history(query.from,query.to,'power','all')).points||[]:[];}
+  try{const data=demo?{points:sampleDemo(query.from,query.to,'power')}:native?JSON.parse(native.history(query.from,query.to,'power','all')):{};miniPoints=data.points||[];if(data.pending){$('miniPeriodNote').textContent='Daten werden im Hintergrund geladen …';$('miniPeriodNote').hidden=false;}}
   catch(error){miniPoints=[];}
   miniWindow=window.WattDashboardCore.solarPlotWindow(miniWindow,miniPoints);
   drawMini();
@@ -417,9 +434,9 @@ $('saveSettings').onclick=()=>{const settings={capacity:Number($('capacitySettin
 $('miniRange').onchange=()=>{const miniRange=$('miniRange').value,error=native?native.settings(JSON.stringify({miniRange})):'';if(error){toast(error);loadMini(true);return;}snapshot.settings.miniRange=miniRange;if(!native)localStorage.setItem('wattpit-mini-range',miniRange);loadMini(true);};
 $('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus');
 for(const [id,name] of [['navOverview','overview'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
-lifecycle=new window.WattLifecycle({native,toast,poll,completed:()=>{lastHistoryRevision=-1;lastMiniLoad=0;dashboard?.cache.clear();}});
+lifecycle=new window.WattLifecycle({native,toast,poll,stateChanged:state=>reads?.state(state),completed:()=>{lastHistoryRevision=-1;lastMiniLoad=0;dashboard?.cache.clear();}});
 lifecycle.poll();
-dashboard = new window.WattDashboard({native,isBlocked:()=>lifecycle.blocked,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
+dashboard = new window.WattDashboard({native,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
 extras = new window.WattExtras({native,getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
 configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,dashboard,equipment,openModal,closeModal,toast,applied:backup=>{

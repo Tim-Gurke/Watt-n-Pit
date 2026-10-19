@@ -171,7 +171,7 @@
     }
     update() {
       if(this.a.isBlocked?.()||!this.a.getSnapshot)return;
-      const snapshot=this.a.getSnapshot(),shunt=this.a.reading('shunt'),solar=this.a.reading('solar'),now=Date.now();
+      const snapshot=this.a.getSnapshot(),shunt=this.a.reading('shunt'),solar=this.a.reading('solar'),now=this.a.dataTime?.()??Date.now();
       const flowWindow=C.windowFor({metric:'energyBalance',type:'chart',period:this.config.energyPeriod},now,snapshot.weather);
       const solarTile=this.config.tiles.find(t=>t.metric==='solarEnergy'),solarWindow=solarTile?C.windowFor(solarTile,now,snapshot.weather):flowWindow;
       const solarFrom=solarTile?.period.mode==='sunrise'?solarWindow.solarFrom??solarWindow.from:flowWindow.from;
@@ -205,6 +205,7 @@
         if(m.energy&&!data?.error)hint=t.period.mode==='sunrise'?`${this.periodLabel(t,window)} · ${Math.floor((data?.summary?.coverage||0)*100)} %`:`Berechnet · ${this.periodLabel(t,window)} · ${Math.floor((data?.summary?.coverage||0)*100)} % erfasst`;
         if(t.type==='chart'&&C.usesLiveValue(t))hint=`${C.finite(value)?'Aktuell':'Kein Livewert'} · ${data?.error?'Verlauf nicht verfügbar':(t.period.mode==='sunrise'?'':'Verlauf: ')+this.periodLabel(t,window)}`;
         else if(data?.error)hint='Zeitraum nicht verfügbar';
+        if(data?.pending)hint='Daten werden im Hintergrund geladen …';
         const coverage=m.energy?Math.floor((data?.summary?.coverage||0)*100)+' % des Zeitraums erfasst':'';
         const hintElement=el.querySelector('.tile-hint');hintElement.textContent=t.metric==='consumptionEnergy'&&C.finite(value)&&value<0?'Zusätzliche Einspeisung · '+hint:hint;hintElement.title=[window?.note||'',coverage,m.hint||''].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
         el.classList.toggle('no-value',!C.finite(value));

@@ -1,6 +1,6 @@
 # Planung und umgesetzte Änderungen
 
-## Für das nächste Update: Synchronisation auf Wunsch im Hintergrund
+## Mit 1.2.6 umgesetzt: Synchronisation auf Wunsch im Hintergrund
 
 Wunsch vom 19. Oktober 2026: Der laufende Geräteabruf soll wahlweise im Hintergrund weiterlaufen, während die App wieder bedienbar wird. Die Entscheidung gilt ausschließlich für den aktuellen Synchronisationslauf, einschließlich der nacheinander abgefragten Geräte.
 
@@ -12,7 +12,7 @@ Wunsch vom 19. Oktober 2026: Der laufende Geräteabruf soll wahlweise im Hinterg
 - Die aktuellen Bridge-Sperren und teuren synchronen Datenbank-/Energieabfragen dafür gezielt anpassen. Nur die Warteanzeige auszublenden genügt nicht. Bedienung, Fortschritt und Abbrechen müssen auch bei großen Archiven reagieren.
 - Hoch-/Querformat, Hell/Dunkel, laufenden Gerätewechsel, App-Wechsel, Abbruch, Fehler und den nächsten neuen Lauf prüfen.
 
-Status: vorgemerkt; noch nicht in der veröffentlichten Version 1.2.5 enthalten.
+Status: mit 1.2.6 umgesetzt. Siehe [Versionshinweise](releases/1.2.6.md) und [Anleitung](ANLEITUNG.md).
 
 ## Mit 1.2.5 umgesetzt
 

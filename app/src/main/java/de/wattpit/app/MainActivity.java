@@ -24,6 +24,7 @@ public final class MainActivity extends Activity {
     private WebView web;
     private Repository repository;
     private final ExecutorService files = Executors.newSingleThreadExecutor();
+    private final ExecutorService historyReads = Executors.newSingleThreadExecutor();
     private CsvCodec.Table pendingImport;
     private volatile String pendingSettingsExport;
     private boolean pageReady;
@@ -224,13 +225,36 @@ public final class MainActivity extends Activity {
     private boolean repositoryArchiveActive(){return repository.archiveBusy;}
     final class Bridge {
         @JavascriptInterface public String syncState(){return repository.syncState();}
+        @JavascriptInterface public String backgroundArchive(long runId){return repository.archiveRun.background(runId)?"":"Dieser Synchronisationslauf ist bereits beendet. Bitte erneut versuchen.";}
+        @JavascriptInterface public void requestHistory(String json){
+            try{
+                if(json.length()>4096)throw new IllegalArgumentException();
+                JSONObject request=new JSONObject(json);long id=request.getLong("id");String method=request.getString("method");JSONArray args=request.getJSONArray("args");
+                long from=args.getLong(0),to=args.getLong(1);if(from<0||to<=from)throw new IllegalArgumentException();
+                historyReads.execute(()->{
+                    JSONObject response=new JSONObject();
+                    try{
+                        JSONObject data;
+                        switch(method){
+                            case "history":data=new JSONObject().put("points",repository.db.query(from,to,args.getString(2),args.getString(3)));break;
+                            case "dashboardHistory":data=repository.db.dashboardData(from,to,args.getString(2));break;
+                            case "energyHistoryWindow":data=repository.db.energyFlow(from,to,args.getLong(3),args.getLong(4),args.getString(2));break;
+                            case "energyHistory":data=repository.db.energyFlow(from,to,args.getLong(3),args.getString(2));break;
+                            default:throw new IllegalArgumentException();
+                        }
+                        response.put("id",id).put("data",data);
+                    }catch(Exception e){try{response.put("id",id).put("data",new JSONObject().put("error","Zeitraum konnte nicht geladen werden."));}catch(JSONException ignored){}}
+                    if(!isDestroyed())call("onHistoryResult",response);
+                });
+            }catch(Exception ignored){}
+        }
         @JavascriptInterface public String acknowledgeCockpit(){
             if(!repository.prefs.edit().putBoolean("cockpitNotice-v1",true).commit())return "Der Hinweis konnte nicht bestätigt werden. Bitte erneut versuchen.";
             runOnUiThread(()->web.postDelayed(MainActivity.this::startAutomaticImport,250));return "";
         }
-        @JavascriptInterface public String snapshot() { if(repository.archiveBusy)return "{\"syncing\":true}";try { return repository.snapshot().toString(); } catch (Exception e) { return "{}"; } }
+        @JavascriptInterface public String snapshot() { if(repository.archiveBusy)return repository.backgroundSnapshot();try { return repository.snapshot().toString(); } catch (Exception e) { return "{}"; } }
         @JavascriptInterface public String history(long from, long to, String metric, String source) {
-            if(repository.archiveBusy)return "{\"points\":[]}";
+            if(repository.archiveBusy)return "{\"syncing\":true}";
             try { return new JSONObject().put("points",repository.db.query(from,to,metric,source)).toString(); }
             catch (Exception e) { return "{\"points\":[],\"error\":\"Verlauf konnte nicht geladen werden.\"}"; }
         }
@@ -245,17 +269,17 @@ public final class MainActivity extends Activity {
             } catch(Exception e) { return Repository.safeError(e); }
         }
         @JavascriptInterface public String dashboardHistory(long from,long to,String metric) {
-            if(repository.archiveBusy)return "{\"points\":[],\"summary\":{}}";
+            if(repository.archiveBusy)return "{\"syncing\":true}";
             try { return repository.db.dashboardData(from,to,metric).toString(); }
             catch(Exception e) { return "{\"points\":[],\"summary\":{},\"error\":\"Zeitraum konnte nicht geladen werden.\"}"; }
         }
         @JavascriptInterface public String energyHistory(long from,long to,String source,long solarFrom) {
-            if(repository.archiveBusy)return "{\"error\":\"Synchronisation läuft.\"}";
+            if(repository.archiveBusy)return "{\"syncing\":true}";
             try {return repository.db.energyFlow(from,to,solarFrom,source).toString();}
             catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
         }
         @JavascriptInterface public String energyHistoryWindow(long from,long to,String source,long solarFrom,long solarTo) {
-            if(repository.archiveBusy)return "{\"error\":\"Synchronisation läuft.\"}";
+            if(repository.archiveBusy)return "{\"syncing\":true}";
             try{return repository.db.energyFlow(from,to,solarFrom,solarTo,source).toString();}
             catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
         }
@@ -321,5 +345,5 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         web.evaluateJavascript("window.handleBack ? window.handleBack() : false",value -> { if (!"true".equals(value)) finish(); });
     }
-    @Override protected void onDestroy() { files.shutdown(); if (web != null) { web.removeJavascriptInterface("WattPit"); web.destroy(); web = null; } super.onDestroy(); }
+    @Override protected void onDestroy() { historyReads.shutdownNow();files.shutdown(); if (web != null) { web.removeJavascriptInterface("WattPit"); web.destroy(); web = null; } super.onDestroy(); }
 }

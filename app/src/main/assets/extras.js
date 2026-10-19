@@ -64,8 +64,8 @@ window.WattExtras=class {
     const historyStatus=document.getElementById('historyArchiveStatus');historyStatus.hidden=!archive.text||this.a.isDemo();historyStatus.textContent=archive.text?(archive.active?'Archivimport läuft · ':'Archivimport · ')+archive.text:'';
     document.getElementById('archiveText').textContent=archive.text||'';document.getElementById('archiveCancel').hidden=!archive.active;
     const progress=document.getElementById('archiveProgress');progress.hidden=!archive.active;if(archive.total>0){progress.max=archive.total;progress.value=Math.min(archive.done,archive.total);}else progress.removeAttribute('value');
-    document.querySelectorAll('.archive-import').forEach(b=>b.disabled=!!archive.active||this.a.isDemo());
-    if(archive.updated&&archive.updated!==this.lastImport&&!archive.active){this.lastImport=archive.updated;this.a.imported();}
+    document.querySelectorAll('.archive-import').forEach(b=>b.disabled=!!s.archiveBusy||!!archive.active||this.a.isDemo());
+    if(archive.updated&&archive.updated!==this.lastImport&&!archive.active&&!s.archiveBusy){this.lastImport=archive.updated;this.a.imported();}
     const histories=s.deviceHistory||[],card=document.getElementById('deviceLifetime');card.hidden=!histories.length;
     card.innerHTML=histories.map(h=>`<h2>Shunt-Gesamtwerte</h2><div class="lifetime-grid">${[['300','Tiefste Entladung','Ah'],['305','Gesamt entnommen','Ah'],['310','Entladene Energie','kWh'],['311','Geladene Energie','kWh'],['306','Min. Batteriespannung','V'],['307','Max. Batteriespannung','V']].map(([k,n,u])=>`<div><span class="muted">${n}</span><strong>${h[k]==null?'—':Number(h[k]).toLocaleString('de-DE',{maximumFractionDigits:2})} ${u}</strong></div>`).join('')}</div>`).join('');
   }

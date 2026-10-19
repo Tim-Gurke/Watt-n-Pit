@@ -100,7 +100,7 @@
     scaleControls(){const auto=this.scaleMode==='auto';$('detailMin').disabled=auto;$('detailMax').disabled=auto;}
     changePeriod(){
       $('detailLast').hidden=this.period.mode!=='last';$('detailCustom').hidden=this.period.mode!=='custom';
-      const window=periodWindow(this.period,this.a.getSnapshot().weather||{});
+      const window=periodWindow(this.period,this.a.getSnapshot().weather||{},this.a.dataTime?.()??Date.now());
       if(!window||this.period.mode==='custom'&&window.to<=window.from){this.error('Bitte einen gültigen Zeitraum wählen.');return;}
       if(this.period.mode==='last'&&(!Number.isFinite(this.period.amount)||this.period.amount<1||this.period.amount>10000)){this.error('Bitte eine Anzahl zwischen 1 und 10.000 wählen.');return;}
       this.selectedTime=null;this.error('');this.base=window;this.view={from:window.from,to:window.to};this.refresh(false);
@@ -118,7 +118,7 @@
       if(!this.active||this.a.isBlocked?.())return;
       if(C.CATALOG[this.tile.metric].widget){this.weather();return;}
       if(follow&&this.period.mode!=='custom'&&this.period.mode!=='yesterday'){
-        const next=periodWindow(this.period,this.a.getSnapshot().weather||{});
+        const next=periodWindow(this.period,this.a.getSnapshot().weather||{},this.a.dataTime?.()??Date.now());
         if(next){const all=this.view.from===this.base.from&&this.view.to===this.base.to;this.base=next;this.view=all?{from:next.from,to:next.to}:clampView(this.view,next);}
       }
       const snapshot=this.a.getSnapshot();this.series=[];
@@ -140,6 +140,7 @@
       $('detailCompareCount').textContent=this.selected.size>1?'('+String(this.selected.size-1)+')':'';
       $('detailLegend').innerHTML=this.series.map((s,i)=>`<span><i style="background:${this.color(s,i)}"></i>${esc(label(s.tile))} · ${esc(s.tile.unit)}</span>`).join('');
       const notes=[this.base.note||'',m.hint||''];
+      if(primary.data.pending)notes.push('Daten werden im Hintergrund geladen …');
       if(m.energy)notes.push(Math.floor((primary.data.summary?.coverage||0)*100)+' % des Zeitraums erfasst.');
       if(m.liveOnly||m.status)notes.push('Für diesen Wert steht kein gespeicherter Verlauf zur Verfügung.');
       $('detailNote').textContent=notes.filter(Boolean).join(' ');this.draw();

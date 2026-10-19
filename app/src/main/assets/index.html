@@ -13,7 +13,7 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><div><div class="wordmark">Watt<span class="wordmark-n">’n’</span><span>Pit</span><small>1.2.5</small></div><div class="brandline">DEIN ENERGIE-COCKPIT</div></div></div>
+  <div class="brand"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><div><div class="wordmark">Watt<span class="wordmark-n">’n’</span><span>Pit</span><small>1.2.6</small></div><div class="brandline">DEIN ENERGIE-COCKPIT</div></div></div>
   <button class="iconbutton" id="themeToggle" aria-label="Farbschema wechseln"></button>
 </header>
 <div id="demoBar" class="demo-bar" hidden><span>DEMO · Beispieldaten</span><button id="exitDemo">Demo verlassen</button></div>
@@ -45,6 +45,7 @@
   <div class="segments range-segments" id="rangeButtons"><button data-range="today" class="selected">Heute</button><button data-range="yesterday">Gestern</button><button data-range="week">Woche</button><button data-range="month">Monat</button><button data-range="custom">Frei</button></div>
   <div id="customRange" class="custom-range" hidden><label>Von<input id="rangeFrom" type="datetime-local"></label><label>Bis<input id="rangeTo" type="datetime-local"></label><button class="primary" id="applyRange">Anzeigen</button></div>
   <div class="metric-chips" id="metricButtons"><button data-metric="power" class="selected">Leistung</button><button data-metric="soc">Akku</button><button data-metric="voltage">Spannung</button><button data-metric="current">Strom</button><button data-metric="yieldWh">Tagesertrag</button><button data-metric="energy">Energie berechnet</button></div>
+  <p id="historyReadNote" class="muted" role="status" hidden></p>
   <p id="historyArchiveStatus" class="muted" role="status" hidden></p>
   <article class="card full-history"><div class="section-heading"><div><h2 id="chartTitle">Solar & Batteriebilanz</h2><p id="chartWindow" class="muted"></p></div><select id="historySource" aria-label="Datenquelle"><option value="all">Alle Daten</option><option value="live">Aufgezeichnet</option><option value="archive">Gerätearchiv</option><option value="csv">CSV-Import</option></select></div><div id="chartLegend" class="chart-legend"></div><div id="energyOptions" hidden><label class="energy-toggle"><input id="energyBalance" type="checkbox" checked>Kurve „Bilanz“ anzeigen</label><details><summary>Berechnung und zusätzliche Einspeisung</summary><p class="muted">Solarertrag − Verbrauch = Bilanz. Im Tagesstandard zählt Solar seit Sonnenaufgang, Verbrauch und Bilanz ab Mitternacht einschließlich der Nacht. Danach werden gemeinsam erfasste Solar- und Shuntabschnitte verwendet; Messlücken bleiben offen. Zusätzlicher PWM- oder Landstrom senkt den berechneten Verbrauch; er kann negativ werden. Ladeverluste werden nicht separat korrigiert.</p></details></div><p id="energyNote" class="muted energy-note" hidden></p><div class="chart-wrap"><canvas id="historyChart" aria-label="Interaktiver Energieverlauf; mit zwei Fingern zoomen, mit einem Finger verschieben"></canvas><div id="chartTooltip" class="chart-tooltip" hidden></div></div><div class="chart-controls"><div class="zoom-control"><span>Zeit</span><button id="zoomOut" aria-label="Zeitachse verkleinern">−</button><button id="zoomIn" aria-label="Zeitachse vergrößern">+</button></div><button class="quiet" id="openScale">Werteskala</button><button class="textbutton" id="resetChart">Zurücksetzen</button></div></article>
   <p class="chart-help">Zwei Finger zum Zoomen. Ein Finger zum Verschieben. Antippen zeigt Messwerte. Lange Zeiträume bündeln Werte; die Schattierung zeigt Minimum und Maximum.</p>
@@ -71,7 +72,7 @@
   <article class="card settings-card"><h2>Einstellungen sichern</h2><p class="muted">Kacheln samt Anordnung, Farben, Zeiträume, Wetterort und Solaranlage als Datei sichern oder wieder einlesen. Ohne Messdaten, Geräteadressen, PINs und Verbindungsschlüssel.</p><div class="row"><button class="quiet" id="exportConfiguration">Einstellungen exportieren</button><button class="quiet" id="importConfiguration">Einstellungen importieren</button></div></article>
   <article class="card settings-card"><h2>Lokal. Ohne Konto.</h2><p class="muted">Watt’n’Pit empfängt deine Geräte direkt. Messwerte und Geräteschlüssel bleiben auf diesem Telefon. Kein Konto, keine Werbung. Nur die optionale Ortssuche und Wettervorschau nutzen Internet: Suchtext bzw. Ortskoordinaten gehen an Open-Meteo. Energiedaten und Geräteschlüssel werden nicht übertragen.</p><div class="row"><button class="quiet" id="settingsImport">CSV importieren</button><button class="quiet" id="settingsExport">CSV exportieren</button></div></article>
   <article class="card cockpit-note"><h2>Dein Energie-Cockpit</h2><p>Watt’n’Pit zeigt Energie- und Messwerte an. Die App ersetzt VictronConnect nicht. Einstellungen an SmartSolar und SmartShunt müssen in <strong>VictronConnect</strong> vorgenommen werden.</p><p class="muted">Batteriekapazität und Solaranlage in dieser App dienen ausschließlich der Anzeige und Berechnung. Sie ändern keine Einstellungen an den Geräten.</p></article>
-  <div class="about"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><strong>Watt’n’Pit 1.2.5</strong><p>Dein Energie-Cockpit.</p><button class="textbutton" id="settingsDemo">Demo ansehen</button></div>
+  <div class="about"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><strong>Watt’n’Pit 1.2.6</strong><p>Dein Energie-Cockpit.</p><button class="textbutton" id="settingsDemo">Demo ansehen</button></div>
 </section>
 </main>
 <nav class="bottom-nav" aria-label="Hauptnavigation"><button data-page="overview" class="active"><span id="navOverview"></span>Übersicht</button><button data-page="history"><span id="navHistory"></span>Verlauf</button><button data-page="devices"><span id="navDevices"></span>Geräte</button><button data-page="settings"><span id="navSettings"></span>Einstellungen</button></nav>
@@ -86,13 +87,15 @@
   </section>
   <section id="syncWaiting" class="activity-card" role="dialog" aria-modal="true" aria-labelledby="syncTitle" aria-describedby="syncExplanation" hidden>
     <div class="activity-spinner" aria-hidden="true"></div><p class="eyebrow">GERÄTEARCHIV</p><h2 id="syncTitle">Synchronisation läuft</h2>
-    <p id="syncExplanation">Gerätedaten werden ergänzt. Bitte warten. Die übrige Bedienung ist währenddessen gesperrt.</p>
+    <p id="syncExplanation">Gerätedaten werden ergänzt. Du kannst warten oder die App während dieses Abrufs weiter benutzen.</p>
     <div role="status" aria-live="polite"><p id="syncDevice" class="activity-device"></p><p id="syncPhase" class="muted"></p></div>
     <progress id="syncWaitingProgress" aria-label="Fortschritt am aktuellen Gerät"></progress><p id="syncProgressLabel" class="muted"></p>
     <p class="muted">Beim Abbrechen bleiben gespeicherte Daten erhalten. Beim nächsten Öffnen wird erneut ergänzt; manuell unter Geräte → Gerätearchiv ergänzen.</p>
+    <p class="muted">„Im Hintergrund synchronisieren“ gibt die Bedienung für diesen Durchlauf frei. Die angezeigten Werte werden noch ergänzt. Beim nächsten Abruf entscheidest du erneut.</p><p id="syncChoiceError" class="form-error" role="alert" hidden></p><button id="syncBackground" class="primary" hidden>Im Hintergrund synchronisieren</button>
     <button id="syncCancel" class="secondary">Synchronisation abbrechen</button>
   </section>
 </div>
+<aside id="syncCompact" class="sync-compact" hidden><button id="syncOpen" aria-label="Synchronisationsfortschritt und Abbrechen öffnen"><span class="sync-compact-icon" aria-hidden="true">↻</span><span><strong id="syncCompactTitle"></strong><small id="syncCompactDetail"></small></span><span aria-hidden="true">›</span></button></aside>
 <div id="toast" class="toast" role="status" hidden></div>
 <script src="dashboard-core.js"></script>
 <script src="dashboard.js"></script>
@@ -102,6 +105,7 @@
 <script src="settings-ui.js"></script>
 <script src="extras.js"></script>
 <script src="lifecycle.js"></script>
+<script src="read-bridge.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

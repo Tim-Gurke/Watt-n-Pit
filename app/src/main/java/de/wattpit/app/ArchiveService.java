@@ -90,7 +90,7 @@ public final class ArchiveService extends Service {
             if(Build.VERSION.SDK_INT>=31)startForeground(11,notification("Verbindung wird aufgebaut …"),ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
             else if(Build.VERSION.SDK_INT>=29)startForeground(11,notification("Verbindung wird aufgebaut …"),ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
             else startForeground(11,notification("Verbindung wird aufgebaut …"));
-            repository.archiveBusy=true;
+            repository.archiveRun.begin(System.currentTimeMillis());repository.archiveBusy=true;
             if(repository.running)startService(new Intent(this,MonitorService.class).setAction("ARCHIVE_SCAN"));
             repository.archiveState(mac,true,"Verbindung wird aufgebaut …",0,0);
             worker.execute(this::runImports);
@@ -326,6 +326,6 @@ public final class ArchiveService extends Service {
         repository.db.archiveHistory(mac,p);
     }
     private void closeGatt(){BluetoothGatt g=gatt;gatt=null;connected=false;if(g!=null){try{g.disconnect();}catch(SecurityException ignored){}try{g.close();}catch(SecurityException ignored){}}}
-    @Override public void onDestroy(){cancelled=true;failOperation(new IOException("cancelled"));closeGatt();repository.archiveBusy=false;repository.finishArchiveIfActive();if(repository.running)startService(new Intent(this,MonitorService.class).setAction("ARCHIVE_SCAN"));worker.shutdownNow();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy();}
+    @Override public void onDestroy(){cancelled=true;failOperation(new IOException("cancelled"));closeGatt();repository.archiveBusy=false;repository.finishArchiveIfActive();repository.archiveRun.finish();if(repository.running)startService(new Intent(this,MonitorService.class).setAction("ARCHIVE_SCAN"));worker.shutdownNow();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy();}
     @Override public IBinder onBind(Intent intent){return null;}
 }

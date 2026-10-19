@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.2.5** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.5/Watt-n-Pit-v1.2.5.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.2.6** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.6/Watt-n-Pit-v1.2.6.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -14,7 +14,7 @@ Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe d
 4. In Watt’n’Pit **Geräte → Suche starten** wählen. Das gefundene Gerät einrichten oder über **+** manuell hinzufügen. Gerätetyp, Name, Adresse und Schlüssel eintragen und speichern.
 5. Die aktive Verbindung in VictronConnect trennen und in Watt’n’Pit die Aufzeichnung starten. In Reichweite der Geräte bleiben.
 
-Beim ersten Öffnen erscheint der Hinweis **Dein Energie-Cockpit**. Mit **Verstanden** bestätigen. Bestehende Installationen zeigen ihn nach diesem Update ebenfalls einmal; anschließend bleibt er bei unverändertem Text bestätigt. Ein Schließen ohne Bestätigung zählt nicht. Die Bestätigung wird nur auf diesem Gerät gespeichert und nicht mit Einstellungen übertragen. Der Hinweis bleibt auch unter **Geräte** und **Einstellungen** nachlesbar.
+Beim ersten Öffnen erscheint der Hinweis **Dein Energie-Cockpit**. Mit **Verstanden** bestätigen. Bei bestehenden Installationen erscheint der seit 1.2.5 enthaltene Hinweis nur, solange er noch nicht bestätigt wurde; anschließend bleibt er bei unverändertem Text bestätigt. Ein Schließen ohne Bestätigung zählt nicht. Die Bestätigung wird nur auf diesem Gerät gespeichert und nicht mit Einstellungen übertragen. Der Hinweis bleibt auch unter **Geräte** und **Einstellungen** nachlesbar.
 
 ![Einmaliger Hinweis zur Rolle als Cockpit und zu VictronConnect](images/cockpit-notice.png)
 
@@ -31,11 +31,15 @@ Beim App-Start ergänzt Watt’n’Pit die Archive der eingerichteten Geräte na
 *Beispiel einer eingerichteten Anlage: Importstatus, vorhandene Android-Kopplung und manueller Archivabruf stehen auf der Geräteseite.*
 
 - Vorhandene Daten werden abgeglichen. Ein erneuter Import ergänzt fehlende Werte, statt denselben Archivpunkt mehrfach abzulegen.
-- Während des Imports erscheint auf jeder Seite **Synchronisation läuft**. Die übrige Oberfläche ist gedimmt und gesperrt. Gerät und Arbeitsschritt werden genannt; bei bekanntem Umfang erscheint der tatsächliche Fortschritt für das aktuelle Gerät, ansonsten eine Aktivitätsanzeige. **Synchronisation abbrechen** bleibt erreichbar. Bereits abgeschlossene Datenblöcke bleiben nach einem Abbruch gespeichert. Beim nächsten Öffnen beziehungsweise nach mehr als 30 Sekunden im Hintergrund wird erneut ergänzt; ein manueller Abruf ist jederzeit unter **Geräte → Gerätearchiv ergänzen** möglich, sobald der laufende Import beendet ist. Nach Erfolg, Abbruch oder Fehler wird die Bedienung automatisch wieder freigegeben. Offene Eingaben bleiben erhalten.
+- Während des Imports erscheint auf jeder Seite **Synchronisation läuft**. Zunächst ist die übrige Oberfläche gedimmt und gesperrt. Über **Im Hintergrund synchronisieren** gibst du die Bedienung für diesen Durchlauf frei. Der Abruf läuft weiter; die Auswahl gilt auch für das nächste Gerät in derselben Warteschlange. Beim nächsten neuen Durchlauf erscheint die Warteanzeige wieder. Es gibt dafür keine dauerhafte Einstellung. Gerät und Arbeitsschritt werden genannt; bei bekanntem Umfang erscheint der tatsächliche Fortschritt für das aktuelle Gerät, ansonsten eine Aktivitätsanzeige. **Synchronisation abbrechen** bleibt erreichbar. Bereits abgeschlossene Datenblöcke bleiben nach einem Abbruch gespeichert. Beim nächsten Öffnen beziehungsweise nach mehr als 30 Sekunden im Hintergrund wird erneut ergänzt; ein manueller Abruf ist jederzeit unter **Geräte → Gerätearchiv ergänzen** möglich, sobald der laufende Import beendet ist. Nach Erfolg, Abbruch oder Fehler wird die Bedienung automatisch wieder freigegeben. Offene Eingaben bleiben erhalten. Nach dem Wechsel in den Hintergrund zeigt die kompakte Leiste oben **Synchronisation läuft · Werte vorläufig**. Antippen öffnet Gerät, Fortschritt und Abbrechen erneut; **Weiter im Hintergrund** oder Android-Zurück schließt diese Fortschrittsansicht wieder. Beim erneuten Öffnen der App während desselben Abrufs bleibt die Wahl erhalten.
 - Archivwerte und selbst aufgezeichnete Werte können unterschiedlich fein sein. Die Standardansicht führt die Quellen zusammen; feinere vorhandene Messwerte haben Vorrang.
 - Leere Archivfelder werden nicht als gemessene Nullwerte ausgegeben. Lücken können deshalb sichtbar bleiben.
 
 ![Warteanzeige mit aktuellem Gerät, Fortschritt und Abbrechen](images/synchronisation.png)
+
+![Weiter bedienbares Cockpit mit kompakter Fortschrittsanzeige](images/synchronisation-hintergrund.png)
+
+Währenddessen bleibt der letzte verfügbare Datenstand sichtbar. Neue Zeiträume und Vergleichswerte werden ohne Bedienungssperre im Hintergrund geladen; bis zur Antwort erscheint **Daten werden im Hintergrund geladen …**. Die Werte sind während des Imports vorläufig und werden nach dessen Ende gemeinsam aktualisiert.
 
 Falls nichts ankommt: Bluetooth und Reichweite prüfen, VictronConnect vom Gerät trennen und den Import erneut versuchen. **Liveempfang** bestätigt den Empfang der Sofortanzeige; der aktive Archivabruf ist ein eigener Vorgang. Über **Verbindungsdetails → Diagnose kopieren** lässt sich ein Bericht ohne Geräteadressen, Schlüssel oder Messwerte kopieren.
 
@@ -155,7 +159,7 @@ Die Wetterkachel liegt im selben Raster wie die Messkacheln. **Anordnen** macht 
 
 *Einstellungen → Deine Solaranlage → Bearbeiten: Modulgruppen beschreiben und ihre Messwertquelle zuordnen. Die gezeigten Angaben sind frei erfunden.*
 
-Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.2.5 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
+Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.2.6 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
 
 ## 8. Einstellungen und Messdaten sichern
 

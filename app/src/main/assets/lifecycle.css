@@ -9,3 +9,7 @@
 @keyframes activity-spin{to{transform:rotate(360deg)}}
 @media(orientation:landscape) and (max-height:500px){.activity-card{padding:18px 24px}.activity-card h2{font-size:22px;margin:6px 0 10px}.activity-card p{margin:8px 0}.activity-spinner{float:right;margin:0 0 8px 16px}.activity-card button{margin-top:8px}}
 @media(prefers-reduced-motion:reduce){.activity-spinner{animation:none}}
+
+.sync-compact{position:fixed;top:6px;left:12px;right:12px;z-index:4500;max-width:1120px;margin:auto}.sync-compact button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:1px solid var(--mint);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);text-align:left}.sync-compact button>span:nth-child(2){flex:1;min-width:0}.sync-compact strong,.sync-compact small{display:block;font-size:12px;overflow-wrap:anywhere}.sync-compact small{font-size:11px;color:var(--muted)}.sync-compact-icon{font-size:24px;color:var(--mint)}
+
+body.sync-background{padding-top:var(--sync-dock-height,78px)}.sync-background .tile-detail,.sync-background .modal{top:var(--sync-dock-height,78px)}

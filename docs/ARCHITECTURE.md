@@ -146,3 +146,12 @@ Nach erfolgreicher Veröffentlichung löscht der Workflow alle öffentlichen Rel
 Der Cockpit-Hinweis ist mit `cockpitNotice-v1` in privaten Android-Einstellungen bestätigt. Nur der ausdrückliche Bridge-Aufruf nach **Verstanden** setzt das Merkmal; Export und Import verwenden weiterhin eine Positivliste ohne diesen Zustand. Der automatische Archivstart wartet auf die Bestätigung. Der dauerhafte Hinweis steht auf Geräte- und Einstellungsseite.
 
 Die Großansicht hält den ausgewählten Messzeitpunkt nur temporär. Punktmarker werden aus realen nahen Messpunkten der jeweiligen Reihe und ihrer Einheit gezeichnet; die gemeinsame senkrechte Linie bezeichnet den ausgewählten Zeitpunkt. Ziehen während der Auswahl aktualisiert Auswahl und Werte ohne Zeitverschiebung. Gedrückthalten beginnt ebenfalls eine Auswahl. Zweifingerzoom und das Aufheben der Auswahl erhalten die bisherige Zeitnavigation. Darstellung, Farbe, Rotation und Aktualisierung zeichnen die Auswahl neu; beim Schließen wird nichts in der Kachelkonfiguration gespeichert.
+
+
+## Hintergrundauswahl je Archivlauf ab 1.2.6
+
+`ArchiveRun` hält eine unveränderliche, flüchtige Zustandssicht mit Laufnummer, Startzeit, Aktivität und Hintergrundauswahl. Die Wahl wird nur für die aktuell aktive Laufnummer angenommen. Gerätewechsel innerhalb der Warteschlange behalten den Zustand; Erfolg, Abbruch und Fehler verwerfen ihn. Activity-Neuanlage liest denselben Repository-Zustand. Einstellungen und Sicherungen enthalten die Wahl nicht.
+
+Die Bridge liefert während des Imports einen datenbankfreien Snapshot aus dem letzten vollständigen Stand samt aktuellen App-Einstellungen und Wetter. Datenrevisionen lösen während eines Laufs keine fortlaufenden Gesamtintegrationen aus. `WattReadBridge` erhält vorhandene Kurven und nutzt für neue Zeiträume `requestHistory` auf einem eigenen Lesethread. Es bleibt jeweils ein Leseauftrag aktiv; Cache und Warteschlange sind begrenzt. Antworten aus einem früheren Lauf werden durch die Generation verworfen. Fehlende Antworten erscheinen als Ladezustand, niemals als erfundene Null. Nach Ende werden die Daten zusammen neu geladen.
+
+Die kompakte Statusleiste reserviert ihre tatsächliche Höhe auch für offene Dialoge und Großansichten, damit sie keine Bedienelemente verdeckt. Die ausführliche Fortschrittsansicht bleibt über die Leiste erreichbar; Abbrechen funktioniert unabhängig vom Lesethread. Ohne ausdrückliche Hintergrundwahl bleibt die bisherige Warteansicht aktiv.

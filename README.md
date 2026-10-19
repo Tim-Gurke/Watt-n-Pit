@@ -4,17 +4,17 @@
 
 **Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht.** Sie zeigt Messwerte, Verläufe und Energieauswertungen. Einstellungen an Solarregler und SmartShunt müssen weiterhin über die Victron-Software **VictronConnect** vorgenommen werden. Die Einstellungen in Watt’n’Pit betreffen nur die App und ändern keine Geräteparameter.
 
-**[Android-APK 1.2.5 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.5/Watt-n-Pit-v1.2.5.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.2.6 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.6/Watt-n-Pit-v1.2.6.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
 
 ## So sieht es aus
 
-Die Screenshots zeigen die App-Oberfläche von **1.2.5 mit frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind neutral; private Messungen und Verbindungscodes werden nicht veröffentlicht.
+Die Screenshots zeigen die App-Oberfläche von **1.2.6 mit frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind neutral; private Messungen und Verbindungscodes werden nicht veröffentlicht.
 
 | Dunkles Design | Helles Design |
 |---|---|
-| ![Watt’n’Pit 1.2.5: Übersicht mit Solar-, Akku- und Wetterkacheln, dunkel](docs/images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](docs/images/overview-light.png) |
+| ![Watt’n’Pit 1.2.6: Übersicht mit Solar-, Akku- und Wetterkacheln, dunkel](docs/images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](docs/images/overview-light.png) |
 
 *Die Standardübersicht: Ladezustand und aktuelle Solarleistung oben, „Bilanz“ und Solarertrag darunter. Anschließend stehen Batteriespannung und aktuelle Batteriebilanz links neben dem berechneten Verbrauch. Die flache Wetterkachel schließt den Kachelblock ab.*
 
@@ -24,11 +24,11 @@ Im Hochformat bleibt die bewährte Anordnung erhalten. Im Querformat stehen Appn
 
 ![Querformat mit gemeinsamem, flachem Kopf und unabhängig angeordneten Kacheln](docs/images/overview-landscape.png)
 
-## Das kann 1.2.5
+## Das kann 1.2.6
 
 - **Direkter Empfang:** SmartSolar und SmartShunt liefern Livewerte über die Bluetooth-Sofortanzeige. Messdaten und Geräteschlüssel bleiben auf dem Telefon.
-- **Synchronisation sichtbar:** Eine Warteanzeige nennt Gerät, Arbeitsschritt und bekannten Fortschritt. Die normale Bedienung pausiert; **Synchronisation abbrechen** bleibt erreichbar. Bereits gespeicherte Daten bleiben erhalten.
-- **Einmaliger Cockpit-Hinweis:** Beim ersten Start nach Installation oder diesem Update mit **Verstanden** bestätigen. Watt’n’Pit ersetzt VictronConnect nicht; Geräteeinstellungen bleiben dort.
+- **Synchronisation sichtbar:** Eine Warteanzeige nennt Gerät, Arbeitsschritt und bekannten Fortschritt. **Im Hintergrund synchronisieren** gibt die Bedienung für den aktuellen Durchlauf frei; eine kleine Statusanzeige bleibt erreichbar. **Synchronisation abbrechen** bleibt verfügbar. Die Auswahl gilt für die gesamte Gerätewarteschlange und wird anschließend verworfen. Bereits gespeicherte Daten bleiben erhalten.
+- **Einmaliger Cockpit-Hinweis:** Den seit 1.2.5 enthaltenen Hinweis einmal mit **Verstanden** bestätigen; eine vorhandene Bestätigung bleibt erhalten. Watt’n’Pit ersetzt VictronConnect nicht; Geräteeinstellungen bleiben dort.
 - **Archive automatisch ergänzen:** Beim App-Start liest Watt’n’Pit vorhandene Gerätearchive nacheinander ein. Vorhandene Werte werden abgeglichen, Lücken ergänzt und Archivpunkte nicht doppelt gespeichert.
 - **Eigene Übersicht:** Kacheln hinzufügen, ziehen, vergrößern und überlappen. Zahlen, Rundinstrumente oder Verlauf wählen; Einheiten, Farben, Schrift und Zeiträume anpassen. Schmale und breite Ansichten haben eigene Anordnungen.
 - **Großansicht:** Kachel antippen und **Großansicht öffnen** wählen. Zeitraum, Einheiten und Skala untersuchen, zoomen und weitere Messgrößen zum Vergleich einblenden. Ein Messpunkt wird durch Punkt und senkrechte Linie markiert. Die Auswahl lässt sich mit dem Finger ziehen; Uhrzeit und Werte folgen. **Auswahl aufheben** gibt das Verschieben des Zeitraums frei. Änderungen in dieser Ansicht sind vorübergehend; **Kachel-Einstellungen** speichert die gewünschte Kacheldarstellung.
@@ -49,7 +49,7 @@ Im Hochformat bleibt die bewährte Anordnung erhalten. Im Querformat stehen Appn
 
 Beim ersten Öffnen den Cockpit-Hinweis lesen und **Verstanden** wählen. Er erscheint auch bei bestehenden Installationen einmal nach diesem Update. Die Bestätigung bleibt nur auf diesem Gerät und wird nicht mit Einstellungen exportiert.
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.5/Watt-n-Pit-v1.2.5.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.2.6/Watt-n-Pit-v1.2.6.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.
@@ -93,7 +93,7 @@ Es bleiben immer die **drei neuesten Releases mit APK-Downloads** verfügbar.
 
 Die App ändert keine Ladeparameter und löscht keine Gerätetrends. Temperatur und Zusatzspannung benötigen einen entsprechend eingerichteten Geräteeingang. Eine lang laufende Aufzeichnung kann durch Android-Energiespareinstellungen begrenzt werden.
 
-Automatisierte Prüfung: **82 JVM-Tests, 51 Node-Tests**, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen, Energiekurven und Farbdesigns. Die Energieberechnung prüft zusätzlich direkten Solarverbrauch, Laden/Entladen, nicht gemessenen PWM-Ertrag, Nachtverbrauch trotz Sonnenaufgangsfenster, gemeinsame Messabdeckung, Messlücken und Quellenüberlappung. Browserprüfungen decken die Umstellung bestehender Kacheln, Zeitraumwahl, Einheiten und Einstellungsexport/-import ab. Die neuen Browserprüfungen testen außerdem die verschiebbare Kurvenmarkierung, sichtbare Warteanzeige, Abbruch und Erhalt offener Eingaben. Die Android-Dateiauswahl für Einstellungssicherungen ist zusätzlich am Gerät zu bestätigen. [Versionshinweise](docs/releases/1.2.5.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
+Automatisierte Prüfung: **88 JVM-Tests, 59 Node-Tests**, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen, Energiekurven und Farbdesigns. Die Energieberechnung prüft zusätzlich direkten Solarverbrauch, Laden/Entladen, nicht gemessenen PWM-Ertrag, Nachtverbrauch trotz Sonnenaufgangsfenster, gemeinsame Messabdeckung, Messlücken und Quellenüberlappung. Browserprüfungen decken die Umstellung bestehender Kacheln, Zeitraumwahl, Einheiten und Einstellungsexport/-import ab. Die neuen Browserprüfungen testen zusätzlich asynchrone Abfragen während des Imports, die Wahl pro Abruf, Wiederöffnen, Gerätewechsel sowie die verschiebbare Kurvenmarkierung, sichtbare Warteanzeige, Abbruch und Erhalt offener Eingaben. Die Android-Dateiauswahl für Einstellungssicherungen ist zusätzlich am Gerät zu bestätigen. [Versionshinweise](docs/releases/1.2.6.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
 ## Entwicklung
 

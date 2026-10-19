@@ -8,9 +8,9 @@ test('a JSON round trip preserves every portable setting, tile layout and source
   assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(backup))),backup);
 });
 test('exports and imports cannot transfer connection secrets, identities or measurements',()=>{
-  const snapshot={settings:{theme:'dark',palette:'classic',capacity:100,sampleSeconds:10,miniRange:'today',key:'PRIVATE_SENTINEL'},devices:[{mac:'PRIVATE_SENTINEL',secret:'PRIVATE_SENTINEL',pin:'PRIVATE_SENTINEL'}],readings:[{power:789}]};
+  const snapshot={settings:{theme:'dark',palette:'classic',capacity:100,sampleSeconds:10,miniRange:'today',key:'PRIVATE_SENTINEL',background:'PRIVATE_SENTINEL',runId:'PRIVATE_SENTINEL','cockpitNotice-v1':'PRIVATE_SENTINEL'},devices:[{mac:'PRIVATE_SENTINEL',secret:'PRIVATE_SENTINEL',pin:'PRIVATE_SENTINEL'}],readings:[{power:789}]};
   const backup=C.create(snapshot,D.defaults(),{version:1,groups:[]});assert.ok(!JSON.stringify(backup).includes('PRIVATE_SENTINEL'));
-  backup.devices=snapshot.devices;backup.readings=snapshot.readings;backup.settings.key='PRIVATE_SENTINEL';backup.dashboard.keys='PRIVATE_SENTINEL';backup.dashboard.tiles[0].secret='PRIVATE_SENTINEL';backup.weatherPlace={name:'Testort',latitude:48,longitude:8,key:'PRIVATE_SENTINEL'};
+  backup.devices=snapshot.devices;backup.readings=snapshot.readings;backup.settings.key='PRIVATE_SENTINEL';backup.settings.background='PRIVATE_SENTINEL';backup.runId='PRIVATE_SENTINEL';backup.dashboard.keys='PRIVATE_SENTINEL';backup.dashboard.tiles[0].secret='PRIVATE_SENTINEL';backup.weatherPlace={name:'Testort',latitude:48,longitude:8,key:'PRIVATE_SENTINEL'};
   assert.ok(!JSON.stringify(C.normalize(backup)).includes('PRIVATE_SENTINEL'));
 });
 test('foreign files, unsupported versions and incomplete dashboards cannot reset the current board',()=>{
