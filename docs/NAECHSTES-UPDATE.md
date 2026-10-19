@@ -16,6 +16,8 @@ Wunsch vom 18. Oktober 2026: Solarwerte mit Tageslichtfenster sollen nach Sonnen
 
 Wunsch vom 19. Oktober 2026: Watt’n’Pit ergänzt die Victron-Software als Energieanzeige; Geräteeinstellungen werden weiterhin über VictronConnect vorgenommen.
 
+- Beim ersten Öffnen nach der Installation als einmalige Hinweisbox mit Schaltfläche **Verstanden** anzeigen. Die Bestätigung auf dem Gerät speichern; sie gilt erst nach dem bewussten Bestätigen.
+- Bei bestehenden Installationen den Hinweis beim ersten Start nach dem Update ebenfalls einmal zeigen. Nach der Bestätigung bei unverändertem Hinweis nicht bei jedem Start oder jedem weiteren Update wiederholen. Der gespeicherte Bestätigungsstand gehört nicht in die übertragbare Einstellungssicherung.
 - Diesen Hinweis gut sichtbar auf der Geräteseite und bei den App-Einstellungen aufnehmen, ohne die Übersicht mit einer zusätzlichen dauerhaften Kachel zu belegen.
 - Geplanter Wortlaut: „Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht. Einstellungen an Solarregler und SmartShunt werden weiterhin in VictronConnect vorgenommen. Die Einstellungen hier betreffen nur Watt’n’Pit.“
 - Bei der Batteriekapazität und den Angaben zur Solaranlage ausdrücklich erklären, dass diese nur der Auswertung und Darstellung in der App dienen und nicht in die Geräte geschrieben werden.
