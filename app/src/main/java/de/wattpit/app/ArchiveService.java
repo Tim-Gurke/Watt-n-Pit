@@ -317,7 +317,9 @@ public final class ArchiveService extends Service {
         for(int day=0;day<31;day++){
             String date=today.minusDays(day).toString();
             if(day>0&&repository.db.archiveDayComplete(mac,date))continue;
-            byte[] b=read(0x1050+day);if(b==null||b.length!=34)continue;
+            byte[] b=read(0x1050+day);
+            if(!LocalDate.now().equals(today)){today=LocalDate.now();day=-1;continue;}
+            if(b==null||b.length!=34)continue;
             long yield=ArchiveCodec.u(b,1,4);if(yield==ArchiveCodec.NA)continue;
             JSONObject p=new JSONObject().put("day",date).put("device",mac).put("origin","archive")
                     .put("Yield(Wh)",yield*10).put("Max. PV power(W)",ArchiveCodec.u(b,24,4))
