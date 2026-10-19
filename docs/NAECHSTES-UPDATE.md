@@ -23,15 +23,15 @@ Wunsch vom 19. Oktober 2026: Watt’n’Pit ergänzt die Victron-Software als En
 - Bei der Batteriekapazität und den Angaben zur Solaranlage ausdrücklich erklären, dass diese nur der Auswertung und Darstellung in der App dienen und nicht in die Geräte geschrieben werden.
 - Der entsprechende Hinweis steht bereits am Anfang der Projektbeschreibung und Anleitung. Die Ergänzung der App-Oberfläche folgt mit dem nächsten Update.
 
-## Synchronisation sichtbar machen und Bedienung erhalten
+## Synchronisation deutlich anzeigen; normale Bedienung darf pausieren
 
-Beobachtung vom 19. Oktober 2026: Während der Synchronisation reagieren Schaltflächen nicht. Der zusätzliche Blitz in der Android-Statusleiste erklärt den Zustand nicht ausreichend.
+Beobachtung vom 19. Oktober 2026: Während der Synchronisation reagieren Schaltflächen nicht. Der zusätzliche Blitz in der Android-Statusleiste erklärt den Zustand nicht ausreichend. Klarstellung des Anwenders: Eine vorübergehend gesperrte normale Bedienung ist in Ordnung; entscheidend ist eine verständliche Kennzeichnung des laufenden Abgleichs.
 
-- Auf allen App-Seiten, insbesondere der Übersicht, eine gut sichtbare Anzeige direkt unter dem Kopf vorsehen: **Synchronisation läuft – Gerätedaten werden ergänzt**. Die Anzeige gehört nicht als zusätzliche Kachel in die gespeicherte Anordnung.
+- Auf allen App-Seiten, insbesondere der Übersicht, eine gut sichtbare Warteanzeige vorsehen: **Synchronisation läuft – Gerätedaten werden ergänzt. Bitte warten.** Die Anzeige gehört nicht als zusätzliche Kachel in die gespeicherte Anordnung. Bei einer Bedienungssperre die übrige Oberfläche sichtbar dimmen beziehungsweise deaktivieren.
 - Aktuelles Gerät (SmartSolar/SmartShunt) und Arbeitsschritt verständlich nennen. Bei bekanntem Umfang den tatsächlichen Fortschritt anzeigen; andernfalls eine laufende Aktivitätsanzeige ohne erfundene Prozentwerte.
-- **Synchronisation abbrechen** dort direkt erreichbar und bedienbar anbieten. Bereits gespeicherte Daten bleiben erhalten. Eine Anzeige darf Navigation und Schaltflächen nicht verdecken oder absichtlich die ganze App sperren.
-- Nach erfolgreichem Abschluss den laufenden Hinweis automatisch entfernen und den Abschluss kurz bestätigen. Abbruch und Fehler eindeutig als solche anzeigen. Hoch-/Querformat, Hell/Dunkel und offene Eingaben berücksichtigen.
-- Die gemeldete vollständige Eingabeblockade gesondert untersuchen und beheben. Im aktuellen Code werden absichtlich nur erneute Archivabrufe gesperrt. Mögliche Engpässe sind die synchronen Aufrufe der nativen Snapshot-/Verlaufs-/Energieabfragen und das sofortige Neuberechnen der Übersicht nach importbedingten Datenrevisionen; die konkrete Ursache ist noch nicht nachgewiesen.
-- Status zuerst sichtbar rendern, Datenbankarbeit und aufwendige Neuberechnungen so organisieren, dass Navigation, Scrollen und Abbrechen auch bei größeren Importen weiter reagieren. Neue Daten gesammelt statt für jeden Importblock vollständig neu zeichnen, ohne Messwerte oder Abschlussaktualisierungen zu verlieren.
+- **Synchronisation abbrechen** als direkt erreichbare, weiterhin bedienbare Funktion anbieten, besonders bei längeren Importen. Bereits gespeicherte Daten bleiben erhalten. Normale Cockpit- und Navigationsbedienung darf währenddessen bewusst gesperrt sein.
+- Nach Erfolg, Abbruch oder Fehler die normale Bedienung automatisch wieder freigeben. Den Abschluss kurz bestätigen beziehungsweise den Fehler verständlich nennen. Hoch-/Querformat, Hell/Dunkel und offene Eingaben berücksichtigen.
+- Warteanzeige und Fortschritt müssen weiter aktualisiert werden. Eine absichtliche Bedienungssperre ist akzeptiert; eine vollständig eingefrorene Statusanzeige oder ein unwirksames Abbrechen bleiben zu untersuchen.
+- Status zuerst sichtbar rendern und Datenbankarbeit sowie Neuberechnungen so organisieren, dass Warteanzeige und Abbrechen auch bei größeren Importen reagieren. Synchrone Snapshot-/Verlaufs-/Energieabfragen und Neuberechnungen nach jeder importbedingten Datenrevision als mögliche Engpässe prüfen; die konkrete Ursache ist noch nicht nachgewiesen. Eine generell uneingeschränkte Bedienbarkeit aller App-Seiten ist für diese Änderung nicht erforderlich.
 
 Status: vorgemerkt; noch nicht in der veröffentlichten Version 1.2.4 umgesetzt.
