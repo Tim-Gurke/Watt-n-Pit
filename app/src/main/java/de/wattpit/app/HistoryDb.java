@@ -9,6 +9,8 @@ import de.wattpit.app.core.CsvCodec;
 import de.wattpit.app.core.Reading;
 import de.wattpit.app.core.HistoryQuery;
 import de.wattpit.app.core.ArchiveMerge;
+import de.wattpit.app.core.ArchiveCodec;
+import de.wattpit.app.core.ArchiveSyncPlan;
 import de.wattpit.app.core.EnergyIntegral;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -18,7 +20,7 @@ import java.util.*;
 
 final class HistoryDb extends SQLiteOpenHelper {
     private static final String[] NUMBERS = {"voltage","current","power","soc","solar","yieldWh","ttg","consumed","temperature","aux","load","state","error","alarm","pvVoltage","auxRaw"};
-    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 3); setWriteAheadLoggingEnabled(true); }
+    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 4); setWriteAheadLoggingEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE readings (ts INTEGER NOT NULL, device TEXT NOT NULL, kind TEXT NOT NULL, origin TEXT NOT NULL, " +
                 "voltage REAL, current REAL, power REAL, soc REAL, solar REAL, yieldWh REAL, ttg REAL, consumed REAL, temperature REAL, aux REAL, load REAL, " +
@@ -28,15 +30,29 @@ final class HistoryDb extends SQLiteOpenHelper {
         createDaily(db);
         createArchives(db);
     }
-    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { if (oldVersion < 2) createDaily(db); if(oldVersion<3){db.execSQL("ALTER TABLE readings ADD COLUMN period INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE readings ADD COLUMN pvVoltage REAL");db.execSQL("ALTER TABLE readings ADD COLUMN auxRaw REAL");createArchives(db);} }
+    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion < 2) createDaily(db);
+        if(oldVersion<3){db.execSQL("ALTER TABLE readings ADD COLUMN period INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE readings ADD COLUMN pvVoltage REAL");db.execSQL("ALTER TABLE readings ADD COLUMN auxRaw REAL");createArchives(db);}
+        else if(oldVersion<4)db.execSQL("ALTER TABLE device_daily ADD COLUMN finalized INTEGER NOT NULL DEFAULT 0");
+    }
 
     private static void createArchives(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE device_daily(device TEXT NOT NULL,day TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(device,day))");
+        db.execSQL("CREATE TABLE device_daily(device TEXT NOT NULL,day TEXT NOT NULL,payload TEXT NOT NULL,finalized INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(device,day))");
         db.execSQL("CREATE TABLE archive_coverage(device TEXT NOT NULL,channel INTEGER NOT NULL,period INTEGER NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,PRIMARY KEY(device,channel,period,start))");
         db.execSQL("CREATE TABLE device_history(device TEXT PRIMARY KEY,payload TEXT NOT NULL)");
     }
-    synchronized boolean covered(String device,int channel,int period,long from,long to){
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT 1 FROM archive_coverage WHERE device=? AND channel=? AND period=? AND start<=? AND end>=? LIMIT 1",new String[]{device,""+channel,""+period,""+from,""+to})){return c.moveToFirst();}
+    interface ArchiveCheck { void run() throws Exception; }
+    ArchiveSyncPlan.Availability archiveAvailability(String device,String kind,int channel,String field,List<ArchiveCodec.Level> levels,ArchiveCodec.Clock clock,long now,ArchiveCheck check) throws Exception{
+        List<Integer> periods=new ArrayList<>();for(ArchiveCodec.Level level:levels)periods.add(level.period);
+        ArchiveSyncPlan.Availability local=new ArchiveSyncPlan.Availability(periods,now);
+        long[] bounds=ArchiveSyncPlan.bounds(levels,clock);
+        try(Cursor c=getReadableDatabase().rawQuery(ArchiveSyncPlan.readingsSql(field),new String[]{device,kind,""+bounds[0],""+bounds[1]})){
+            int rows=0;while(c.moveToNext()){local.reading(c.getLong(0),c.getString(1),c.getInt(2));if(++rows%512==0)check.run();}
+        }
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT period,start,end FROM archive_coverage WHERE device=? AND channel=? AND start<=? AND end>=?",new String[]{device,""+channel,""+bounds[1],""+bounds[0]})){
+            int rows=0;while(c.moveToNext()){local.imported(c.getInt(0),c.getLong(1),c.getLong(2));if(++rows%512==0)check.run();}
+        }
+        return local;
     }
     synchronized void cover(String device,int channel,int period,long from,long to){
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
@@ -47,8 +63,11 @@ final class HistoryDb extends SQLiteOpenHelper {
             db.delete("archive_coverage",where,args);ContentValues v=new ContentValues();v.put("device",device);v.put("channel",channel);v.put("period",period);v.put("start",from);v.put("end",to);db.insertOrThrow("archive_coverage",null,v);db.setTransactionSuccessful();
         }finally{db.endTransaction();}
     }
-    synchronized void archiveDaily(String device,String day,JSONObject payload) {
-        ContentValues v=new ContentValues();v.put("device",device);v.put("day",day);v.put("payload",payload.toString());
+    synchronized boolean archiveDayComplete(String device,String day){
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT 1 FROM device_daily WHERE device=? AND day=? AND finalized=1",new String[]{device,day})){return c.moveToFirst();}
+    }
+    synchronized void archiveDaily(String device,String day,JSONObject payload,boolean finalized) {
+        ContentValues v=new ContentValues();v.put("device",device);v.put("day",day);v.put("payload",payload.toString());v.put("finalized",finalized?1:0);
         getWritableDatabase().insertWithOnConflict("device_daily",null,v,SQLiteDatabase.CONFLICT_REPLACE);
     }
     synchronized void archiveHistory(String device,JSONObject payload) {
