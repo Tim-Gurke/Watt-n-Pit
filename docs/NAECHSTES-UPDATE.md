@@ -1,6 +1,22 @@
-# Mit 1.2.5 umgesetzt
+# Planung und umgesetzte Änderungen
 
-## Solarfenster an Sonnenzeiten und tatsächliche Erzeugung anpassen
+## Für das nächste Update: Synchronisation auf Wunsch im Hintergrund
+
+Wunsch vom 19. Oktober 2026: Der laufende Geräteabruf soll wahlweise im Hintergrund weiterlaufen, während die App wieder bedienbar wird. Die Entscheidung gilt ausschließlich für den aktuellen Synchronisationslauf, einschließlich der nacheinander abgefragten Geräte.
+
+- In der Warteanzeige zusätzlich zu **Synchronisation abbrechen** die Schaltfläche **Im Hintergrund synchronisieren** anbieten. Wer nichts auswählt, bleibt bei der bisherigen Warteanzeige.
+- Nach dieser Auswahl die normale Bedienung wieder freigeben und den Abruf weiterlaufen lassen. Einen kompakten, jederzeit erreichbaren Status mit Gerät, Arbeitsschritt und echtem Fortschritt zeigen; darüber Fortschrittsanzeige und Abbrechen weiterhin erreichbar halten.
+- Der bestehende Android-Dienst mit seiner Benachrichtigung führt den Abruf weiter. Das Ausblenden der Warteanzeige beendet den Import nicht.
+- Die Wahl an den aktiven Lauf binden und bei dessen Erfolg, Abbruch oder Fehler verwerfen. Wird derselbe laufende Abruf erneut geöffnet, die bereits getroffene Wahl beibehalten. Beim nächsten neuen Lauf wieder die normale Warteanzeige zeigen. Keine dauerhafte Hintergrundeinstellung und kein Export dieser Auswahl.
+- Während des Imports den angezeigten Datenstand klar kennzeichnen. Vorhandene Werte und Kurven erhalten, keine gesperrten Abfragen als leere oder gemessene Nullwerte darstellen. Nach Abschluss die ergänzten Daten gemeinsam aktualisieren; offene Eingaben und beide Anordnungen erhalten.
+- Die aktuellen Bridge-Sperren und teuren synchronen Datenbank-/Energieabfragen dafür gezielt anpassen. Nur die Warteanzeige auszublenden genügt nicht. Bedienung, Fortschritt und Abbrechen müssen auch bei großen Archiven reagieren.
+- Hoch-/Querformat, Hell/Dunkel, laufenden Gerätewechsel, App-Wechsel, Abbruch, Fehler und den nächsten neuen Lauf prüfen.
+
+Status: vorgemerkt; noch nicht in der veröffentlichten Version 1.2.5 enthalten.
+
+## Mit 1.2.5 umgesetzt
+
+### Solarfenster an Sonnenzeiten und tatsächliche Erzeugung anpassen
 
 Wunsch vom 18. Oktober 2026: Solarwerte mit Tageslichtfenster sollen nach Sonnenuntergang nicht weiter eine immer längere Nullstrecke anzeigen. Tatsächlich gemessene Erzeugung vor Sonnenaufgang oder nach Sonnenuntergang zählt weiterhin mit.
 
@@ -12,7 +28,7 @@ Wunsch vom 18. Oktober 2026: Solarwerte mit Tageslichtfenster sollen nach Sonnen
 - Freie Zeiträume behalten ihre ausdrücklich gewählten Grenzen. Beide Anordnungen sowie die unabhängige Livezahl bleiben erhalten.
 - Sonnenuntergang am eingestellten Wetterort zusätzlich übernehmen. Bei fehlender oder ungültiger Sonnenzeit den bisherigen Verlauf mit erkennbarem Ersatz verwenden.
 
-## Rolle als Energie-Cockpit deutlich erklären
+### Rolle als Energie-Cockpit deutlich erklären
 
 Wunsch vom 19. Oktober 2026: Watt’n’Pit ergänzt die Victron-Software als Energieanzeige; Geräteeinstellungen werden weiterhin über VictronConnect vorgenommen.
 
@@ -23,7 +39,7 @@ Wunsch vom 19. Oktober 2026: Watt’n’Pit ergänzt die Victron-Software als En
 - Bei der Batteriekapazität und den Angaben zur Solaranlage ausdrücklich erklären, dass diese nur der Auswertung und Darstellung in der App dienen und nicht in die Geräte geschrieben werden.
 - Der entsprechende Hinweis steht bereits am Anfang der Projektbeschreibung und Anleitung. Die App-Oberfläche enthält den Hinweis ab 1.2.5.
 
-## Synchronisation deutlich anzeigen; normale Bedienung darf pausieren
+### Synchronisation deutlich anzeigen; normale Bedienung darf pausieren
 
 Beobachtung vom 19. Oktober 2026: Während der Synchronisation reagieren Schaltflächen nicht. Der zusätzliche Blitz in der Android-Statusleiste erklärt den Zustand nicht ausreichend. Klarstellung des Anwenders: Eine vorübergehend gesperrte normale Bedienung ist in Ordnung; entscheidend ist eine verständliche Kennzeichnung des laufenden Abgleichs.
 
@@ -36,6 +52,6 @@ Beobachtung vom 19. Oktober 2026: Während der Synchronisation reagieren Schaltf
 
 Status: in 1.2.5 umgesetzt. Siehe [Versionshinweise](releases/1.2.5.md) und [Anleitung](ANLEITUNG.md).
 
-## Verschiebbare Messpunktauswahl in der Großansicht
+### Verschiebbare Messpunktauswahl in der Großansicht
 
 Wunsch vom 19. Oktober 2026: Ein ausgewählter Kurvenwert erhält einen Punkt und eine senkrechte Linie. Während der Auswahl lässt sich die Markierung mit dem Finger verschieben; Uhrzeit und Werte folgen. **Auswahl aufheben** gibt das Verschieben des Zeitraums wieder frei.
