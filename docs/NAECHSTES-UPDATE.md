@@ -12,4 +12,13 @@ Wunsch vom 18. Oktober 2026: Solarwerte mit Tageslichtfenster sollen nach Sonnen
 - Freie Zeiträume behalten ihre ausdrücklich gewählten Grenzen. Beide Anordnungen sowie die unabhängige Livezahl bleiben erhalten.
 - Sonnenuntergang am eingestellten Wetterort zusätzlich übernehmen. Bei fehlender oder ungültiger Sonnenzeit den bisherigen Verlauf mit erkennbarem Ersatz verwenden.
 
+## Rolle als Energie-Cockpit deutlich erklären
+
+Wunsch vom 19. Oktober 2026: Watt’n’Pit ergänzt die Victron-Software als Energieanzeige; Geräteeinstellungen werden weiterhin über VictronConnect vorgenommen.
+
+- Diesen Hinweis gut sichtbar auf der Geräteseite und bei den App-Einstellungen aufnehmen, ohne die Übersicht mit einer zusätzlichen dauerhaften Kachel zu belegen.
+- Geplanter Wortlaut: „Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht. Einstellungen an Solarregler und SmartShunt werden weiterhin in VictronConnect vorgenommen. Die Einstellungen hier betreffen nur Watt’n’Pit.“
+- Bei der Batteriekapazität und den Angaben zur Solaranlage ausdrücklich erklären, dass diese nur der Auswertung und Darstellung in der App dienen und nicht in die Geräte geschrieben werden.
+- Der entsprechende Hinweis steht bereits am Anfang der Projektbeschreibung und Anleitung. Die Ergänzung der App-Oberfläche folgt mit dem nächsten Update.
+
 Status: vorgemerkt; noch nicht in der veröffentlichten Version 1.2.4 umgesetzt.
