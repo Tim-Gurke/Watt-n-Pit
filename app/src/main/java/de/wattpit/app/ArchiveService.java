@@ -228,7 +228,7 @@ public final class ArchiveService extends Service {
         finally{main.post(this::stopSelf);}
     }
     private void runImport(){
-        boolean complete=false;
+        boolean importComplete=false;
         try {
             JSONObject cfg=null;JSONArray list=repository.configs();for(int i=0;i<list.length();i++)if(list.getJSONObject(i).getString("mac").equals(mac))cfg=list.getJSONObject(i);
             if(cfg==null)throw new IllegalArgumentException("Bitte zuerst ein Gerät einrichten.");kind=cfg.getString("kind");
@@ -335,7 +335,6 @@ public final class ArchiveService extends Service {
                 int added=repository.db.archiveBlock(mac,kind,field.name,times,values);changed+=added;blocks++;
                 if(added>0)repository.invalidateStats();
                 ArchiveSyncPlan.Availability local=availability.get(ch);
-                for(long[] time:times)local.reading(time[0],"archive",(int)time[1]);
                 for(long[] window:ArchiveSyncPlan.completed(block,clock,System.currentTimeMillis())){
                     repository.db.cover(mac,registers.get(ch),block.period,window[0],window[1]);local.imported(block.period,window[0],window[1]);
                 }
@@ -352,7 +351,7 @@ public final class ArchiveService extends Service {
             if(skipped>0)result+=" · "+skipped+" bereits vorhanden, nicht geladen";
             if(unmapped>0)result+=" · "+unmapped+" ohne Zeitreferenz zurückgestellt";
             if(unknown>0)result+=" · "+unknown+" Kanäle/Abfragen nicht unterstützt";
-            complete=true;
+            importComplete=true;
             traceSummary();saveDiagnostics(result);repository.archiveState(mac,false,result,processed,total);repository.message(result);
         }catch(Exception e){
             String reason=e instanceof GattFailure?"GATT "+((GattFailure)e).status:e instanceof TimeoutException?"Zeitüberschreitung":e instanceof IllegalArgumentException||e instanceof LinkClosed||e instanceof GattRejected||e instanceof IllegalStateException?e.getMessage():e instanceof SecurityException?"Bluetooth-Berechtigung fehlt":"Verbindung beendet";
@@ -360,7 +359,7 @@ public final class ArchiveService extends Service {
             String result=(cancelled?"Import abgebrochen · automatische Abrufe 30 Minuten pausiert":stage+": "+reason)+". "+changed+" Archivwerte übernommen. Weitere Daten unter Geräte → Gerätearchiv ergänzen nachladen.";
             trace(cancelled?"Abgebrochen":stage+" · "+reason);traceSummary();saveDiagnostics(result);
             repository.invalidateStats();repository.archiveState(mac,false,result,processed,total);repository.message(result);
-        }finally{closeGatt();repository.archiveAttemptFinished(mac,cancelled,complete);}
+        }finally{closeGatt();repository.archiveAttemptFinished(mac,cancelled,importComplete);}
     }
     private void refreshTransfer(int ch,ArchiveTransferPlan transfer,Map<Integer,List<ArchiveCodec.Level>> levels,
                                  Map<Integer,Integer> batches,Map<Integer,Integer> registers,Map<Integer,ArchiveCodec.Field> fields,
