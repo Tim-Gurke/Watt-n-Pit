@@ -11,6 +11,8 @@ const path=require('node:path');
  page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date(fixture.to));
  await page.addInitScript(f=>{
   window.coverageFixture=f;window.activeGap=false;window.curveTraces=[];
+  const width=Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype,'width');
+  Object.defineProperty(HTMLCanvasElement.prototype,'width',{...width,set(value){window.curveTraces=window.curveTraces.filter(x=>x.canvas!==this.id);return width.set.call(this,value)}});
   const proto=CanvasRenderingContext2D.prototype,begin=proto.beginPath,move=proto.moveTo,line=proto.lineTo,stroke=proto.stroke;
   proto.beginPath=function(){this.coveragePath=[];return begin.apply(this,arguments)};
   proto.moveTo=function(){this.coveragePath?.push('M');return move.apply(this,arguments)};
@@ -24,7 +26,7 @@ const path=require('node:path');
  },fixture);
  await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
  const moves=async()=>((await page.locator('[data-tile="coverage-solar"] .tile-sparkline path').last().getAttribute('d')).match(/M/g)||[]).length;
- const trace=async canvas=>page.evaluate(canvas=>window.curveTraces.filter(x=>x.canvas===canvas).at(-1)?.path,canvas);
+ const trace=async canvas=>page.evaluate(canvas=>window.curveTraces.filter(x=>x.canvas===canvas).map(x=>x.path).join(''),canvas);
  for(const gap of [false,true]){
   await page.evaluate(gap=>{window.activeGap=gap;window.mock.historyRevision++;poll();},gap);
   await page.waitForFunction(expected=>((document.querySelector('[data-tile="coverage-solar"] .tile-sparkline path:last-child')?.getAttribute('d')||'').match(/M/g)||[]).length===expected,gap?2:1);
@@ -35,8 +37,8 @@ const path=require('node:path');
   await page.locator('#detailClose').click();await page.locator('[data-page="history"]').click();await page.locator('#metricButtons [data-metric="power"]').click();
   assert.equal(((await trace('historyChart')).match(/M/g)||[]).length,gap?2:1,'history disagrees with native coverage');
   await page.locator('#metricButtons [data-metric="energy"]').click();
-  const energyPaths=await page.evaluate(()=>window.curveTraces.filter(x=>x.canvas==='historyChart').slice(-3).map(x=>(x.path.match(/M/g)||[]).length));
-  assert.deepEqual(energyPaths,Array(3).fill(gap?2:1),'energy plot disagrees with its Java coverage');
+  const energyMoves=((await trace('historyChart')).match(/M/g)||[]).length;
+  assert.equal(energyMoves,gap?6:3,'energy plot disagrees with its Java coverage');
   await page.locator('[data-page="overview"]').click();
   if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,gap?'sync-real-gap.png':'sync-complete.png'),fullPage:true});}
  }
