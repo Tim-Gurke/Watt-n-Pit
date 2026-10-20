@@ -78,6 +78,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onStart(){
         super.onStart();
+        web.removeCallbacks(retryIncompleteArchive);web.postDelayed(retryIncompleteArchive,15000);
         // Refresh on each foreground entry; WeatherClient skips disabled weather
         // and coalesces an already running request. Cached data stays available.
         WeatherClient.refresh(repository,true);
@@ -87,11 +88,15 @@ public final class MainActivity extends Activity {
             },800);
         }
     }
-    @Override protected void onStop(){stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
+    @Override protected void onStop(){web.removeCallbacks(retryIncompleteArchive);stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
+    private final Runnable retryIncompleteArchive=new Runnable(){@Override public void run(){startAutomaticImport(true);web.postDelayed(this,15000);}};
     private void startAutomaticImport(){
+        startAutomaticImport(false);
+    }
+    private void startAutomaticImport(boolean retriesOnly){
         if(isFinishing()||isDestroyed()||pendingStart||!repository.prefs.getBoolean("cockpitNotice-v1",false))return;
         try{
-            if(repository.automaticArchiveDevices().length()>0&&!repositoryArchiveActive())pendingArchive="AUTO";
+            if(repository.automaticArchiveDevices(retriesOnly).length()>0&&!repositoryArchiveActive())pendingArchive=retriesOnly?"RETRY":"AUTO";
             if(pendingArchive!=null||repository.prefs.getBoolean("recording",false)&&!repository.running)requestStart();
         }catch(Exception ignored){}
     }

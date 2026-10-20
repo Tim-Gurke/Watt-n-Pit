@@ -44,8 +44,11 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
     interface ArchiveCheck { void run() throws Exception; }
     ArchiveSyncPlan.Availability archiveAvailability(String device,String kind,int channel,String field,List<ArchiveCodec.Level> levels,ArchiveCodec.Clock clock,long now,ArchiveCheck check) throws Exception{
+        return archiveAvailability(device,kind,channel,field,levels,clock,now,true,check);
+    }
+    ArchiveSyncPlan.Availability archiveAvailability(String device,String kind,int channel,String field,List<ArchiveCodec.Level> levels,ArchiveCodec.Clock clock,long now,boolean refreshRecent,ArchiveCheck check) throws Exception{
         List<Integer> periods=new ArrayList<>();for(ArchiveCodec.Level level:levels)periods.add(level.period);
-        ArchiveSyncPlan.Availability local=new ArchiveSyncPlan.Availability(periods,now);
+        ArchiveSyncPlan.Availability local=new ArchiveSyncPlan.Availability(periods,now,refreshRecent);
         long[] bounds=ArchiveSyncPlan.bounds(levels,clock);
         try(Cursor c=getReadableDatabase().rawQuery(ArchiveSyncPlan.readingsSql(field),new String[]{device,kind,""+bounds[0],""+bounds[1]})){
             int rows=0;while(c.moveToNext()){local.reading(c.getLong(0),c.getString(1),c.getInt(2));if(++rows%512==0)check.run();}

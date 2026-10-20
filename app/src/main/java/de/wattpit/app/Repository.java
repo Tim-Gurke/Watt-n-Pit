@@ -87,14 +87,19 @@ final class Repository {
     }
     synchronized JSONArray configs() throws JSONException { return new JSONArray(prefs.getString("devices", "[]")); }
     JSONArray automaticArchiveDevices()throws JSONException{
+        return automaticArchiveDevices(false);
+    }
+    JSONArray automaticArchiveDevices(boolean retriesOnly)throws JSONException{
         JSONArray due=new JSONArray(),all=new JSONArray(prefs.getString("devices","[]"));long now=System.currentTimeMillis();
-        for(int i=0;i<all.length();i++){JSONObject cfg=all.getJSONObject(i);if(ArchiveSchedule.automaticDue(prefs.getLong("archiveNext."+cfg.getString("mac"),0),now))due.put(cfg);}
+        for(int i=0;i<all.length();i++){JSONObject cfg=all.getJSONObject(i);String mac=cfg.getString("mac");
+            if((!retriesOnly||prefs.getBoolean("archivePending."+mac,false))&&ArchiveSchedule.automaticDue(prefs.getLong("archiveNext."+mac,0),now,prefs.getInt("archiveRevision."+mac,0)))due.put(cfg);}
         return due;
     }
-    void archiveAttemptFinished(String mac,boolean cancelled){prefs.edit().putLong("archiveNext."+mac,ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),cancelled)).apply();}
+    void archiveAttemptFinished(String mac,boolean cancelled,boolean complete){prefs.edit().putLong("archiveNext."+mac,ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),cancelled))
+            .putInt("archiveRevision."+mac,ArchiveSchedule.REPAIR_REVISION).putBoolean("archivePending."+mac,!cancelled&&!complete).apply();}
     void pauseAutomaticArchives(){
         try{JSONArray all=configs();SharedPreferences.Editor edit=prefs.edit();long next=ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),true);
-            for(int i=0;i<all.length();i++)edit.putLong("archiveNext."+all.getJSONObject(i).getString("mac"),next);edit.apply();
+            for(int i=0;i<all.length();i++){String mac=all.getJSONObject(i).getString("mac");edit.putLong("archiveNext."+mac,next).putInt("archiveRevision."+mac,ArchiveSchedule.REPAIR_REVISION).putBoolean("archivePending."+mac,false);}edit.apply();
         }catch(JSONException ignored){}
     }
     ArchiveCodec.Clock archiveClock(String mac,long uptime){

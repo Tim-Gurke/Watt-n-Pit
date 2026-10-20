@@ -3,6 +3,13 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class ArchiveScheduleTest {
+    @Test public void aRepairUpdateStartsEvenDuringThePreviousVersionsCooldown(){
+        assertTrue(ArchiveSchedule.automaticDue(ArchiveSchedule.nextAutomatic(1000,false),1001,0));
+        assertFalse(ArchiveSchedule.automaticDue(ArchiveSchedule.nextAutomatic(1000,false),1001,ArchiveSchedule.REPAIR_REVISION));
+    }
+    @Test public void cancellingTheRepairStillPausesItForThirtyMinutes(){
+        assertFalse(ArchiveSchedule.automaticDue(ArchiveSchedule.nextAutomatic(1000,true),1001,ArchiveSchedule.REPAIR_REVISION));
+    }
     @Test public void repeatedForegroundEntriesCannotRestartDuringCooldown(){
         long next=ArchiveSchedule.nextAutomatic(1000,false);
         assertFalse(ArchiveSchedule.automaticDue(next,31001));assertFalse(ArchiveSchedule.automaticDue(next,300999));assertTrue(ArchiveSchedule.automaticDue(next,301000));

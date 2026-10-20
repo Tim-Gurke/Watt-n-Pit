@@ -127,6 +127,18 @@ public class ArchiveSyncPlanTest {
     @Test public void emptyDeviceResponseCreatesNoCoverage() {
         assertTrue(ArchiveSyncPlan.completed(block(1000,0,0,false),clock(),t(20000)).isEmpty());
     }
+    @Test public void aFreshUnavailableReplyIsAcknowledgedOnlyWithinItsCurrentRun(){
+        ArchiveCodec.Block b=block(1000,30,1,true);
+        assertTrue(ArchiveSyncPlan.completed(b,clock(),t(1000)).isEmpty());
+        List<long[]> received=ArchiveSyncPlan.completed(b,clock(),t(1000),false);assertEquals(1,received.size());
+        ArchiveSyncPlan.Availability audit=new ArchiveSyncPlan.Availability(Arrays.asList(30),t(1000),false);
+        ArchiveSyncPlan.Availability later=new ArchiveSyncPlan.Availability(Arrays.asList(30),t(1000));
+        for(long[] r:received){audit.imported(30,r[0],r[1]);later.imported(30,r[0],r[1]);}
+        assertTrue(audit.known(t(1000),30));assertFalse(later.known(t(1000),30));
+    }
+    @Test public void aFutureClockErrorCannotBecomeAFinalAuditAcknowledgement(){
+        assertTrue(ArchiveSyncPlan.completed(block(1000,30,1,false),clock(),t(0),false).isEmpty());
+    }
     private Connection database() throws Exception {
         Connection db=DriverManager.getConnection("jdbc:sqlite::memory:");
         db.createStatement().execute("CREATE TABLE readings(ts INTEGER,device TEXT,kind TEXT,origin TEXT,period INTEGER,voltage REAL,current REAL)");return db;

@@ -39,9 +39,12 @@ public final class ArchiveSyncPlan {
         private final Map<Integer,Intervals> actual=new LinkedHashMap<>(),checked=new LinkedHashMap<>(),exact=new LinkedHashMap<>();
         private final Map<Integer,long[]> windows=new HashMap<>();
         private final Map<Integer,TreeSet<Long>> archived=new HashMap<>();
-        private final long now;private long lastLive=Long.MIN_VALUE;private int lastLiveStep;
+        private final long now;private final boolean refreshRecent;private long lastLive=Long.MIN_VALUE;private int lastLiveStep;
         public Availability(Collection<Integer> periods,long now){
-            this.now=now;for(int p:periods){if(p<1)throw new IllegalArgumentException("Ungültige Archivauflösung.");actual.put(p,new Intervals());checked.put(p,new Intervals());exact.put(p,new Intervals());}
+            this(periods,now,true);
+        }
+        public Availability(Collection<Integer> periods,long now,boolean refreshRecent){
+            this.now=now;this.refreshRecent=refreshRecent;for(int p:periods){if(p<1)throw new IllegalArgumentException("Ungültige Archivauflösung.");actual.put(p,new Intervals());checked.put(p,new Intervals());exact.put(p,new Intervals());}
         }
         public void reading(long time,String origin,int resolution){
             if(origin.equals("live")){
@@ -52,7 +55,7 @@ public final class ArchiveSyncPlan {
             if(!(origin.equals("archive")||origin.equals("csv")))return;
             if(resolution<=0){if(origin.equals("csv"))for(Intervals ranges:actual.values())ranges.add(time,time);return;}
             long stableBefore=now-2L*resolution*1000;
-            if(time>=stableBefore)return;
+            if(refreshRecent&&time>=stableBefore)return;
             TreeSet<Long> times=archived.computeIfAbsent(resolution,k->new TreeSet<>());
             Long lower=times.floor(time),upper=times.ceiling(time);times.add(time);
             for(int p:actual.keySet())if(resolution<=p){
@@ -63,6 +66,10 @@ public final class ArchiveSyncPlan {
             if(exact.containsKey(resolution))exact.get(resolution).add(time,time);
         }
         public void imported(int period,long from,long to){Intervals ranges=checked.get(period);if(ranges!=null)ranges.add(from,to);}
+        void received(ArchiveCodec.Block block,ArchiveCodec.Clock clock){
+            for(int i=0;i<block.count;i++)if(block.values[i]!=null){Long time=clock.millis(block.time-(long)i*block.period);if(importable(time))reading(time,"archive",block.period);}
+            for(long[] range:completed(block,clock,now))imported(block.period,range[0],range[1]);
+        }
         private void window(int period,Long oldest,Long newest){if(oldest!=null&&newest!=null)windows.put(period,new long[]{Math.min(oldest,newest),Math.max(oldest,newest)});}
         public boolean known(Long time,int period){
             if(time==null||!actual.containsKey(period))return false;
@@ -71,7 +78,7 @@ public final class ArchiveSyncPlan {
             // A nearby point alone cannot cover a real hole. Its surrounding archive cell
             // must be supported, or this exact resolution must already have been read.
             return actual.get(period).covers(from,to)||exact.get(period).contains(time)||
-                    time<now-2L*period*1000&&checked.get(period).contains(time);
+                    (!refreshRecent||time<now-2L*period*1000)&&checked.get(period).contains(time);
         }
         public boolean importable(Long time){return time!=null&&time>=0&&time<=now+300000;}
     }
@@ -154,11 +161,15 @@ public final class ArchiveSyncPlan {
 
     /** Persist completed responses, including unavailable values, without bridging unknown clock epochs. */
     public static List<long[]> completed(ArchiveCodec.Block block, ArchiveCodec.Clock clock, long now) {
+        return completed(block,clock,now,true);
+    }
+    /** Recent acknowledgements are valid for this run's audit, but not a later skip marker. */
+    public static List<long[]> completed(ArchiveCodec.Block block, ArchiveCodec.Clock clock, long now,boolean stableOnly) {
         List<long[]> windows = new ArrayList<>();
         long from = 0, to = 0; boolean open = false;
         for (int i = 0; i < block.count; i++) {
             Long time = clock.millis(block.time - (long) i * block.period);
-            if (time == null || time >= now - 2L * block.period * 1000) {
+            if (time == null || time>now+300000 || stableOnly&&time >= now - 2L * block.period * 1000) {
                 if (open) windows.add(new long[]{from, to});
                 open = false;
             } else if (open && time == from - block.period * 1000L) from = time;
