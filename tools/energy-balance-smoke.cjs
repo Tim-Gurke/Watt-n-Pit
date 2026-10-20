@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const path=require('node:path');
 
 (async()=>{
- const browser=await chromium.launch({headless:true,executablePath:process.env.WATTPIT_CHROMIUM,args:['--no-sandbox','--single-process','--no-zygote','--disable-gpu']});
+ const browser=await chromium.launch({headless:true,executablePath:process.env.WATTPIT_CHROMIUM,args:['--no-sandbox','--disable-gpu']});
  const page=await browser.newPage({viewport:{width:390,height:1100},timezoneId:'Europe/Berlin'}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-10-17T12:42:00Z'));
  await page.addInitScript(()=>{
