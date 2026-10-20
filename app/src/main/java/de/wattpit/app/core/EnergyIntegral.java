@@ -1,18 +1,13 @@
 package de.wattpit.app.core;
 
 import java.util.*;
+import de.wattpit.app.core.SampleTimeline.Interval;
 
 /** Integrates original power samples. Unknown intervals are excluded, never extrapolated. */
 public final class EnergyIntegral {
     public static final long LOOKAROUND = 65535L * 1500;
-    public static final class Sample {
-        public final long time;
-        public final double watts;
-        public final int period;
-        public final String device,origin;
-        public Sample(long time,double watts,int period,String device,String origin) {
-            this.time=time;this.watts=watts;this.period=period;this.device=device;this.origin=origin;
-        }
+    public static final class Sample extends SampleTimeline.Sample {
+        public Sample(long time,double watts,int period,String device,String origin){super(time,watts,period,device,origin);}
     }
     public static final class Point {
         public final long time;
@@ -26,22 +21,6 @@ public final class EnergyIntegral {
         public long coveredMillis;
         public final List<Point> points=new ArrayList<>();
         public double coverage(long from,long to){return to>from?Math.min(1,coveredMillis/(double)(to-from)):0;}
-    }
-    private static final class Segment {
-        final Sample a,b;
-        final long from,to;
-        final int id,rank;
-        Segment(Sample a,Sample b,long from,long to,int id){this.a=a;this.b=b;this.from=from;this.to=to;this.id=id;rank=a.origin.equals("live")?3:a.origin.equals("archive")?2:1;}
-        double value(long t){return a.watts+(b.watts-a.watts)*(t-a.time)/(b.time-a.time);}
-    }
-    private static final class Event {
-        final long time;final Segment segment;final boolean start;
-        Event(long time,Segment segment,boolean start){this.time=time;this.segment=segment;this.start=start;}
-    }
-    private static final class Interval {
-        final long from,to;final double a,b;
-        Interval(long from,long to,double a,double b){this.from=from;this.to=to;this.a=a;this.b=b;}
-        double value(long time){return a+(b-a)*(time-from)/(to-from);}
     }
     public static final class Flow {
         public final Result solar,consumption,balance;
@@ -60,7 +39,11 @@ public final class EnergyIntegral {
     public static Flow flow(List<Sample> solar,List<Sample> battery,long from,long to,long solarFrom,long solarTo) {
         if(from<0||to<=from)throw new IllegalArgumentException("Ungültiger Zeitraum.");
         solarFrom=Math.max(from,Math.min(to,solarFrom));solarTo=Math.max(solarFrom,Math.min(to,solarTo));
-        List<Interval> observed=intervals(solar,from,to,false),s=new ArrayList<>(),b=intervals(battery,from,to,true);
+        return flowIntervals(intervals(solar,from,to,false),intervals(battery,from,to,true),from,to,solarFrom,solarTo);
+    }
+    public static Flow flowIntervals(List<Interval> observed,List<Interval> b,long from,long to,long solarFrom,long solarTo){
+        solarFrom=Math.max(from,Math.min(to,solarFrom));solarTo=Math.max(solarFrom,Math.min(to,solarTo));
+        List<Interval> s=new ArrayList<>();
         for(Interval x:observed)if(x.a>0||x.b>0){solarFrom=Math.min(solarFrom,x.from);solarTo=Math.max(solarTo,x.to);}
         if(solarFrom>from)s.add(new Interval(from,solarFrom,0,0));
         for(Interval x:observed){long start=Math.max(solarFrom,x.from),end=Math.min(solarTo,x.to);if(end>start)s.add(new Interval(start,end,x.value(start),x.value(end)));}
@@ -93,32 +76,26 @@ public final class EnergyIntegral {
     private static Result calculate(List<Sample> samples,long from,long to,boolean discharge,boolean balance) {
         return integrate(intervals(samples,from,to,discharge||balance),from,to,discharge,balance);
     }
-    private static List<Interval> intervals(List<Sample> samples,long from,long to,boolean signed) {
-        if(from<0||to<=from)throw new IllegalArgumentException("Ungültiger Zeitraum.");
-        List<Sample> sorted=new ArrayList<>(samples);sorted.sort(Comparator.comparingLong(s->s.time));
-        Map<String,Sample> previous=new HashMap<>();List<Event> events=new ArrayList<>();int id=0;
-        for(Sample s:sorted){
-            boolean live=s.origin.equals("live");
-            String key=s.device+"\n"+s.origin+"\n"+(live?0:s.period);Sample a=previous.put(key,s);
-            if(a==null||!Double.isFinite(a.watts)||!Double.isFinite(s.watts)||(!signed&&(a.watts<0||s.watts<0)))continue;
-            long dt=s.time-a.time,limit=s.period>0?s.period*1500L:90000;
-            if(live&&a.period>0)limit=Math.min(limit,a.period*1500L);
-            if(dt<=0||dt>limit)continue;
-            long start=Math.max(from,a.time),end=Math.min(to,s.time);if(end<=start)continue;
-            Segment segment=new Segment(a,s,start,end,id++);events.add(new Event(start,segment,true));events.add(new Event(end,segment,false));
+    /** Complementary Voltage/Current channels need no extra BLE fetch to derive power. */
+    public static List<Interval> powerIntervals(List<Sample> power,List<Sample> voltage,List<Sample> current,long from,long to){
+        Map<String,List<Sample>> volts=new LinkedHashMap<>(),amps=new LinkedHashMap<>();
+        for(Sample s:voltage)volts.computeIfAbsent(s.device,k->new ArrayList<>()).add(s);
+        for(Sample s:current)amps.computeIfAbsent(s.device,k->new ArrayList<>()).add(s);
+        List<Interval> derived=new ArrayList<>();
+        for(String device:volts.keySet()){
+            List<Interval> v=SampleTimeline.intervals(volts.get(device),from,to,false),c=SampleTimeline.intervals(amps.getOrDefault(device,Collections.emptyList()),from,to,true),part=new ArrayList<>();
+            int i=0,j=0;while(i<v.size()&&j<c.size()){
+                Interval a=v.get(i),b=c.get(j);long start=Math.max(a.from,b.from),end=Math.min(a.to,b.to);
+                if(end>start)part.add(new Interval(start,end,a.value(start)*b.value(start),a.value(end)*b.value(end)));
+                if(a.to<=b.to)i++;if(b.to<=a.to)j++;
+            }
+            derived=SampleTimeline.prefer(derived,part);
         }
-        events.sort(Comparator.comparingLong(e->e.time));
-        TreeSet<Segment> active=new TreeSet<>(Comparator.<Segment>comparingInt(s->s.rank).reversed().thenComparingInt(s->s.a.period).thenComparingInt(s->s.id));
-        List<Interval> result=new ArrayList<>();
-        for(int i=0;i<events.size();){
-            long time=events.get(i).time;
-            while(i<events.size()&&events.get(i).time==time){Event e=events.get(i++);if(e.start)active.add(e.segment);else active.remove(e.segment);}
-            if(i==events.size()||active.isEmpty())continue;
-            long end=events.get(i).time;if(end<=time)continue;
-            Segment s=active.first();double a=s.value(time),b=s.value(end);
-            result.add(new Interval(time,end,a,b));
-        }
-        return result;
+        return SampleTimeline.prefer(SampleTimeline.intervals(power,from,to,true),derived);
+    }
+    public static Result calculateIntervals(List<Interval> intervals,long from,long to,boolean discharge,boolean balance){return integrate(intervals,from,to,discharge,balance);}
+    private static List<Interval> intervals(List<Sample> samples,long from,long to,boolean signed){
+        return SampleTimeline.intervals(samples,from,to,signed);
     }
     private static Result integrate(List<Interval> intervals,long from,long to,boolean discharge,boolean balance) {
         Result result=new Result();List<Point> raw=new ArrayList<>();double energy=0;long lastEnd=-1;
@@ -134,21 +111,19 @@ public final class EnergyIntegral {
         }
         if(result.coveredMillis==0)return result;
         result.wh=energy;
-        // Bound bridge payloads while retaining endpoints and explicit breaks in each bucket.
-        long width=Math.max(1,(to-from)/600);Point first=null,last=null,low=null,high=null;long bucket=-1;boolean gap=false;
+        long width=Math.max(1,(to-from)/600);List<Point> bucket=new ArrayList<>();long slot=-1;
         for(Point p:raw){long next=(p.time-from)/width;
             result.minimumWh=Math.min(result.minimumWh,p.wh);result.maximumWh=Math.max(result.maximumWh,p.wh);
-            if(first!=null&&next!=bucket){append(result.points,first,last,low,high,gap);first=null;gap=false;}
-            if(first==null){first=p;low=high=p;bucket=next;}else if(p.gap&&p.time!=first.time)gap=true;
-            if(p.wh<low.wh)low=p;if(p.wh>high.wh)high=p;
-            last=p;
+            if(!bucket.isEmpty()&&(next!=slot||p.gap)){append(result.points,bucket);bucket.clear();}
+            bucket.add(p);slot=next;
         }
-        if(first!=null)append(result.points,first,last,low,high,gap);
-        return result;
+        append(result.points,bucket);return result;
     }
-    private static void append(List<Point> out,Point first,Point last,Point low,Point high,boolean gap){
+    private static void append(List<Point> out,List<Point> bucket){
+        if(bucket.isEmpty())return;Point first=bucket.get(0),last=bucket.get(bucket.size()-1),low=first,high=first;
+        for(Point p:bucket){if(p.wh<low.wh)low=p;if(p.wh>high.wh)high=p;}
         List<Point> selected=new ArrayList<>(Arrays.asList(first,low,high,last));selected.sort(Comparator.comparingLong(p->p.time));
-        long previous=-1;for(Point p:selected)if(p.time!=previous){if(p!=first)p.gap|=gap;out.add(p);previous=p.time;}
+        Point previous=null;for(Point p:selected)if(previous!=p){if(out.isEmpty()||out.get(out.size()-1).time!=p.time||p.gap)out.add(p);previous=p;}
     }
     private static double positiveArea(double a,double b){
         if(a>=0&&b>=0)return (a+b)/2;

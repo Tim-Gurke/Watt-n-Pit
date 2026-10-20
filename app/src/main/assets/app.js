@@ -330,7 +330,7 @@ function canvasChart(canvas,data,from,to,chosen,mini=false) {
     const bucket=(to-from)/600;
     const gapLimit=Math.max(bucket*3,s.origin==='csv'?45*60000:45000,...s.points.map(p=>(p.period||0)*1500));
     const segments=[];let segment=[];
-    for(const p of s.points){if(segment.length && (chosen==='energy'?p.gap:p.t-segment[segment.length-1].last>gapLimit)){segments.push(segment);segment=[];}segment.push(p);}if(segment.length)segments.push(segment);
+    for(const p of s.points){if(segment.length && window.WattDashboardCore.seriesGap(segment[segment.length-1],p,gapLimit)){segments.push(segment);segment=[];}segment.push(p);}if(segment.length)segments.push(segment);
     for(const segment of segments){
       if(segment.some(p=>p.n>1)){ctx.beginPath();segment.forEach((p,i)=>i?ctx.lineTo(x(p.t),y(p.max)):ctx.moveTo(x(p.t),y(p.max)));[...segment].reverse().forEach(p=>ctx.lineTo(x(p.t),y(p.min)));ctx.closePath();ctx.globalAlpha=.16;ctx.fillStyle=color;ctx.fill();ctx.globalAlpha=1;}
       ctx.strokeStyle=color;ctx.lineWidth=mini?2:2.2;ctx.setLineDash(s.kind==='balance'?[6,3]:s.origin==='csv'?[5,4]:[]);ctx.beginPath();segment.forEach((p,i)=>i?ctx.lineTo(x(p.t),y(p.v)):ctx.moveTo(x(p.t),y(p.v)));ctx.stroke();ctx.setLineDash([]);

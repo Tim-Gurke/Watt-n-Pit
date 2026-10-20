@@ -44,8 +44,8 @@ public class EnergyIntegralTest {
         EnergyIntegral.Result r=EnergyIntegral.calculate(data,0,120000,false);
         assertEquals(2,r.wh,1e-9);assertEquals(120000,r.coveredMillis);
     }
-    @Test public void cannotInventIntervalsAcrossDifferentDevicesOrResolutions(){
-        List<EnergyIntegral.Sample> data=Arrays.asList(sample(0,100,30,"archive"),sample(30,100,60,"archive"),new EnergyIntegral.Sample(60000,100,60,"other-device","archive"));
+    @Test public void cannotInventIntervalsAcrossDifferentDevices(){
+        List<EnergyIntegral.Sample> data=Arrays.asList(sample(0,100,30,"archive"),new EnergyIntegral.Sample(30000,100,60,"other-device","archive"));
         assertNull(EnergyIntegral.calculate(data,0,90000,false).wh);
     }
     @Test public void invalidPowerBreaksRatherThanBridgesAnInterval(){

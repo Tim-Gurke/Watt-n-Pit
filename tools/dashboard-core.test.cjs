@@ -284,3 +284,9 @@ test('solar energy axis uses native observed bounds without reading cumulative W
  const w={from:100,to:200,solarFrom:100,solarTo:200,dayFrom:0,dayTo:300};
  assert.deepEqual(C.solarPlotWindow(w,[{t:300,v:200}],{from:50,to:250}),{...w,from:50,to:250});
 });
+
+test('native gap flags govern all charts across source changes and long supported intervals',()=>{
+ const a={t:1000,last:1000,device:'A',origin:'live'},b={t:61000,last:61000,device:'A',origin:'archive',gap:false};
+ assert.equal(C.seriesGap(a,b,15000),false);assert.equal(C.seriesGap(a,{...b,gap:true}),true);
+ assert.equal(C.seriesGap(a,{...b,device:'B',gap:false}),true);assert.equal(C.seriesGap(a,{...b,gap:undefined},15000),true);
+});

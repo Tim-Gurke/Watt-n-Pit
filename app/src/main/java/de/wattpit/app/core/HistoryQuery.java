@@ -25,10 +25,13 @@ public final class HistoryQuery {
         Selection s=select(from,to,metric,source);
         return new HistoryQuery("SELECT "+s.field+",ts FROM readings WHERE "+s.where+" ORDER BY ts DESC LIMIT 1",s.args);
     }
-    public static HistoryQuery rawPower(long from,long to,String metric,String source) {
+    public static HistoryQuery rawPower(long from,long to,String metric,String source){
         if(!metric.equals("solar")&&!metric.equals("batteryPower"))throw new IllegalArgumentException("Keine Leistungsmessgröße.");
+        return raw(from,to,metric,source);
+    }
+    public static HistoryQuery raw(long from,long to,String metric,String source){
         Selection s=select(from,to,metric,source,false);
-        return new HistoryQuery("SELECT ts,"+s.field+",period,device,origin FROM readings WHERE "+s.where+" ORDER BY ts",s.args);
+        return new HistoryQuery("SELECT ts,"+s.field+",period,device,origin,kind FROM readings WHERE "+s.where+" ORDER BY ts",s.args);
     }
     private static final class Selection {
         final String field,where; final List<String> args;
@@ -78,7 +81,7 @@ public final class HistoryQuery {
             else liveField="l."+field;
             where+=" AND (origin='live' OR NOT EXISTS (SELECT 1 FROM readings l WHERE l.kind=readings.kind AND (l.device=readings.device OR readings.origin='csv') "+
                     "AND (l.origin='live' OR (readings.origin='csv' AND l.origin='archive') OR (readings.origin='archive' AND l.origin='archive' AND l.period<readings.period AND l.period>0)) "+
-                    "AND l.ts BETWEEN readings.ts-MAX(45000,readings.period*500) AND readings.ts+MAX(45000,readings.period*500) AND ("+liveField+") IS NOT NULL))";
+                    "AND l.ts BETWEEN readings.ts-500 AND readings.ts+500 AND ("+liveField+") IS NOT NULL))";
         }
         return new Selection(field,where,args);
     }

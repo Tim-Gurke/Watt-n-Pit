@@ -80,4 +80,11 @@ public class HistoryQueryTest {
         }
         assertTrue(power.contains(-100.0));assertTrue(power.contains(100.0));assertTrue(power.contains(-26.4));assertFalse(power.contains(80.0));
     }
+    @Test public void aNecessaryArchiveEdgeIsNotHiddenByANearbyLiveReading() throws Exception {
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,solar,period) VALUES (200000,'S','solar','live',60,10),(220000,'S','solar','archive',60,30)");
+        HistoryQuery q=HistoryQuery.raw(190000,230000,"solar","all");int count=0;
+        try(PreparedStatement statement=db.prepareStatement(q.sql)){for(int i=0;i<q.args.length;i++)statement.setString(i+1,q.args[i]);try(ResultSet r=statement.executeQuery()){while(r.next())count++;}}
+        assertEquals(2,count);
+    }
+
 }

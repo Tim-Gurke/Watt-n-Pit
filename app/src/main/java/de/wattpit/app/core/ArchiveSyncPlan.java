@@ -28,6 +28,7 @@ public final class ArchiveSyncPlan {
             }
             ranges.put(from, to);
         }
+        boolean covers(long from,long to){Map.Entry<Long,Long> previous=ranges.floorEntry(from);return previous!=null&&previous.getValue()>=to;}
         boolean contains(long time) {
             Map.Entry<Long, Long> previous = ranges.floorEntry(time);
             return previous != null && previous.getValue() >= time;
@@ -35,47 +36,42 @@ public final class ArchiveSyncPlan {
     }
 
     public static final class Availability {
-        private final Map<Integer, Intervals> live = new LinkedHashMap<>(), archive = new LinkedHashMap<>();
-        private final long now;
-        private long lastLive=Long.MIN_VALUE;
-        private int lastLiveStep;
-        public Availability(Collection<Integer> periods, long now) {
-            this.now = now;
-            for (int period : periods) {
-                if (period < 1) throw new IllegalArgumentException("Ungültige Archivauflösung.");
-                live.put(period, new Intervals()); archive.put(period, new Intervals());
+        private final Map<Integer,Intervals> actual=new LinkedHashMap<>(),checked=new LinkedHashMap<>(),exact=new LinkedHashMap<>();
+        private final Map<Integer,long[]> windows=new HashMap<>();
+        private final Map<Integer,TreeSet<Long>> archived=new HashMap<>();
+        private final long now;private long lastLive=Long.MIN_VALUE;private int lastLiveStep;
+        public Availability(Collection<Integer> periods,long now){
+            this.now=now;for(int p:periods){if(p<1)throw new IllegalArgumentException("Ungültige Archivauflösung.");actual.put(p,new Intervals());checked.put(p,new Intervals());exact.put(p,new Intervals());}
+        }
+        public void reading(long time,String origin,int resolution){
+            if(origin.equals("live")){
+                boolean join=lastLive!=Long.MIN_VALUE&&time>lastLive&&time-lastLive<=SampleTimeline.liveLimit(lastLiveStep,resolution);
+                for(Intervals ranges:actual.values()){ranges.add(time-500,time+500);if(join)ranges.add(lastLive,time);}
+                if(time>lastLive){lastLive=time;lastLiveStep=resolution;}return;
             }
-        }
-        public void reading(long time, String origin, int resolution) {
-            int liveStep=resolution>0?resolution:10;
-            boolean joinsLive=origin.equals("live")&&lastLive!=Long.MIN_VALUE&&time>lastLive&&
-                    time-lastLive<=Math.min(liveStep,lastLiveStep)*1500L;
-            for (int period : live.keySet()) {
-                long tolerance = Math.min(45000L, Math.max(500L, period * 500L));
-                if (origin.equals("live")) {
-                    live.get(period).add(time-tolerance,time+tolerance);
-                    // The chosen recording cadence is not a reception gap. Only adjacent,
-                    // sufficiently close non-null samples of this field form a live span.
-                    if(joinsLive)live.get(period).add(lastLive,time);
-                }
-                else if ((origin.equals("archive") || origin.equals("csv")) && resolution > 0 && resolution <= period) {
-                    // Equal-resolution samples cover their own instant; finer samples have the same
-                    // bounded matching tolerance as the existing archive/live merge.
-                    long near = resolution < period ? tolerance : 0;
-                    archive.get(period).add(time - near, time + near);
-                } else if (origin.equals("csv") && resolution == 0) archive.get(period).add(time, time);
+            if(!(origin.equals("archive")||origin.equals("csv")))return;
+            if(resolution<=0){if(origin.equals("csv"))for(Intervals ranges:actual.values())ranges.add(time,time);return;}
+            long stableBefore=now-2L*resolution*1000;
+            if(time>=stableBefore)return;
+            TreeSet<Long> times=archived.computeIfAbsent(resolution,k->new TreeSet<>());
+            Long lower=times.floor(time),upper=times.ceiling(time);times.add(time);
+            for(int p:actual.keySet())if(resolution<=p){
+                Intervals ranges=actual.get(p);ranges.add(time,time);
+                if(lower!=null&&time-lower<=SampleTimeline.limit(origin,resolution))ranges.add(lower,time);
+                if(upper!=null&&upper-time<=SampleTimeline.limit(origin,resolution))ranges.add(time,upper);
             }
-            if(origin.equals("live")&&time>lastLive){lastLive=time;lastLiveStep=liveStep;}
+            if(exact.containsKey(resolution))exact.get(resolution).add(time,time);
         }
-        public void imported(int period, long from, long to) {
-            Intervals intervals = archive.get(period);
-            if (intervals != null) intervals.add(from, to);
-        }
-        public boolean known(Long time, int period) {
-            if (time == null || !live.containsKey(period)) return false;
-            // Live data are final. The newest two archive intervals can still change on the device.
-            return live.get(period).contains(time) ||
-                    time < now - 2L * period * 1000 && archive.get(period).contains(time);
+        public void imported(int period,long from,long to){Intervals ranges=checked.get(period);if(ranges!=null)ranges.add(from,to);}
+        private void window(int period,Long oldest,Long newest){if(oldest!=null&&newest!=null)windows.put(period,new long[]{Math.min(oldest,newest),Math.max(oldest,newest)});}
+        public boolean known(Long time,int period){
+            if(time==null||!actual.containsKey(period))return false;
+            long from=time,to=time;long[] bounds=windows.get(period);
+            if(bounds!=null){long half=period*500L;from=Math.max(bounds[0],time-half);to=Math.min(bounds[1],time+half);}
+            // A nearby point alone cannot cover a real hole. Its surrounding archive cell
+            // must be supported, or this exact resolution must already have been read.
+            return actual.get(period).covers(from,to)||exact.get(period).contains(time)||
+                    time<now-2L*period*1000&&checked.get(period).contains(time);
         }
         public boolean importable(Long time){return time!=null&&time>=0&&time<=now+300000;}
     }
@@ -104,6 +100,7 @@ public final class ArchiveSyncPlan {
     }
 
     public static Plan plan(ArchiveCodec.Level level,ArchiveCodec.Clock clock,Availability local){
+        local.window(level.period,clock.millis(level.oldest),clock.millis(level.newest));
         List<Window> windows=new ArrayList<>();int known=0,deferred=0,needed=0,count=0;long start=0;
         for(int i=0;i<level.capacity;i++){
             long cursor=level.newest-(long)i*level.period;

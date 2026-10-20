@@ -234,7 +234,7 @@ public class ArchiveSyncPlanTest {
     }
     @Test public void preflightFindsAllSeparateHolesBeforeTheFirstMeasurementRequest(){
         ArchiveSyncPlan.Availability a=local(30);
-        for(long time:new long[]{790,880,910,970,1000})a.reading(t(time),"live",0);
+        for(long time:new long[]{790,800,810,860,870,880,890,900,910,920,930,950,960,970,980,990,1000})a.reading(t(time),"live",10);
         ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(new ArchiveCodec.Level(8,30,1000),clock(),a);
         assertEquals(3,plan.needed);assertEquals(5,plan.known);assertEquals(2,plan.windows.size());
         assertEquals(940,plan.windows.get(0).cursor);assertEquals(1,plan.windows.get(0).count);
@@ -243,7 +243,7 @@ public class ArchiveSyncPlanTest {
     @Test public void liveDataArrivingAfterPreflightArePrunedBeforeTheirTransfer(){
         ArchiveSyncPlan.Availability a=local(30);
         ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(new ArchiveCodec.Level(8,30,1000),clock(),a);
-        a.reading(t(1000),"live",10);
+        for(long time=970;time<=1000;time+=10)a.reading(t(time),"live",10);
         ArchiveSyncPlan.Window w=plan.windows.get(0);
         ArchiveSyncPlan.Request request=next(a,w.cursor,w.count,790,8);
         assertEquals(8,plan.needed);assertEquals(1,request.skipped);assertEquals(7,request.count);assertEquals(970,request.cursor);

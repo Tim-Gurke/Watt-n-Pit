@@ -261,7 +261,7 @@
       const bounds=C.chartRange(t,points,capacity,summary),low=bounds.min,high=bounds.max,x=p=>4+(p.t-window.from)/(window.to-window.from)*292,y=p=>58-C.clamp((p.v-low)/(high-low),0,1)*52;
       const zero=low<0&&high>=0?`<path class="tile-zero-line" d="M4 ${y({v:0}).toFixed(2)}H296" stroke="var(--border)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`:'';
       let path='',last=null;
-      for(const p of series){const gap=last && (C.CATALOG[t.metric].energy?p.gap:(last.device!==p.device || last.origin!==p.origin || p.t-(last.last || last.t)>Math.max(this.a.isDemo()?600001:45000,(p.period||0)*1500,(window.to-window.from)/600*3)));path+=(last&&!gap?'L':'M')+x(p).toFixed(2)+','+y(p).toFixed(2);last=p;}
+      for(const p of series){const gap=C.seriesGap(last,p,Math.max(this.a.isDemo()?600001:45000,(p.period||0)*1500,(window.to-window.from)/600*3));path+=(last&&!gap?'L':'M')+x(p).toFixed(2)+','+y(p).toFixed(2);last=p;}
       return `<svg class="tile-sparkline" data-scale-min="${low}" data-scale-max="${high}" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true"><path d="M4 60H296" stroke="var(--border)"/>${zero}<path d="${path}" fill="none" stroke="${this.paint(t.color,t)}" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg><div class="tile-chart-range"><span>${esc(C.axisLabel(low,high-low))}</span>${bounds.auto?'<span title="Skala nach bisherigen Messwerten im gewählten Zeitraum">Auto</span>':''}<span>${esc(C.axisLabel(high,high-low))} ${esc(t.unit)}</span></div>`;
     }
     choose(id) {

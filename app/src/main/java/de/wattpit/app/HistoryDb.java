@@ -12,6 +12,8 @@ import de.wattpit.app.core.ArchiveMerge;
 import de.wattpit.app.core.ArchiveCodec;
 import de.wattpit.app.core.ArchiveSyncPlan;
 import de.wattpit.app.core.EnergyIntegral;
+import de.wattpit.app.core.SampleTimeline;
+import de.wattpit.app.core.HistorySchema;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.*;
@@ -20,11 +22,9 @@ import java.util.*;
 
 final class HistoryDb extends SQLiteOpenHelper {
     private static final String[] NUMBERS = {"voltage","current","power","soc","solar","yieldWh","ttg","consumed","temperature","aux","load","state","error","alarm","pvVoltage","auxRaw"};
-    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 4); setWriteAheadLoggingEnabled(true); }
+    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 5); setWriteAheadLoggingEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE readings (ts INTEGER NOT NULL, device TEXT NOT NULL, kind TEXT NOT NULL, origin TEXT NOT NULL, " +
-                "voltage REAL, current REAL, power REAL, soc REAL, solar REAL, yieldWh REAL, ttg REAL, consumed REAL, temperature REAL, aux REAL, load REAL, " +
-                "state INTEGER, error INTEGER, alarm INTEGER, pvVoltage REAL, auxRaw REAL, period INTEGER NOT NULL DEFAULT 0, UNIQUE(ts,device,origin))");
+        db.execSQL(HistorySchema.CREATE);
         db.execSQL("CREATE INDEX history_window ON readings(ts,kind,origin)");
         db.execSQL("CREATE INDEX history_device ON readings(device,ts)");
         createDaily(db);
@@ -34,11 +34,12 @@ final class HistoryDb extends SQLiteOpenHelper {
         if (oldVersion < 2) createDaily(db);
         if(oldVersion<3){db.execSQL("ALTER TABLE readings ADD COLUMN period INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE readings ADD COLUMN pvVoltage REAL");db.execSQL("ALTER TABLE readings ADD COLUMN auxRaw REAL");createArchives(db);}
         else if(oldVersion<4)db.execSQL("ALTER TABLE device_daily ADD COLUMN finalized INTEGER NOT NULL DEFAULT 0");
+        if(oldVersion<5)for(String sql:HistorySchema.MIGRATE)db.execSQL(sql);
     }
 
     private static void createArchives(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE device_daily(device TEXT NOT NULL,day TEXT NOT NULL,payload TEXT NOT NULL,finalized INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(device,day))");
-        db.execSQL("CREATE TABLE archive_coverage(device TEXT NOT NULL,channel INTEGER NOT NULL,period INTEGER NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,PRIMARY KEY(device,channel,period,start))");
+        db.execSQL(HistorySchema.COVERAGE);
         db.execSQL("CREATE TABLE device_history(device TEXT PRIMARY KEY,payload TEXT NOT NULL)");
     }
     interface ArchiveCheck { void run() throws Exception; }
@@ -92,14 +93,14 @@ final class HistoryDb extends SQLiteOpenHelper {
             ArchiveMerge match=ArchiveMerge.existing(field,device,kind,t[0],(int)t[1],value);
             try(Cursor c=db.rawQuery(match.sql,match.args)){if(c.moveToFirst())continue;}
             ContentValues v=new ContentValues();v.put(field,value);
-            String[] key={String.valueOf(t[0]),device};
-            boolean exists;int period=0;Double old=null;
-            try(Cursor c=db.rawQuery("SELECT period,"+field+" FROM readings WHERE ts=? AND device=? AND origin='archive'",key)){
-                exists=c.moveToFirst();if(exists){period=c.getInt(0);if(!c.isNull(1))old=c.getDouble(1);}
+            String[] key={String.valueOf(t[0]),device,String.valueOf(t[1])};
+            boolean exists;Double old=null;
+            try(Cursor c=db.rawQuery("SELECT period,"+field+" FROM readings WHERE ts=? AND device=? AND period=? AND origin='archive'",key)){
+                exists=c.moveToFirst();if(exists&&!c.isNull(1))old=c.getDouble(1);
             }
             if(exists){
-                if(old!=null&&(period<t[1]||Double.compare(old,value)==0))continue;
-                v.put("period",period==0?t[1]:Math.min(period,t[1]));db.update("readings",v,"ts=? AND device=? AND origin='archive'",key);
+                if(old!=null&&Double.compare(old,value)==0)continue;
+                v.put("period",t[1]);db.update("readings",v,"ts=? AND device=? AND period=? AND origin='archive'",key);
             } else {v.put("ts",t[0]);v.put("device",device);v.put("kind",kind);v.put("origin","archive");v.put("period",t[1]);db.insertOrThrow("readings",null,v);}
             changed++;
         }
@@ -152,15 +153,21 @@ final class HistoryDb extends SQLiteOpenHelper {
     JSONArray query(long from, long to, String metric, String source) throws Exception {
         if(flowKey(metric)!=null)return energyFlow(from,to,source).getJSONObject(flowKey(metric)).getJSONArray("points");
         if(metric.equals("solarEnergy")||metric.equals("dischargeEnergy")||metric.equals("batteryEnergy"))return energyData(from,to,metric,source).getJSONArray("points");
-        HistoryQuery query = HistoryQuery.build(from,to,metric,source);
-        JSONArray result = new JSONArray();
-        try (Cursor c = getReadableDatabase().rawQuery(query.sql, query.args)) {
-            while (c.moveToNext()) {
-                JSONObject p = new JSONObject();
-                p.put("t", c.getLong(0)); p.put("last", c.getLong(1)); p.put("device", c.getString(2));
-                p.put("kind", c.getString(3)); p.put("origin", c.getString(4)); p.put("v", c.getDouble(5));
-                p.put("period", c.getLong(9)); p.put("min", c.getDouble(6)); p.put("max", c.getDouble(7)); p.put("n", c.getLong(8));
-                result.put(p);
+        HistoryQuery query=HistoryQuery.raw(Math.max(0,from-EnergyIntegral.LOOKAROUND),Math.min(System.currentTimeMillis(),to+EnergyIntegral.LOOKAROUND),metric,source);
+        Map<String,List<SampleTimeline.Sample>> devices=new LinkedHashMap<>();Map<String,String> kinds=new HashMap<>();
+        try(Cursor c=getReadableDatabase().rawQuery(query.sql,query.args)){
+            while(c.moveToNext()){
+                String device=c.getString(3);kinds.put(device,c.getString(5));
+                devices.computeIfAbsent(device,k->new ArrayList<>()).add(new SampleTimeline.Sample(c.getLong(0),c.getDouble(1),c.getInt(2),device,c.getString(4)));
+            }
+        }
+        JSONArray result=new JSONArray();
+        for(Map.Entry<String,List<SampleTimeline.Sample>> entry:devices.entrySet()){
+            List<SampleTimeline.Interval> intervals=kinds.get(entry.getKey()).equals("shunt")&&(metric.equals("power")||metric.equals("batteryPower"))?
+                    batteryIntervals(from,to,source,entry.getKey()):SampleTimeline.intervals(entry.getValue(),from,to,true);
+            for(SampleTimeline.PlotPoint point:SampleTimeline.plot(entry.getValue(),intervals,from,to)){
+                result.put(new JSONObject().put("t",point.time).put("last",point.time).put("device",entry.getKey()).put("kind",kinds.get(entry.getKey()))
+                .put("origin",source.equals("all")?"merged":source).put("v",point.value).put("min",point.value).put("max",point.value).put("n",1).put("period",0).put("gap",point.gap));
             }
         }
         return result;
@@ -195,8 +202,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         if(!discharge&&!balance&&!metric.equals("solarEnergy"))throw new IllegalArgumentException("Unbekannte Energiegröße.");
         to=Math.min(to,System.currentTimeMillis());
         if(to<=from)return new JSONObject().put("points",new JSONArray()).put("summary",new JSONObject());
-        List<EnergyIntegral.Sample> samples=powerSamples(from,to,discharge||balance?"batteryPower":"solar",source);
-        EnergyIntegral.Result result=balance?EnergyIntegral.balance(samples,from,to):EnergyIntegral.calculate(samples,from,to,discharge);
+        EnergyIntegral.Result result=discharge||balance?EnergyIntegral.calculateIntervals(batteryIntervals(from,to,source,null),from,to,discharge,balance):EnergyIntegral.calculate(powerSamples(from,to,"solar",source),from,to,false);
         return energyJson(result,from,to,balance?"battery-balance":discharge?"shunt":"solar");
     }
 
@@ -213,13 +219,24 @@ final class HistoryDb extends SQLiteOpenHelper {
     JSONObject energyFlow(long from,long to,long solarFrom,long solarTo,String source) throws Exception {
         to=Math.min(to,System.currentTimeMillis());
         solarFrom=Math.max(from,solarFrom);
-        EnergyIntegral.Flow flow=to>from?EnergyIntegral.flow(powerSamples(from,to,"solar",source),powerSamples(from,to,"batteryPower",source),from,to,solarFrom,solarTo):null;
+        EnergyIntegral.Flow flow=to>from?EnergyIntegral.flowIntervals(SampleTimeline.intervals(powerSamples(from,to,"solar",source),from,to,false),batteryIntervals(from,to,source,null),from,to,solarFrom,solarTo):null;
         JSONObject out=new JSONObject();String[] kinds={"solar","consumption","balance"};
         EnergyIntegral.Result[] results=flow==null?new EnergyIntegral.Result[]{new EnergyIntegral.Result(),new EnergyIntegral.Result(),new EnergyIntegral.Result()}:new EnergyIntegral.Result[]{flow.solar,flow.consumption,flow.balance};
         for(int i=0;i<kinds.length;i++)out.put(kinds[i],energyJson(results[i],i==0&&flow!=null?flow.solarFrom:from,i==0&&flow!=null?flow.solarTo:to,kinds[i]));
         return out;
     }
 
+    private List<SampleTimeline.Interval> batteryIntervals(long from,long to,String source,String device){
+        return EnergyIntegral.powerIntervals(fieldSamples(from,to,"batteryPower",source,device),fieldSamples(from,to,"batteryVoltage",source,device),fieldSamples(from,to,"batteryCurrent",source,device),from,to);
+    }
+    private List<EnergyIntegral.Sample> fieldSamples(long from,long to,String metric,String source,String device){
+        HistoryQuery query=HistoryQuery.raw(Math.max(0,from-EnergyIntegral.LOOKAROUND),Math.min(System.currentTimeMillis(),to+EnergyIntegral.LOOKAROUND),metric,source);
+        List<EnergyIntegral.Sample> samples=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().rawQuery(query.sql,query.args)){
+            while(c.moveToNext())if(device==null||device.equals(c.getString(3)))samples.add(new EnergyIntegral.Sample(c.getLong(0),c.getDouble(1),c.getInt(2),c.getString(3),c.getString(4)));
+        }
+        return samples;
+    }
     private List<EnergyIntegral.Sample> powerSamples(long from,long to,String metric,String source){
         HistoryQuery query=HistoryQuery.rawPower(Math.max(0,from-EnergyIntegral.LOOKAROUND),Math.min(System.currentTimeMillis(),to+EnergyIntegral.LOOKAROUND),metric,source);
         List<EnergyIntegral.Sample> samples=new ArrayList<>();

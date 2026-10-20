@@ -53,6 +53,12 @@
       if(ratio>=target||step===100)return '#'+channels.map(c=>c.toString(16).padStart(2,'0')).join('');
     }
   }
+  function seriesGap(previous,point,fallbackLimit=45000) {
+    if(!previous)return true;
+    if(previous.device!==point.device)return true;
+    if(typeof point.gap==='boolean')return point.gap;
+    return previous.origin!==point.origin||point.t-(previous.last??previous.t)>fallbackLimit;
+  }
   function unitValue(value,unit) {
     if (!finite(value)) return null;
     value=Number(value);
@@ -259,5 +265,5 @@
     }
     return {...window,from:Math.max(window.dayFrom??window.from,from),to:Math.min(window.dayTo??window.to,to)};
   }
-  return {CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow,solarQueryWindow,solarPlotWindow};
+  return {seriesGap,CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow,solarQueryWindow,solarPlotWindow};
 });

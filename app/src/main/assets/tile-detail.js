@@ -196,7 +196,7 @@
           for(const p of points){
             if(!C.finite(p.v)){last=null;continue;}hasValues=true;
             const limit=Math.max(this.a.isDemo()?600001:45000,(p.period||0)*1500,(this.base.to-this.base.from)/600*3);
-            const gap=!last||p.gap||!C.CATALOG[s.tile.metric].energy&&(last.device!==p.device||last.origin!==p.origin||p.t-(last.last||last.t)>limit);
+            const gap=C.seriesGap(last,p,limit);
             if(gap)ctx.moveTo(x(p.t),y(p.v));else ctx.lineTo(x(p.t),y(p.v));last=p;
           }
           ctx.stroke();ctx.setLineDash([]);
