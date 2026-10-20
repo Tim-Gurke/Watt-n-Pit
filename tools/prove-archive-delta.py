@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the released planning classes locally; every phase uses a fresh JVM and SQLite connection."""
+"""Run the working-tree planning classes locally; every phase uses a fresh JVM and SQLite connection."""
 import argparse
 import hashlib
 import json
@@ -65,7 +65,7 @@ checks = {
     'complete_live_data_no_measurement_requests': results['complete_live_recording']['points'] == 0,
     'no_automatic_connection_permission_for_complete_data': not results['complete_live_recording']['automatic_due_after_five_minutes'],
 }
-report = {'version': '1.3.5', 'scope': 'Unchanged production core and production SQLite schema/queries; independent deterministic protocol peer. Every phase runs in a new JVM. One second of simulated transfer time per response is applied to the production completion-marker timestamps. The next phase starts after this elapsed time. Android radio and user hardware are not executed.',
+report = {'version': 'delta-fix-working-tree', 'scope': 'Working-tree production core and production SQLite schema/queries; independent deterministic protocol peer. Every phase runs in a new JVM. One second of simulated transfer time per response is applied to the production completion-marker timestamps. The next phase starts after this elapsed time. Android radio and user hardware are not executed.',
           'source_sha256': {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources},
           'scenarios': results, 'requirements': checks, 'all_requirements_met': all(checks.values())}
 (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

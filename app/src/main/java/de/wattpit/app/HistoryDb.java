@@ -44,11 +44,8 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
     interface ArchiveCheck { void run() throws Exception; }
     ArchiveSyncPlan.Availability archiveAvailability(String device,String kind,int channel,String field,List<ArchiveCodec.Level> levels,ArchiveCodec.Clock clock,long now,ArchiveCheck check) throws Exception{
-        return archiveAvailability(device,kind,channel,field,levels,clock,now,true,check);
-    }
-    ArchiveSyncPlan.Availability archiveAvailability(String device,String kind,int channel,String field,List<ArchiveCodec.Level> levels,ArchiveCodec.Clock clock,long now,boolean refreshRecent,ArchiveCheck check) throws Exception{
         List<Integer> periods=new ArrayList<>();for(ArchiveCodec.Level level:levels)periods.add(level.period);
-        ArchiveSyncPlan.Availability local=new ArchiveSyncPlan.Availability(periods,now,refreshRecent);
+        ArchiveSyncPlan.Availability local=new ArchiveSyncPlan.Availability(periods,now);
         long[] bounds=ArchiveSyncPlan.bounds(levels,clock);
         try(Cursor c=getReadableDatabase().rawQuery(ArchiveSyncPlan.readingsSql(field),new String[]{device,kind,""+bounds[0],""+bounds[1]})){
             int rows=0;while(c.moveToNext()){local.reading(c.getLong(0),c.getString(1),c.getInt(2));if(++rows%512==0)check.run();}
@@ -64,14 +61,12 @@ final class HistoryDb extends SQLiteOpenHelper {
             while(c.moveToNext())if(c.getString(1).equals("live"))local.reading(c.getLong(0),"live",c.getInt(2));
         }
     }
-    synchronized void cover(String device,int channel,int period,long from,long to){
-        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+    /** Runs inside the same transaction as the block's measurements. */
+    private void cover(SQLiteDatabase db,String device,int channel,int period,long from,long to){
         String where="device=? AND channel=? AND period=? AND start<=? AND end>=?";
         String[] args={device,""+channel,""+period,""+(to+period*1000L),""+(from-period*1000L)};
-        try {
-            try(Cursor c=db.rawQuery("SELECT MIN(start),MAX(end) FROM archive_coverage WHERE "+where,args)){if(c.moveToFirst()&&!c.isNull(0)){from=Math.min(from,c.getLong(0));to=Math.max(to,c.getLong(1));}}
-            db.delete("archive_coverage",where,args);ContentValues v=new ContentValues();v.put("device",device);v.put("channel",channel);v.put("period",period);v.put("start",from);v.put("end",to);db.insertOrThrow("archive_coverage",null,v);db.setTransactionSuccessful();
-        }finally{db.endTransaction();}
+        try(Cursor c=db.rawQuery("SELECT MIN(start),MAX(end) FROM archive_coverage WHERE "+where,args)){if(c.moveToFirst()&&!c.isNull(0)){from=Math.min(from,c.getLong(0));to=Math.max(to,c.getLong(1));}}
+        db.delete("archive_coverage",where,args);ContentValues v=new ContentValues();v.put("device",device);v.put("channel",channel);v.put("period",period);v.put("start",from);v.put("end",to);db.insertOrThrow("archive_coverage",null,v);
     }
     synchronized boolean archiveDayComplete(String device,String day){
         try(Cursor c=getReadableDatabase().rawQuery("SELECT 1 FROM device_daily WHERE device=? AND day=? AND finalized=1",new String[]{device,day})){return c.moveToFirst();}
@@ -87,8 +82,8 @@ final class HistoryDb extends SQLiteOpenHelper {
     JSONArray histories() throws Exception {
         JSONArray out=new JSONArray();try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM device_history",null)){while(c.moveToNext())out.put(new JSONObject(c.getString(0)));}return out;
     }
-    /** A channel block is atomic. Complementary fields merge; finer values win at the same instant. */
-    synchronized int archiveBlock(String device,String kind,String field,List<long[]> times,List<Double> numbers) {
+    /** Measurements and all acknowledgements, including NA, commit or roll back together. */
+    synchronized int archiveBlock(String device,String kind,String field,int channel,int period,List<long[]> times,List<Double> numbers,List<long[]> completed) {
         if(!Arrays.asList(NUMBERS).contains(field))throw new IllegalArgumentException("Unbekannter Archivwert.");
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();int changed=0;
         try {for(int i=0;i<times.size();i++){
@@ -112,6 +107,7 @@ final class HistoryDb extends SQLiteOpenHelper {
             long from=Long.MAX_VALUE,to=Long.MIN_VALUE;for(long[] t:times){from=Math.min(from,t[0]);to=Math.max(to,t[0]);}
             db.execSQL("UPDATE readings SET power=voltage*current WHERE device=? AND origin='archive' AND ts BETWEEN ? AND ? AND voltage IS NOT NULL AND current IS NOT NULL AND (power IS NULL OR power!=voltage*current)",new Object[]{device,from,to});
         }
+        for(long[] range:completed)cover(db,device,channel,period,range[0],range[1]);
         db.setTransactionSuccessful();return changed;
         }finally{db.endTransaction();}
     }

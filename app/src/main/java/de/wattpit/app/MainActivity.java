@@ -32,7 +32,7 @@ public final class MainActivity extends Activity {
     private boolean pendingStart;
     private String pendingArchive;
     private long stoppedAt;
-    private boolean entered;
+    private boolean entered,foreground,checkingArchive;
     private static final int PERMISSIONS = 11, BLUETOOTH = 12, IMPORT = 20, EXPORT = 21, IMPORT_SETTINGS = 22, EXPORT_SETTINGS = 23;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -78,6 +78,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onStart(){
         super.onStart();
+        foreground=true;
         web.removeCallbacks(retryIncompleteArchive);web.postDelayed(retryIncompleteArchive,15000);
         // Refresh on each foreground entry; WeatherClient skips disabled weather
         // and coalesces an already running request. Cached data stays available.
@@ -88,17 +89,24 @@ public final class MainActivity extends Activity {
             },800);
         }
     }
-    @Override protected void onStop(){web.removeCallbacks(retryIncompleteArchive);stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
-    private final Runnable retryIncompleteArchive=new Runnable(){@Override public void run(){startAutomaticImport(true);web.postDelayed(this,15000);}};
+    @Override protected void onStop(){foreground=false;web.removeCallbacks(retryIncompleteArchive);stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
+    private final Runnable retryIncompleteArchive=new Runnable(){@Override public void run(){startAutomaticImport();web.postDelayed(this,15000);}};
     private void startAutomaticImport(){
         startAutomaticImport(false);
     }
     private void startAutomaticImport(boolean retriesOnly){
-        if(isFinishing()||isDestroyed()||pendingStart||!repository.prefs.getBoolean("cockpitNotice-v1",false))return;
-        try{
-            if(repository.automaticArchiveDevices(retriesOnly).length()>0&&!repositoryArchiveActive())pendingArchive=retriesOnly?"RETRY":"AUTO";
-            if(pendingArchive!=null||repository.prefs.getBoolean("recording",false)&&!repository.running)requestStart();
-        }catch(Exception ignored){}
+        if(!foreground||isFinishing()||isDestroyed()||pendingStart||pendingArchive!=null||checkingArchive||repositoryArchiveActive()||!repository.prefs.getBoolean("cockpitNotice-v1",false))return;
+        checkingArchive=true;
+        files.execute(()->{
+            boolean due=false;try{due=repository.automaticArchiveDevices(retriesOnly).length()>0;}catch(Exception ignored){}
+            final boolean needed=due;
+            runOnUiThread(()->{
+                checkingArchive=false;
+                if(!foreground||isFinishing()||isDestroyed()||pendingStart||pendingArchive!=null||repositoryArchiveActive())return;
+                if(needed)pendingArchive=retriesOnly?"RETRY":"AUTO";
+                if(pendingArchive!=null||repository.prefs.getBoolean("recording",false)&&!repository.running)requestStart();
+            });
+        });
     }
     private void applyTheme(String theme) {
         boolean light = theme.equals("light");

@@ -92,14 +92,55 @@ final class Repository {
     JSONArray automaticArchiveDevices(boolean retriesOnly)throws JSONException{
         JSONArray due=new JSONArray(),all=new JSONArray(prefs.getString("devices","[]"));long now=System.currentTimeMillis();
         for(int i=0;i<all.length();i++){JSONObject cfg=all.getJSONObject(i);String mac=cfg.getString("mac");
-            if((!retriesOnly||prefs.getBoolean("archivePending."+mac,false))&&ArchiveSchedule.automaticDue(prefs.getLong("archiveNext."+mac,0),now,prefs.getInt("archiveRevision."+mac,0)))due.put(cfg);}
+            long next=prefs.getLong("archiveNext."+mac,0);
+            if((retriesOnly&&!prefs.getBoolean("archivePending."+mac,false))||!ArchiveSchedule.automaticDue(next,now))continue;
+            if(ArchiveSchedule.automaticDue(next,now,archiveNeedsData(cfg,now)))due.put(cfg);
+            else prefs.edit().putLong("archiveNext."+mac,ArchiveSchedule.nextAutomatic(now,false)).apply();
+        }
         return due;
     }
+    /** Read-only local preflight. No GATT connection is needed to find a data gap. */
+    boolean archiveNeedsData(JSONObject cfg,long now){
+        String mac=cfg.optString("mac"),kind=cfg.optString("kind");
+        try{
+            JSONObject saved=new JSONObject(prefs.getString("archivePlan."+mac,"{}"));
+            if(!kind.equals(saved.optString("kind"))||!saved.has("at")||now<saved.getLong("at"))return true;
+            ArchiveCodec.Clock clock=new ArchiveCodec.Clock();
+            clock.anchors(Base64.getDecoder().decode(saved.getString("anchors")));clock.reboots(Base64.getDecoder().decode(saved.getString("reboots")));
+            if(!clock.hasAnchors())return true;
+            long deviceNow=saved.getLong("uptime")+(now-saved.getLong("at"))/1000;
+            long before=now-Math.max(1,prefs.getInt("sampleSeconds",10))*1500L;
+            JSONArray channels=saved.getJSONArray("channels");if(channels.length()==0)return true;
+            for(int i=0;i<channels.length();i++){
+                JSONObject channel=channels.getJSONObject(i);JSONArray tiers=channel.getJSONArray("levels");List<ArchiveCodec.Level> levels=new ArrayList<>();
+                if(tiers.length()==0)return true;
+                for(int j=0;j<tiers.length();j++){JSONArray tier=tiers.getJSONArray(j);levels.add(new ArchiveCodec.Level(tier.getInt(0),tier.getInt(1),tier.getLong(2)));}
+                levels=ArchiveSyncPlan.advance(levels,deviceNow,clock,before);
+                ArchiveSyncPlan.Availability local=db.archiveAvailability(mac,kind,channel.getInt("register"),channel.getString("field"),levels,clock,now,()->{});
+                if(ArchiveSyncPlan.needsData(levels,clock,local))return true;
+            }
+            return false;
+        }catch(Exception e){return true;} // Missing/invalid metadata requires one real device preflight.
+    }
+    void saveArchivePlan(String mac,String kind,long uptime,long at,ArchiveCodec.Clock clock,Map<Integer,List<ArchiveCodec.Level>> levels,
+                         Map<Integer,ArchiveCodec.Field> fields,Map<Integer,Integer> registers)throws JSONException{
+        JSONArray channels=new JSONArray();
+        for(int ch:fields.keySet()){
+            JSONArray tiers=new JSONArray();for(ArchiveCodec.Level level:levels.get(ch))tiers.put(new JSONArray().put(level.capacity).put(level.period).put(level.newest));
+            channels.put(new JSONObject().put("field",fields.get(ch).name).put("register",registers.get(ch)).put("levels",tiers));
+        }
+        JSONObject plan=new JSONObject().put("kind",kind).put("uptime",uptime).put("at",at).put("channels",channels)
+                .put("anchors",Base64.getEncoder().encodeToString(clock.anchorBytes())).put("reboots",Base64.getEncoder().encodeToString(clock.rebootBytes()));
+        if(!prefs.edit().putString("archivePlan."+mac,plan.toString()).commit())throw new IllegalStateException("Archivplan konnte nicht gespeichert werden.");
+    }
+    void archiveAttemptStarted(String mac){
+        if(!prefs.edit().putBoolean("archivePending."+mac,true).commit())throw new IllegalStateException("Archivfortschritt konnte nicht gespeichert werden.");
+    }
     void archiveAttemptFinished(String mac,boolean cancelled,boolean complete){prefs.edit().putLong("archiveNext."+mac,ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),cancelled))
-            .putInt("archiveRevision."+mac,ArchiveSchedule.REPAIR_REVISION).putBoolean("archivePending."+mac,!cancelled&&!complete).apply();}
+            .putBoolean("archivePending."+mac,!cancelled&&!complete).apply();}
     void pauseAutomaticArchives(){
         try{JSONArray all=configs();SharedPreferences.Editor edit=prefs.edit();long next=ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),true);
-            for(int i=0;i<all.length();i++){String mac=all.getJSONObject(i).getString("mac");edit.putLong("archiveNext."+mac,next).putInt("archiveRevision."+mac,ArchiveSchedule.REPAIR_REVISION).putBoolean("archivePending."+mac,false);}edit.apply();
+            for(int i=0;i<all.length();i++){String mac=all.getJSONObject(i).getString("mac");edit.putLong("archiveNext."+mac,next).putBoolean("archivePending."+mac,false);}edit.apply();
         }catch(JSONException ignored){}
     }
     ArchiveCodec.Clock archiveClock(String mac,long uptime){

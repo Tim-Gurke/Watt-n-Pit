@@ -38,9 +38,9 @@ public class ArchiveTransferPlanTest {
                 db.commit();
             }catch(Exception e){db.rollback();throw e;}finally{db.setAutoCommit(true);}
         }
-        ArchiveSyncPlan.Availability load(int ch,List<ArchiveCodec.Level> levels,boolean refresh)throws Exception{
+        ArchiveSyncPlan.Availability load(int ch,List<ArchiveCodec.Level> levels)throws Exception{
             List<Integer> p=new ArrayList<>();for(ArchiveCodec.Level level:levels)p.add(level.period);
-            ArchiveSyncPlan.Availability a=new ArchiveSyncPlan.Availability(p,now,refresh);
+            ArchiveSyncPlan.Availability a=new ArchiveSyncPlan.Availability(p,now);
             try(PreparedStatement q=db.prepareStatement(ArchiveSyncPlan.readingsSql(field(ch).name))){q.setString(1,device(ch));q.setString(2,kind(ch));q.setLong(3,0);q.setLong(4,Long.MAX_VALUE);try(ResultSet r=q.executeQuery()){while(r.next())a.reading(r.getLong(1),r.getString(2),r.getInt(3));}}
             try(PreparedStatement q=db.prepareStatement("SELECT period,start,end FROM archive_coverage WHERE device=? AND channel=?")){q.setString(1,device(ch));q.setInt(2,ch);try(ResultSet r=q.executeQuery()){while(r.next())a.imported(r.getInt(1),r.getLong(2),r.getLong(3));}}
             return a;
@@ -53,7 +53,7 @@ public class ArchiveTransferPlanTest {
     private ArchiveTransferPlan plan(Store s,Map<Integer,List<ArchiveCodec.Level>> levels)throws Exception{
         Map<Integer,ArchiveSyncPlan.Availability> local=new HashMap<>();Map<Integer,Integer>batches=new HashMap<>();
         ArchiveTransferPlan p=new ArchiveTransferPlan(clock(),local,batches);
-        for(int ch:levels.keySet()){local.put(ch,s.load(ch,levels.get(ch),true));batches.put(ch,ch==2?14:28);}
+        for(int ch:levels.keySet()){local.put(ch,s.load(ch,levels.get(ch)));batches.put(ch,ch==2?14:28);}
         for(int ch:levels.keySet())for(ArchiveCodec.Level level:levels.get(ch))p.add(ch,level);return p;
     }
     private void finish(Store s,ArchiveTransferPlan p)throws Exception{
@@ -66,7 +66,7 @@ public class ArchiveTransferPlanTest {
         Map<Integer,List<ArchiveCodec.Level>> levels=new LinkedHashMap<>();for(int ch=0;ch<3;ch++)levels.put(ch,tier);
         try(Store s=new Store(end+10000)){
             finish(s,plan(s,levels));
-            for(int ch=0;ch<3;ch++)for(ArchiveCodec.Level l:tier)assertEquals(0,ArchiveSyncPlan.plan(l,clock(),s.load(ch,tier,false)).needed);
+            for(int ch=0;ch<3;ch++)for(ArchiveCodec.Level l:tier)assertEquals(0,ArchiveSyncPlan.plan(l,clock(),s.load(ch,tier)).needed);
             assertEquals(0,plan(s,levels).remaining());
             List<SampleTimeline.Interval> battery=EnergyIntegral.powerIntervals(Collections.emptyList(),s.samples(1),s.samples(2),EPOCH,EPOCH+end*1000L);
             EnergyIntegral.Flow flow=EnergyIntegral.flowIntervals(SampleTimeline.intervals(s.samples(0),EPOCH,EPOCH+end*1000L,false),battery,EPOCH,EPOCH+end*1000L,EPOCH,EPOCH+end*1000L);
@@ -80,13 +80,13 @@ public class ArchiveTransferPlanTest {
         try(Store s=new Store(10000)){
             ArchiveTransferPlan p=plan(s,levels);ArchiveTransferPlan.Read read=p.next(ch->{});assertEquals(0,read.channel);
             ArchiveCodec.Block actual=block(0,300,300,2);s.put(actual);assertFalse(p.accept(actual));assertTrue(p.remaining()>11);
-            List<ArchiveCodec.Level> current=Arrays.asList(new ArchiveCodec.Level(2,300,300));p.refresh(0,current,s.load(0,current,true),28);
+            List<ArchiveCodec.Level> current=Arrays.asList(new ArchiveCodec.Level(2,300,300));p.refresh(0,current,s.load(0,current),28);
             finish(s,p);assertEquals(2,s.samples(0).size());assertEquals(11,s.samples(1).size());
         }
     }
     @Test public void anEmptyReplyDoesNotDiscardTheRestOfItsRange()throws Exception{
         Map<Integer,List<ArchiveCodec.Level>> levels=Collections.singletonMap(0,Arrays.asList(new ArchiveCodec.Level(101,30,3000)));
-        try(Store s=new Store(20000)){ArchiveTransferPlan p=plan(s,levels);ArchiveTransferPlan.Read r=p.next(ch->{});assertEquals(101,p.remaining());assertFalse(p.accept(block(0,r.request.cursor,0,0)));assertEquals(101,p.remaining());p.refresh(0,levels.get(0),s.load(0,levels.get(0),true),28);finish(s,p);assertEquals(101,s.samples(0).size());}
+        try(Store s=new Store(20000)){ArchiveTransferPlan p=plan(s,levels);ArchiveTransferPlan.Read r=p.next(ch->{});assertEquals(101,p.remaining());assertFalse(p.accept(block(0,r.request.cursor,0,0)));assertEquals(101,p.remaining());p.refresh(0,levels.get(0),s.load(0,levels.get(0)),28);finish(s,p);assertEquals(101,s.samples(0).size());}
     }
     @Test public void partialRepliesConsumeOnlyTheirConfirmedSamples()throws Exception{
         Map<Integer,List<ArchiveCodec.Level>> levels=Collections.singletonMap(0,Arrays.asList(new ArchiveCodec.Level(101,30,3000)));
@@ -94,14 +94,14 @@ public class ArchiveTransferPlanTest {
     }
     @Test public void aPersistentWrongReplyFailsWithTheOutstandingWorkInsteadOfReportingCompletion()throws Exception{
         Map<Integer,List<ArchiveCodec.Level>> levels=Collections.singletonMap(0,Arrays.asList(new ArchiveCodec.Level(101,30,3000)));
-        try(Store s=new Store(20000)){ArchiveTransferPlan p=plan(s,levels);for(int i=0;i<4;i++){ArchiveTransferPlan.Read r=p.next(ch->{});assertFalse(p.accept(block(0,r.request.cursor,0,0)));try{p.refresh(0,levels.get(0),s.load(0,levels.get(0),true),28);assertTrue(i<3);}catch(IllegalStateException e){assertEquals(3,i);assertTrue(e.getMessage().contains("101"));assertEquals(101,p.remaining());}}}
+        try(Store s=new Store(20000)){ArchiveTransferPlan p=plan(s,levels);for(int i=0;i<4;i++){ArchiveTransferPlan.Read r=p.next(ch->{});assertFalse(p.accept(block(0,r.request.cursor,0,0)));try{p.refresh(0,levels.get(0),s.load(0,levels.get(0)),28);assertTrue(i<3);}catch(IllegalStateException e){assertEquals(3,i);assertTrue(e.getMessage().contains("101"));assertEquals(101,p.remaining());}}}
     }
     @Test public void finalAuditRecognizesFreshSavedValuesWithoutRefetchingTheEntireRecentTail()throws Exception{
         List<ArchiveCodec.Level> levels=Arrays.asList(new ArchiveCodec.Level(121,1,120));
-        try(Store s=new Store(120)){ArchiveTransferPlan p=plan(s,Collections.singletonMap(0,levels));finish(s,p);assertTrue(ArchiveSyncPlan.plan(levels.get(0),clock(),s.load(0,levels,true)).needed>0);assertEquals(0,ArchiveSyncPlan.plan(levels.get(0),clock(),s.load(0,levels,false)).needed);}
+        try(Store s=new Store(120)){ArchiveTransferPlan p=plan(s,Collections.singletonMap(0,levels));finish(s,p);assertEquals(0,ArchiveSyncPlan.plan(levels.get(0),clock(),s.load(0,levels)).needed);}
     }
     @Test public void aDatabaseAuditCanRequeueAnActuallyMissingSavedRange()throws Exception{
         Map<Integer,List<ArchiveCodec.Level>> levels=Collections.singletonMap(0,Arrays.asList(new ArchiveCodec.Level(101,30,3000)));
-        try(Store s=new Store(20000)){ArchiveTransferPlan p=plan(s,levels);finish(s,p);s.db.createStatement().execute("DELETE FROM readings WHERE ts="+(EPOCH+1500000));s.db.createStatement().execute("DELETE FROM archive_coverage");ArchiveSyncPlan.Availability a=s.load(0,levels.get(0),false);assertEquals(1,ArchiveSyncPlan.plan(levels.get(0).get(0),clock(),a).needed);p.replace(0,levels.get(0),a,28);assertEquals(1,p.remaining());finish(s,p);assertEquals(101,s.samples(0).size());}
+        try(Store s=new Store(20000)){ArchiveTransferPlan p=plan(s,levels);finish(s,p);s.db.createStatement().execute("DELETE FROM readings WHERE ts="+(EPOCH+1500000));s.db.createStatement().execute("DELETE FROM archive_coverage");ArchiveSyncPlan.Availability a=s.load(0,levels.get(0));assertEquals(1,ArchiveSyncPlan.plan(levels.get(0).get(0),clock(),a).needed);p.replace(0,levels.get(0),a,28);assertEquals(1,p.remaining());finish(s,p);assertEquals(101,s.samples(0).size());}
     }
 }

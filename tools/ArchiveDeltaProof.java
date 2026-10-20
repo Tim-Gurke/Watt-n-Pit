@@ -5,7 +5,7 @@ import java.util.*;
 import java.nio.file.*;
 import java.io.*;
 
-/** Observes unmodified production planning against persistent SQLite. No Android/APK build. */
+/** Observes production planning against persistent SQLite. No Android/APK build. */
 public final class ArchiveDeltaProof {
     private static final long EPOCH=1700000000000L;
     private static final int[] PERIODS={1,30,300,1800};
@@ -18,8 +18,8 @@ public final class ArchiveDeltaProof {
     private static ArchiveCodec.Field field(int ch){return ArchiveCodec.field(reg(ch),-1);}
     private static List<ArchiveCodec.Level> levels(long end){List<ArchiveCodec.Level> out=new ArrayList<>();for(int i=0;i<PERIODS.length;i++)out.add(new ArchiveCodec.Level(CAPACITIES[i],PERIODS[i],end-end%PERIODS[i]));return out;}
     private static void bind(PreparedStatement q,String[] args)throws Exception{for(int i=0;i<args.length;i++)q.setString(i+1,args[i]);}
-    private static ArchiveSyncPlan.Availability load(Connection db,int ch,long end,long now,boolean refresh)throws Exception{
-        ArchiveSyncPlan.Availability local=new ArchiveSyncPlan.Availability(Arrays.asList(1,30,300,1800),now,refresh);
+    private static ArchiveSyncPlan.Availability load(Connection db,int ch,long end,long now)throws Exception{
+        ArchiveSyncPlan.Availability local=new ArchiveSyncPlan.Availability(Arrays.asList(1,30,300,1800),now);
         long[] bounds=ArchiveSyncPlan.bounds(levels(end),clock());
         try(PreparedStatement q=db.prepareStatement(ArchiveSyncPlan.readingsSql(field(ch).name))){bind(q,new String[]{device(ch),kind(ch),""+bounds[0],""+bounds[1]});try(ResultSet r=q.executeQuery()){while(r.next())local.reading(r.getLong(1),r.getString(2),r.getInt(3));}}
         try(PreparedStatement q=db.prepareStatement("SELECT period,start,end FROM archive_coverage WHERE device=? AND channel=? AND start<=? AND end>=?")){bind(q,new String[]{device(ch),""+reg(ch),""+bounds[1],""+bounds[0]});try(ResultSet r=q.executeQuery()){while(r.next())local.imported(r.getInt(1),r.getLong(2),r.getLong(3));}}
@@ -57,10 +57,9 @@ public final class ArchiveDeltaProof {
             try(Statement s=db.createStatement()){s.execute(HistorySchema.CREATE.replace("CREATE TABLE ","CREATE TABLE IF NOT EXISTS "));s.execute(HistorySchema.COVERAGE.replace("CREATE TABLE ","CREATE TABLE IF NOT EXISTS "));s.execute("CREATE TABLE IF NOT EXISTS proof_received(channel INTEGER,period INTEGER,ts INTEGER,PRIMARY KEY(channel,period,ts))");}
             if(seedLive){db.setAutoCommit(false);for(int ch=0;ch<3;ch++)for(long t=0;t<=end;t+=60)sample(db,ch,EPOCH+t*1000,60,"live",raw(ch)/field(ch).divisor);db.commit();db.setAutoCommit(true);}
             Map<Integer,ArchiveSyncPlan.Availability> local=new HashMap<>();Map<Integer,Integer>batches=new HashMap<>();ArchiveTransferPlan plan=new ArchiveTransferPlan(clock(),local,batches);
-            for(int ch=0;ch<channels;ch++){local.put(ch,load(db,ch,end,now,true));batches.put(ch,ch==2?14:28);}
+            for(int ch=0;ch<channels;ch++){local.put(ch,load(db,ch,end,now));batches.put(ch,ch==2?14:28);}
             for(ArchiveCodec.Level level:levels(end))for(int ch=0;ch<channels;ch++)plan.add(ch,level);
             int neededAtStart=plan.remaining(),requests=0,points=0,repeated=0,na=0;long oldest=Long.MAX_VALUE,newest=Long.MIN_VALUE;
-            Map<Integer,List<long[]>> confirmed=new HashMap<>();
             try(BufferedWriter trace=Files.newBufferedWriter(tracePath)){
                 trace.write("channel\tperiod\tdevice_time\tpoints\trepeated\n");
                 while(packetLimit<0||requests<packetLimit){
@@ -79,18 +78,17 @@ public final class ArchiveDeltaProof {
                         for(long[] r:ArchiveSyncPlan.completed(b,clock(),receiptTime)){cover(db,b.channel,b.period,r[0],r[1]);local.get(b.channel).imported(b.period,r[0],r[1]);}
                         db.commit();
                     }catch(Exception e){db.rollback();throw e;}finally{db.setAutoCommit(true);}
-                    for(long[] r:ArchiveSyncPlan.completed(b,clock(),now+(requests+1)*1000L,false))confirmed.computeIfAbsent(b.channel,k->new ArrayList<>()).add(new long[]{b.period,r[0],r[1]});
                     if(!plan.accept(b))throw new AssertionError("Fixture did not match planned response");
                     requests++;points+=b.count;repeated+=duplicates;trace.write(b.channel+"\t"+b.period+"\t"+b.time+"\t"+b.count+"\t"+duplicates+"\n");
                     if(requests>10000)throw new AssertionError("No progress");
                 }
             }
             int auditMissing=0;for(int ch=0;ch<channels;ch++){
-                ArchiveSyncPlan.Availability a=load(db,ch,end,now,false);for(long[] r:confirmed.getOrDefault(ch,Collections.emptyList()))a.imported((int)r[0],r[1],r[2]);for(ArchiveCodec.Level level:levels(end))auditMissing+=ArchiveSyncPlan.plan(level,clock(),a).needed;
+                ArchiveSyncPlan.Availability a=load(db,ch,end,now);for(ArchiveCodec.Level level:levels(end))auditMissing+=ArchiveSyncPlan.plan(level,clock(),a).needed;
             }
             EnergyIntegral.Flow flow=EnergyIntegral.flowIntervals(SampleTimeline.intervals(samples(db,0),EPOCH,EPOCH+end*1000,false),EnergyIntegral.powerIntervals(Collections.emptyList(),samples(db,1),samples(db,2),EPOCH,EPOCH+end*1000),EPOCH,EPOCH+end*1000,EPOCH,EPOCH+end*1000);
             long totalRows;try(Statement s=db.createStatement();ResultSet r=s.executeQuery("SELECT COUNT(*) FROM readings")){r.next();totalRows=r.getLong(1);}
-            System.out.println("{\"planned\":"+neededAtStart+",\"requests\":"+requests+",\"elapsed_seconds\":"+requests+",\"points\":"+points+",\"repeated\":"+repeated+",\"unavailable\":"+na+",\"queue_remaining\":"+plan.remaining()+",\"audit_missing\":"+auditMissing+",\"rows\":"+totalRows+",\"oldest_requested\":"+(points==0?"null":oldest)+",\"newest_requested\":"+(points==0?"null":newest)+",\"solar_coverage\":"+flow.solar.coverage(EPOCH,EPOCH+end*1000)+",\"load_coverage\":"+flow.consumption.coverage(EPOCH,EPOCH+end*1000)+",\"automatic_due_after_five_minutes\":"+ArchiveSchedule.automaticDue(ArchiveSchedule.nextAutomatic(now,false),now+300001,ArchiveSchedule.REPAIR_REVISION)+"}");
+            System.out.println("{\"planned\":"+neededAtStart+",\"requests\":"+requests+",\"elapsed_seconds\":"+requests+",\"points\":"+points+",\"repeated\":"+repeated+",\"unavailable\":"+na+",\"queue_remaining\":"+plan.remaining()+",\"audit_missing\":"+auditMissing+",\"rows\":"+totalRows+",\"oldest_requested\":"+(points==0?"null":oldest)+",\"newest_requested\":"+(points==0?"null":newest)+",\"solar_coverage\":"+flow.solar.coverage(EPOCH,EPOCH+end*1000)+",\"load_coverage\":"+flow.consumption.coverage(EPOCH,EPOCH+end*1000)+",\"automatic_due_after_five_minutes\":"+ArchiveSchedule.automaticDue(ArchiveSchedule.nextAutomatic(now,false),now+300001,auditMissing>0)+"}");
         }
     }
 }
