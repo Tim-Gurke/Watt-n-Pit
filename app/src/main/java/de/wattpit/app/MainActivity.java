@@ -91,7 +91,7 @@ public final class MainActivity extends Activity {
     private void startAutomaticImport(){
         if(isFinishing()||isDestroyed()||pendingStart||!repository.prefs.getBoolean("cockpitNotice-v1",false))return;
         try{
-            if(repository.configs().length()>0&&!repositoryArchiveActive())pendingArchive="AUTO";
+            if(repository.automaticArchiveDevices().length()>0&&!repositoryArchiveActive())pendingArchive="AUTO";
             if(pendingArchive!=null||repository.prefs.getBoolean("recording",false)&&!repository.running)requestStart();
         }catch(Exception ignored){}
     }

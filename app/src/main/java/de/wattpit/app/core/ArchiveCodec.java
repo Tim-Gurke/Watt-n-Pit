@@ -94,8 +94,14 @@ public final class ArchiveCodec {
     }
     public static final class Clock {
         private final TreeMap<Long,Long> anchors=new TreeMap<>();private final TreeSet<Long> reboots=new TreeSet<>();
-        public void anchors(byte[] b){if(b.length%8!=0)throw new IllegalArgumentException("Ungültige Archivzeit.");for(int i=0;i<b.length;i+=8){long u=u(b,i,4),t=u(b,i+4,4);if(u!=NA&&t!=NA&&t>946684800L)anchors.put(u,t);}}
-        public void reboots(byte[] b){if(b.length%4!=0)throw new IllegalArgumentException("Ungültige Neustartliste.");for(int i=0;i<b.length;i+=4){long t=u(b,i,4);if(t!=NA)reboots.add(t);}}
+        public static Clock restore(long savedUptime,long currentUptime,byte[] anchors,byte[] reboots){Clock clock=new Clock();if(savedUptime<0||currentUptime<savedUptime)return clock;clock.anchors(anchors);clock.reboots(reboots);return clock;}
+        public int anchors(byte[] b){if(b.length%8!=0)throw new IllegalArgumentException("Ungültige Archivzeit.");int added=0;for(int i=0;i<b.length;i+=8){long u=u(b,i,4),t=u(b,i+4,4);if(u!=NA&&t!=NA&&t>946684800L){Long old=anchors.put(u,t);if(old==null||old!=t)added++;}}return added;}
+        public int reboots(byte[] b){if(b.length%4!=0)throw new IllegalArgumentException("Ungültige Neustartliste.");int added=0;for(int i=0;i<b.length;i+=4){long t=u(b,i,4);if(t!=NA&&reboots.add(t))added++;}return added;}
+        public boolean hasAnchors(){return !anchors.isEmpty();}
+        public long oldestStoredAnchor(){return anchors.isEmpty()?NA:anchors.firstKey();}
+        public long oldestStoredReboot(){return reboots.isEmpty()?NA:reboots.first();}
+        public byte[] anchorBytes(){ByteArrayOutputStream b=new ByteArrayOutputStream();for(Map.Entry<Long,Long> a:anchors.entrySet()){byte[] u=le(a.getKey(),4),t=le(a.getValue(),4);b.write(u,0,4);b.write(t,0,4);}return b.toByteArray();}
+        public byte[] rebootBytes(){ByteArrayOutputStream b=new ByteArrayOutputStream();for(long t:reboots){byte[] bytes=le(t,4);b.write(bytes,0,4);}return b.toByteArray();}
         public Long millis(long time){Long low=reboots.floor(time),high=reboots.higher(time);long from=low==null?0:low,to=high==null?NA:high;
             Map.Entry<Long,Long> a=anchors.floorEntry(time);if(a==null||a.getKey()<from)a=anchors.ceilingEntry(from);
             return a==null||a.getKey()>=to?null:(a.getValue()+time-a.getKey())*1000;

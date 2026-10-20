@@ -82,7 +82,6 @@ public final class MonitorService extends Service {
     @SuppressLint("MissingPermission")
     private void startScan() {
         if (!repository.running || scanning || !hasPermissions()) return;
-        if(repository.archiveBusy){repository.status="Gerätearchiv wird gelesen";return;}
         BluetoothManager manager = getSystemService(BluetoothManager.class);
         BluetoothAdapter adapter = manager == null ? null : manager.getAdapter();
         if (adapter == null) { repository.status = "Dieses Gerät unterstützt kein Bluetooth LE."; return; }

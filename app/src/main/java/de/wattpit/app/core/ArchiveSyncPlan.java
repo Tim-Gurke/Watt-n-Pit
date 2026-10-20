@@ -66,26 +66,31 @@ public final class ArchiveSyncPlan {
             return live.get(period).contains(time) ||
                     time < now - 2L * period * 1000 && archive.get(period).contains(time);
         }
+        public boolean importable(Long time){return time!=null&&time>=0&&time<=now+300000;}
     }
 
     public static final class Request {
         public final long cursor;
-        public final int skipped, count;
-        Request(long cursor, int skipped, int count) { this.cursor = cursor; this.skipped = skipped; this.count = count; }
+        public final int skipped, count, deferred;
+        Request(long cursor, int skipped, int count,int deferred) { this.cursor = cursor; this.skipped = skipped; this.count = count;this.deferred=deferred; }
     }
 
     /** Skip known samples and stop a request before the next known sample, even inside a batch. */
     public static Request next(long cursor, int remaining, long oldest, int period, int batch,
                                ArchiveCodec.Clock clock, Availability local) {
         if (remaining < 0 || period < 1 || batch < 1 || batch > 56) throw new IllegalArgumentException("Ungültige Archivabfrage.");
-        int skipped = 0;
-        while (skipped < remaining && cursor >= oldest && local.known(clock.millis(cursor), period)) {
+        int skipped = 0,deferred=0;
+        while (skipped < remaining && cursor >= oldest) {
+            Long time=clock.millis(cursor);
+            if(local.importable(time)&&!local.known(time,period))break;
+            if(!local.importable(time))deferred++;
             skipped++; cursor -= period;
         }
         int count = 0;
         while (count < batch && count < remaining - skipped && cursor - (long) count * period >= oldest &&
+                local.importable(clock.millis(cursor-(long)count*period))&&
                 !local.known(clock.millis(cursor - (long) count * period), period)) count++;
-        return new Request(cursor, skipped, count);
+        return new Request(cursor, skipped, count,deferred);
     }
 
     /** Bounds include all reboot epochs rather than assuming device time is Unix time. */

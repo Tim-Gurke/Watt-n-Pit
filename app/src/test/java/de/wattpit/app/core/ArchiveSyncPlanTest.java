@@ -75,10 +75,27 @@ public class ArchiveSyncPlanTest {
         ArchiveSyncPlan.Availability a=local(30);a.reading(t(1000),"live",0);
         assertFalse(a.known(t(970),30));assertTrue(a.known(t(1000),30));
     }
-    @Test public void unknownClockTimesCannotBeMarkedKnown() {
+    @Test public void unknownClockTimesAreDeferredBeforeTransferWithoutBeingMarkedKnown() {
         ArchiveSyncPlan.Availability a=local(30);a.imported(30,0,t(2000));
         ArchiveSyncPlan.Request r=ArchiveSyncPlan.next(1000,8,790,30,8,new ArchiveCodec.Clock(),a);
-        assertEquals(0,r.skipped);assertEquals(8,r.count);
+        assertEquals(8,r.skipped);assertEquals(8,r.deferred);assertEquals(0,r.count);assertFalse(a.known(null,30));
+    }
+    @Test public void deferredWindowsCanBeRequestedAsSoonAsAnAnchorExists() {
+        ArchiveSyncPlan.Availability a=local(30);ArchiveCodec.Clock clock=new ArchiveCodec.Clock();
+        assertEquals(8,ArchiveSyncPlan.next(1000,8,790,30,8,clock,a).deferred);
+        clock.anchors(clock().anchorBytes());
+        ArchiveSyncPlan.Request r=ArchiveSyncPlan.next(1000,8,790,30,8,clock,a);
+        assertEquals(0,r.deferred);assertEquals(0,r.skipped);assertEquals(8,r.count);
+    }
+    @Test public void anUnmappedBootEpochDoesNotPreventReadingTheOtherEpoch() {
+        ArchiveSyncPlan.Availability a=local(100);ArchiveCodec.Clock c=clock();c.reboots(ArchiveCodec.le(1000,4));
+        ArchiveSyncPlan.Request r=ArchiveSyncPlan.next(1100,5,700,100,8,c,a);
+        assertEquals(2,r.deferred);assertEquals(900,r.cursor);assertEquals(3,r.count);
+    }
+    @Test public void futureClockErrorsCannotTriggerRepeatedUnusableTransfers() {
+        ArchiveSyncPlan.Availability a=new ArchiveSyncPlan.Availability(Arrays.asList(30),t(0));
+        ArchiveSyncPlan.Request r=next(a,1000,8,790,8);
+        assertEquals(8,r.deferred);assertEquals(0,r.count);
     }
     @Test public void knownIntervalsMergeInEitherOrderWithoutBridgingHoles() {
         ArchiveSyncPlan.Availability a=local(30);

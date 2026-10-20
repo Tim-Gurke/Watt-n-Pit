@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import de.wattpit.app.core.*;
 import org.json.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 final class Repository {
     private static Repository instance;
@@ -15,7 +16,7 @@ final class Repository {
     private final Context context;
     final HistoryDb db;
     final SharedPreferences prefs;
-    private final Map<String,Reading> latest = new LinkedHashMap<>();
+    private final Map<String,Reading> latest = new ConcurrentHashMap<>();
     private final Map<String,JSONObject> found = new LinkedHashMap<>();
     private final Map<String,String> errors = new HashMap<>();
     private final Map<String,byte[]> keys = new HashMap<>();
@@ -48,19 +49,22 @@ final class Repository {
     String backgroundSnapshot(){
         try{
             JSONObject result=new JSONObject(lastSnapshot);
-            JSONArray devices=new JSONArray(),list=new JSONArray(prefs.getString("devices","[]")),previous=result.optJSONArray("devices");
+            JSONArray devices=new JSONArray(),live=new JSONArray(),list=new JSONArray(prefs.getString("devices","[]")),previous=result.optJSONArray("devices"),oldReadings=result.optJSONArray("readings");
             for(int i=0;i<list.length();i++){
                 JSONObject c=list.getJSONObject(i),device=new JSONObject();
                 if(previous!=null)for(int j=0;j<previous.length();j++)if(c.optString("mac").equals(previous.getJSONObject(j).optString("mac"))){device=new JSONObject(previous.getJSONObject(j).toString());break;}
+                Reading current=latest.get(c.optString("mac"));
+                if(current!=null){live.put(HistoryDb.json(current));device.put("seen",current.timestamp);}
+                else if(oldReadings!=null)for(int j=0;j<oldReadings.length();j++)if(c.optString("mac").equals(oldReadings.getJSONObject(j).optString("device"))){live.put(oldReadings.getJSONObject(j));break;}
                 devices.put(device.put("mac",c.optString("mac")).put("name",c.optString("name")).put("kind",c.optString("kind")).put("hasKey",true));
             }
-            result.put("devices",devices);
-            if(!result.has("readings"))result.put("found",new JSONArray()).put("readings",new JSONArray()).put("stats",new JSONObject());
+            result.put("devices",devices).put("readings",live);
+            if(!result.has("stats"))result.put("found",new JSONArray()).put("stats",new JSONObject());
             return result.put("syncing",true).put("dataAt",lastSnapshotAt).put("settings",settingsSnapshot()).put("running",running).put("status",status)
                 .put("equipment",new JSONObject(prefs.getString("equipment-v1","{\"version\":1,\"groups\":[]}")))
                 .put("archive",archive).put("archiveBusy",archiveBusy).put("weather",new JSONObject(prefs.getString("weatherCache","{}")))
                 .put("weatherError",prefs.getString("weatherError","")).toString();
-        }catch(JSONException e){return "{\"syncing\":true}";}
+        }catch(Exception e){return "{\"syncing\":true}";}
     }
     synchronized void archiveState(String mac,boolean active,String text,int done,int total){
         try{String device="";JSONArray list=configs();for(int i=0;i<list.length();i++){JSONObject c=list.getJSONObject(i);if(mac.equals(c.optString("mac"))){device=(c.optString("kind").equals("solar")?"SmartSolar":"SmartShunt")+" · "+c.optString("name");break;}}
@@ -82,6 +86,31 @@ final class Repository {
         return text.toString();
     }
     synchronized JSONArray configs() throws JSONException { return new JSONArray(prefs.getString("devices", "[]")); }
+    JSONArray automaticArchiveDevices()throws JSONException{
+        JSONArray due=new JSONArray(),all=new JSONArray(prefs.getString("devices","[]"));long now=System.currentTimeMillis();
+        for(int i=0;i<all.length();i++){JSONObject cfg=all.getJSONObject(i);if(ArchiveBudget.automaticDue(prefs.getLong("archiveNext."+cfg.getString("mac"),0),now))due.put(cfg);}
+        return due;
+    }
+    void archiveAttemptFinished(String mac,boolean cancelled){prefs.edit().putLong("archiveNext."+mac,ArchiveBudget.nextAutomatic(System.currentTimeMillis(),cancelled)).apply();}
+    void pauseAutomaticArchives(){
+        try{JSONArray all=configs();SharedPreferences.Editor edit=prefs.edit();long next=ArchiveBudget.nextAutomatic(System.currentTimeMillis(),true);
+            for(int i=0;i<all.length();i++)edit.putLong("archiveNext."+all.getJSONObject(i).getString("mac"),next);edit.apply();
+        }catch(JSONException ignored){}
+    }
+    ArchiveCodec.Clock archiveClock(String mac,long uptime){
+        ArchiveCodec.Clock clock=new ArchiveCodec.Clock();
+        try{JSONObject saved=new JSONObject(prefs.getString("archiveClock."+mac,"{}"));
+            if(saved.has("uptime")&&uptime>=saved.getLong("uptime")){
+                return ArchiveCodec.Clock.restore(saved.getLong("uptime"),uptime,Base64.getDecoder().decode(saved.getString("anchors")),Base64.getDecoder().decode(saved.getString("reboots")));
+            }
+        }catch(JSONException|IllegalArgumentException ignored){return new ArchiveCodec.Clock();}
+        return clock;
+    }
+    void saveArchiveClock(String mac,long uptime,ArchiveCodec.Clock clock){
+        try{JSONObject saved=new JSONObject().put("uptime",uptime).put("anchors",Base64.getEncoder().encodeToString(clock.anchorBytes())).put("reboots",Base64.getEncoder().encodeToString(clock.rebootBytes()));
+            prefs.edit().putString("archiveClock."+mac,saved.toString()).apply();
+        }catch(JSONException ignored){}
+    }
     synchronized void message(String text) { event = text; eventId++; }
 
     synchronized void saveDevice(JSONObject input) throws Exception {
