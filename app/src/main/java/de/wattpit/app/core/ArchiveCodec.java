@@ -94,6 +94,9 @@ public final class ArchiveCodec {
     }
     public static final class Clock {
         private final TreeMap<Long,Long> anchors=new TreeMap<>();private final TreeSet<Long> reboots=new TreeSet<>();
+        private boolean anchorHistoryComplete,rebootHistoryComplete;
+        public boolean historyComplete(int reg){if(reg==0xec63)return anchorHistoryComplete;if(reg==0xec64)return rebootHistoryComplete;throw new IllegalArgumentException("Unbekannte Zeitreferenz.");}
+        public void completeHistory(int reg){if(reg==0xec63)anchorHistoryComplete=true;else if(reg==0xec64)rebootHistoryComplete=true;else throw new IllegalArgumentException("Unbekannte Zeitreferenz.");}
         public static Clock restore(long savedUptime,long currentUptime,byte[] anchors,byte[] reboots){Clock clock=new Clock();if(savedUptime<0||currentUptime<savedUptime)return clock;clock.anchors(anchors);clock.reboots(reboots);return clock;}
         public int anchors(byte[] b){if(b.length%8!=0)throw new IllegalArgumentException("Ungültige Archivzeit.");int added=0;for(int i=0;i<b.length;i+=8){long u=u(b,i,4),t=u(b,i+4,4);if(u!=NA&&t!=NA&&t>946684800L){Long old=anchors.put(u,t);if(old==null||old!=t)added++;}}return added;}
         public int reboots(byte[] b){if(b.length%4!=0)throw new IllegalArgumentException("Ungültige Neustartliste.");int added=0;for(int i=0;i<b.length;i+=4){long t=u(b,i,4);if(t!=NA&&reboots.add(t))added++;}return added;}

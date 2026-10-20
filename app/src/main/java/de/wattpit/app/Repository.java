@@ -88,12 +88,12 @@ final class Repository {
     synchronized JSONArray configs() throws JSONException { return new JSONArray(prefs.getString("devices", "[]")); }
     JSONArray automaticArchiveDevices()throws JSONException{
         JSONArray due=new JSONArray(),all=new JSONArray(prefs.getString("devices","[]"));long now=System.currentTimeMillis();
-        for(int i=0;i<all.length();i++){JSONObject cfg=all.getJSONObject(i);if(ArchiveBudget.automaticDue(prefs.getLong("archiveNext."+cfg.getString("mac"),0),now))due.put(cfg);}
+        for(int i=0;i<all.length();i++){JSONObject cfg=all.getJSONObject(i);if(ArchiveSchedule.automaticDue(prefs.getLong("archiveNext."+cfg.getString("mac"),0),now))due.put(cfg);}
         return due;
     }
-    void archiveAttemptFinished(String mac,boolean cancelled){prefs.edit().putLong("archiveNext."+mac,ArchiveBudget.nextAutomatic(System.currentTimeMillis(),cancelled)).apply();}
+    void archiveAttemptFinished(String mac,boolean cancelled){prefs.edit().putLong("archiveNext."+mac,ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),cancelled)).apply();}
     void pauseAutomaticArchives(){
-        try{JSONArray all=configs();SharedPreferences.Editor edit=prefs.edit();long next=ArchiveBudget.nextAutomatic(System.currentTimeMillis(),true);
+        try{JSONArray all=configs();SharedPreferences.Editor edit=prefs.edit();long next=ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),true);
             for(int i=0;i<all.length();i++)edit.putLong("archiveNext."+all.getJSONObject(i).getString("mac"),next);edit.apply();
         }catch(JSONException ignored){}
     }
@@ -101,13 +101,17 @@ final class Repository {
         ArchiveCodec.Clock clock=new ArchiveCodec.Clock();
         try{JSONObject saved=new JSONObject(prefs.getString("archiveClock."+mac,"{}"));
             if(saved.has("uptime")&&uptime>=saved.getLong("uptime")){
-                return ArchiveCodec.Clock.restore(saved.getLong("uptime"),uptime,Base64.getDecoder().decode(saved.getString("anchors")),Base64.getDecoder().decode(saved.getString("reboots")));
+                clock=ArchiveCodec.Clock.restore(saved.getLong("uptime"),uptime,Base64.getDecoder().decode(saved.getString("anchors")),Base64.getDecoder().decode(saved.getString("reboots")));
+                if(saved.optBoolean("anchorsComplete"))clock.completeHistory(0xec63);
+                if(saved.optBoolean("rebootsComplete"))clock.completeHistory(0xec64);
+                return clock;
             }
         }catch(JSONException|IllegalArgumentException ignored){return new ArchiveCodec.Clock();}
         return clock;
     }
     void saveArchiveClock(String mac,long uptime,ArchiveCodec.Clock clock){
-        try{JSONObject saved=new JSONObject().put("uptime",uptime).put("anchors",Base64.getEncoder().encodeToString(clock.anchorBytes())).put("reboots",Base64.getEncoder().encodeToString(clock.rebootBytes()));
+        try{JSONObject saved=new JSONObject().put("uptime",uptime).put("anchors",Base64.getEncoder().encodeToString(clock.anchorBytes())).put("reboots",Base64.getEncoder().encodeToString(clock.rebootBytes()))
+                .put("anchorsComplete",clock.historyComplete(0xec63)).put("rebootsComplete",clock.historyComplete(0xec64));
             prefs.edit().putString("archiveClock."+mac,saved.toString()).apply();
         }catch(JSONException ignored){}
     }
@@ -184,6 +188,7 @@ final class Repository {
                     r.device = mac; r.timestamp = now;
                     latest.put(mac,r); errors.remove(mac);
                     int seconds = prefs.getInt("sampleSeconds",10);
+                    r.period=seconds;
                     if (now - stored.getOrDefault(mac,0L) >= seconds * 1000L) { db.insert(r); stored.put(mac,now); }
                 } catch (Exception e) { errors.put(mac,safeError(e)); }
             }

@@ -13,7 +13,7 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><div><div class="wordmark">Watt<span class="wordmark-n">’n’</span><span>Pit</span><small>1.3.2</small></div><div class="brandline">DEIN ENERGIE-COCKPIT</div></div></div>
+  <div class="brand"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><div><div class="wordmark">Watt<span class="wordmark-n">’n’</span><span>Pit</span><small>1.3.3</small></div><div class="brandline">DEIN ENERGIE-COCKPIT</div></div></div>
   <button class="iconbutton" id="themeToggle" aria-label="Farbschema wechseln"></button>
 </header>
 <div id="demoBar" class="demo-bar" hidden><span>DEMO · Beispieldaten</span><button id="exitDemo">Demo verlassen</button></div>
@@ -55,7 +55,7 @@
 <section id="devices" class="page">
   <div class="pagehead"><div><p class="eyebrow">DIREKT PER BLUETOOTH</p><h1>Deine Geräte.</h1></div><button class="iconbutton" id="addDevice" aria-label="Gerät manuell hinzufügen"></button></div>
   <article id="archiveStatus" class="card archive-status" hidden><p id="archiveText" role="status"></p><progress id="archiveProgress" aria-label="Archivimport"></progress><button id="archiveCancel" class="textbutton" hidden>Import abbrechen</button><details id="archiveDetails"><summary>Verbindungsdetails</summary><pre id="archiveDiagnosticText"></pre><button id="copyArchiveDiagnostics" class="quiet">Diagnose kopieren</button><p class="muted">Ohne Geräteadressen, Verbindungsschlüssel oder Messwerte.</p></details></article>
-  <p class="muted archive-hint">Archive werden beim App-Start automatisch ergänzt und mit vorhandenen Daten abgeglichen. VictronConnect dafür trennen. Android nutzt bestehende Kopplungen; bei neuen Geräten fragt es nach der Geräte-PIN.</p>
+  <p class="muted archive-hint">Vor dem Archivabruf werden vorhandene Aufzeichnungen geprüft. Nur fehlende Messgrößen und Zeitabschnitte werden ergänzt. VictronConnect dafür trennen. Android nutzt bestehende Kopplungen; bei neuen Geräten fragt es nach der Geräte-PIN.</p>
   <article class="card cockpit-note"><h2>Dein Energie-Cockpit</h2><p>Watt’n’Pit zeigt Energie- und Messwerte an. Die App ersetzt VictronConnect nicht. Einstellungen an SmartSolar und SmartShunt müssen in <strong>VictronConnect</strong> vorgenommen werden.</p><p class="muted">Batteriekapazität und Solaranlage in dieser App dienen ausschließlich der Anzeige und Berechnung. Sie ändern keine Einstellungen an den Geräten.</p></article>
   <div id="deviceCards" class="device-cards"></div>
   <article id="deviceLifetime" class="card" hidden></article>
@@ -72,7 +72,7 @@
   <article class="card settings-card"><h2>Einstellungen sichern</h2><p class="muted">Kacheln samt Anordnung, Farben, Zeiträume, Wetterort und Solaranlage als Datei sichern oder wieder einlesen. Ohne Messdaten, Geräteadressen, PINs und Verbindungsschlüssel.</p><div class="row"><button class="quiet" id="exportConfiguration">Einstellungen exportieren</button><button class="quiet" id="importConfiguration">Einstellungen importieren</button></div></article>
   <article class="card settings-card"><h2>Lokal. Ohne Konto.</h2><p class="muted">Watt’n’Pit empfängt deine Geräte direkt. Messwerte und Geräteschlüssel bleiben auf diesem Telefon. Kein Konto, keine Werbung. Nur die optionale Ortssuche und Wettervorschau nutzen Internet: Suchtext bzw. Ortskoordinaten gehen an Open-Meteo. Energiedaten und Geräteschlüssel werden nicht übertragen.</p><div class="row"><button class="quiet" id="settingsImport">CSV importieren</button><button class="quiet" id="settingsExport">CSV exportieren</button></div></article>
   <article class="card cockpit-note"><h2>Dein Energie-Cockpit</h2><p>Watt’n’Pit zeigt Energie- und Messwerte an. Die App ersetzt VictronConnect nicht. Einstellungen an SmartSolar und SmartShunt müssen in <strong>VictronConnect</strong> vorgenommen werden.</p><p class="muted">Batteriekapazität und Solaranlage in dieser App dienen ausschließlich der Anzeige und Berechnung. Sie ändern keine Einstellungen an den Geräten.</p></article>
-  <div class="about"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><strong>Watt’n’Pit 1.3.2</strong><p>Dein Energie-Cockpit.</p><button class="textbutton" id="settingsDemo">Demo ansehen</button></div>
+  <div class="about"><img class="brandmark" src="brand.svg" alt="Sonne und Batterie"><strong>Watt’n’Pit 1.3.3</strong><p>Dein Energie-Cockpit.</p><button class="textbutton" id="settingsDemo">Demo ansehen</button></div>
 </section>
 </main>
 <nav class="bottom-nav" aria-label="Hauptnavigation"><button data-page="overview" class="active"><span id="navOverview"></span>Übersicht</button><button data-page="history"><span id="navHistory"></span>Verlauf</button><button data-page="devices"><span id="navDevices"></span>Geräte</button><button data-page="settings"><span id="navSettings"></span>Einstellungen</button></nav>

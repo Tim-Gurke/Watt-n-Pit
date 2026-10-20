@@ -11,14 +11,13 @@ import de.wattpit.app.core.ArchiveSession;
 import de.wattpit.app.core.ArchiveDiagnostic;
 import de.wattpit.app.core.ArchiveLink;
 import de.wattpit.app.core.ArchiveSyncPlan;
-import de.wattpit.app.core.ArchiveBudget;
 import org.json.*;
 import java.io.IOException;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** Short-lived, serial GATT archive reader. Every stored block survives cancellation. */
+/** Serial, preplanned GATT archive reader. Every stored block survives cancellation. */
 @SuppressLint("MissingPermission")
 public final class ArchiveService extends Service {
     private static final String CHANNEL="wattpit-archive";
@@ -39,7 +38,6 @@ public final class ArchiveService extends Service {
     private volatile BluetoothGatt gatt;
     private BluetoothGattCharacteristic control,data;
     private Repository repository;
-    private ArchiveBudget budget;
     private boolean automatic;
     private String mac="",kind="";
     private int changed,missing,unmapped,processed,total,unknown,blocks,skipped;
@@ -90,7 +88,7 @@ public final class ArchiveService extends Service {
         if(intent==null){stopSelf();return START_NOT_STICKY;}
         if("CANCEL".equals(intent.getAction())){cancelled=true;repository.pauseAutomaticArchives();failOperation(new IOException("cancelled"));received.offer(new byte[0]);if(!started)stopSelf();return START_NOT_STICKY;}
         if(started)return START_NOT_STICKY;started=true;mac=intent.getStringExtra("mac");
-        automatic="AUTO".equals(mac);budget=new ArchiveBudget(automatic,SystemClock.elapsedRealtime());
+        automatic="AUTO".equals(mac);
         try {
             if(Build.VERSION.SDK_INT>=31)startForeground(11,notification("Verbindung wird aufgebaut …"),ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
             else if(Build.VERSION.SDK_INT>=29)startForeground(11,notification("Verbindung wird aufgebaut …"),ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
@@ -107,11 +105,10 @@ public final class ArchiveService extends Service {
         return new Notification.Builder(this,CHANNEL).setSmallIcon(R.drawable.ic_bolt).setContentTitle("Watt’n’Pit · Gerätearchiv").setContentText(text).setContentIntent(open).setOngoing(true).addAction(new Notification.Action.Builder(null,"Abbrechen",cancel).build()).build();
     }
     private void progress(String text){repository.archiveState(mac,true,text,processed,total);long now=SystemClock.elapsedRealtime();if(now-lastNotification>750){lastNotification=now;getSystemService(NotificationManager.class).notify(11,notification(text));}}
-    private static final class BudgetReached extends IOException {private static final long serialVersionUID=1;}
-    private void check() throws IOException {if(cancelled||Thread.currentThread().isInterrupted())throw new IOException("cancelled");if(budget!=null&&budget.remaining(SystemClock.elapsedRealtime())==0)throw new BudgetReached();}
+    private void check() throws IOException {if(cancelled||Thread.currentThread().isInterrupted())throw new IOException("cancelled");}
     private interface GattAction {boolean run();}
     private void op(String type,GattAction action) throws Exception {
-        check();long wait=budget==null?20000:budget.waitMillis(SystemClock.elapsedRealtime(),20000);if(wait==0)throw new BudgetReached();
+        check();long wait=20000;
         CompletableFuture<Integer> future=new CompletableFuture<>();operationType=type;operation=future;
         main.post(()->{if(future.isDone()||cancelled)return;try{if(!action.run())future.completeExceptionally(new GattRejected(type));}catch(Exception e){future.completeExceptionally(e);}});
         try {int status=future.get(wait,TimeUnit.MILLISECONDS);if(status!=0){trace(type+" · GATT "+status);throw new GattFailure(status);}}
@@ -225,15 +222,20 @@ public final class ArchiveService extends Service {
             List<String> queue=new ArrayList<>();
             if(automatic){JSONArray configs=repository.automaticArchiveDevices();for(int i=0;i<configs.length();i++)queue.add(configs.getJSONObject(i).getString("mac"));}
             else queue.add(mac);
-            for(String next:queue){if(cancelled||budget.queueEnded(SystemClock.elapsedRealtime()))break;budget.device(SystemClock.elapsedRealtime());mac=next;stage="Verbindung";changed=missing=unmapped=processed=total=unknown=blocks=skipped=0;negotiatedMtu=23;disconnectStatus=0;link=new ArchiveLink();synchronized(diagnostics){diagnostics.clear();}received.clear();messages.clear();stream=new ArchiveCodec.Stream();runImport();}
+            for(String next:queue){if(cancelled)break;mac=next;stage="Verbindung";changed=missing=unmapped=processed=total=unknown=blocks=skipped=0;negotiatedMtu=23;disconnectStatus=0;link=new ArchiveLink();synchronized(diagnostics){diagnostics.clear();}received.clear();messages.clear();stream=new ArchiveCodec.Stream();runImport();}
         }catch(Exception e){repository.archiveState(mac,false,"Import konnte nicht vorbereitet werden.",0,0);}
         finally{main.post(this::stopSelf);}
     }
     private static final class ArchiveTask {
-        final int channel,slot;final ArchiveCodec.Level level;long cursor;int remaining;
-        ArchiveTask(int channel,int slot,ArchiveCodec.Level level){this.channel=channel;this.slot=slot;this.level=level;cursor=level.newest;remaining=level.capacity;}
+        final int channel,period;
+        final List<ArchiveSyncPlan.Window> windows;
+        int index,remaining;long cursor;
+        ArchiveTask(int channel,int period,ArchiveSyncPlan.Plan plan){
+            this.channel=channel;this.period=period;windows=plan.windows;load();
+        }
+        private void load(){ArchiveSyncPlan.Window w=windows.get(index);cursor=w.cursor;remaining=w.count;}
+        boolean more(){if(remaining>0)return true;if(++index>=windows.size())return false;load();return true;}
     }
-    private void nextArchiveTurn(ArchiveTask task,int size){repository.prefs.edit().putInt("archiveTurn."+mac,(task.slot+1)%size).apply();}
     private void runImport(){
         try {
             JSONObject cfg=null;JSONArray list=repository.configs();for(int i=0;i<list.length();i++)if(list.getJSONObject(i).getString("mac").equals(mac))cfg=list.getJSONObject(i);
@@ -244,28 +246,23 @@ public final class ArchiveService extends Service {
             stage("Archivmetadaten lesen");
             long currentUptime=ArchiveCodec.u(require(0xec5a),0,4);
             byte[] ids=require(0xec5d);if(ids.length!=16)throw new IllegalArgumentException("Unbekannte Archivkanäle.");
-            ArchiveCodec.Clock clock=repository.archiveClock(mac,currentUptime);boolean cachedClock=clock.hasAnchors();
+            ArchiveCodec.Clock clock=repository.archiveClock(mac,currentUptime);
             byte[] anchor=read(0xec5f);if(anchor!=null)clock.anchors(anchor);repository.saveArchiveClock(mac,currentUptime,clock);
-            // Current summaries must not wait behind a large historical backlog.
-            if(kind.equals("solar"))solarDays();else shuntHistory();
             // Read historical anchors and boot boundaries, including paginated older entries.
             stage("Archivzeiten zuordnen");
             for(int reg:new int[]{0xec63,0xec64}){
-                long cursor=currentUptime;boolean jumped=false;
-                for(int page=0;page<64;page++){
-                    byte[] b=exchange(reg,ArchiveCodec.request(reg,ArchiveCodec.le(cursor,4)));if(b==null)break;
+                long cursor=currentUptime;boolean complete=clock.historyComplete(reg);
+                while(true){
+                    byte[] b=exchange(reg,ArchiveCodec.request(reg,ArchiveCodec.le(cursor,4)));
+                    if(b==null){clock.completeHistory(reg);break;}
                     long oldest=ArchiveCodec.NA;int added;
                     if(reg==0xec63){added=clock.anchors(b);oldest=clock.oldestAnchor(b);}
-                    else {added=clock.reboots(b);for(int j=0;j+4<=b.length;j+=4){long t=ArchiveCodec.u(b,j,4);if(t!=ArchiveCodec.NA)oldest=Math.min(oldest,t);}}
-                    repository.saveArchiveClock(mac,currentUptime,clock);
-                    if(oldest==ArchiveCodec.NA||oldest==0||oldest>=cursor)break;
-                    if(cachedClock&&added==0){
-                        long stored=reg==0xec63?clock.oldestStoredAnchor():clock.oldestStoredReboot();
-                        if(!jumped&&stored!=ArchiveCodec.NA&&stored>0&&stored<cursor){cursor=stored-1;jumped=true;continue;}
-                        break;
-                    }
-                    cursor=oldest-1;
+                    else{added=clock.reboots(b);for(int j=0;j+4<=b.length;j+=4){long t=ArchiveCodec.u(b,j,4);if(t!=ArchiveCodec.NA)oldest=Math.min(oldest,t);}}
+                    if(oldest!=ArchiveCodec.NA&&oldest>cursor)throw new IllegalArgumentException("Zeitreferenz liegt außerhalb der Abfrage.");
+                    if(oldest==ArchiveCodec.NA||oldest==0||complete&&added==0){clock.completeHistory(reg);break;}
+                    repository.saveArchiveClock(mac,currentUptime,clock);cursor=oldest-1;
                 }
+                repository.saveArchiveClock(mac,currentUptime,clock);
             }
             if(anchor!=null)clock.anchors(anchor);repository.saveArchiveClock(mac,currentUptime,clock);
             stage("Archivkanäle lesen");
@@ -276,31 +273,48 @@ public final class ArchiveService extends Service {
                 ArchiveCodec.Field field=ArchiveCodec.field(id,auxMode);if(field==null){unknown++;continue;}
                 byte[] config=read(0xec4a+ch),refs=read(0xec52+ch);if(config==null||refs==null){unknown++;continue;}
                 List<ArchiveCodec.Level> tier=ArchiveCodec.levels(config,refs);levels.put(ch,tier);fields.put(ch,field);registers.put(ch,id);
-                batches.put(ch,Math.max(1,Math.min(config[1]&255,56/field.width)));for(ArchiveCodec.Level l:tier)total+=l.capacity;
+                batches.put(ch,Math.max(1,Math.min(config[1]&255,56/field.width)));
             }
             if(fields.isEmpty())throw new IllegalArgumentException("Keine unterstützten Trendkanäle gefunden.");
             List<Integer> channelOrder=new ArrayList<>(fields.keySet());channelOrder.sort(Comparator.comparingInt(ch->ArchiveSession.priority(fields.get(ch).name)));
-            // One block per channel/tier turn: an old Solar channel cannot monopolize the queue.
+            // Finish the complete per-device preflight before the first measurement read.
+            stage("Lokale Aufzeichnung vollständig abgleichen");
+            Map<Integer,ArchiveSyncPlan.Availability> availability=new HashMap<>();
+            Map<Integer,Long> liveChecked=new HashMap<>();
+            for(int ch:channelOrder){
+                maintain();long at=System.currentTimeMillis();ArchiveCodec.Field field=fields.get(ch);
+                availability.put(ch,repository.db.archiveAvailability(mac,kind,registers.get(ch),field.name,levels.get(ch),clock,at,this::maintain));
+                liveChecked.put(ch,at);
+            }
             List<ArchiveTask> tasks=new ArrayList<>();int tierCount=0;
             for(List<ArchiveCodec.Level> tier:levels.values())tierCount=Math.max(tierCount,tier.size());
-            for(int tier=0;tier<tierCount;tier++)for(int ch:channelOrder)if(tier<levels.get(ch).size())tasks.add(new ArchiveTask(ch,tasks.size(),levels.get(ch).get(tier)));
-            int taskCount=tasks.size();if(taskCount>0)Collections.rotate(tasks,-Math.floorMod(repository.prefs.getInt("archiveTurn."+mac,0),taskCount));
+            for(int tier=0;tier<tierCount;tier++)for(int ch:channelOrder)if(tier<levels.get(ch).size()){
+                maintain();ArchiveCodec.Level level=levels.get(ch).get(tier);
+                ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(level,clock,availability.get(ch));
+                skipped+=plan.known;unmapped+=plan.deferred;total+=plan.needed;
+                if(plan.needed>0)tasks.add(new ArchiveTask(ch,level.period,plan));
+                trace(ArchiveSession.label(fields.get(ch).name)+" · "+level.period+" s · "+plan.needed+" fehlen · "+plan.known+" vorhanden · "+plan.deferred+" ohne Zeitreferenz");
+            }
+            LocalDate summaryDay=LocalDate.now();List<Integer> daily=new ArrayList<>();
+            if(kind.equals("solar"))for(int day=0;day<31;day++)if(day==0||!repository.db.archiveDayComplete(mac,summaryDay.minusDays(day).toString()))daily.add(day);
+            trace("Abrufplan fertig · "+total+" fehlende Archivwerte · "+skipped+" vorhanden · "+unmapped+" ohne Zeitreferenz");
+            progress(total==0?(unmapped>0?unmapped+" Archivwerte ohne sichere Zeitreferenz zurückgestellt":"Keine Trendwerte nachzuladen"):total+" fehlende Archivwerte ermittelt · "+skipped+" bereits vorhanden");
+            // Summary reads are also chosen before any measurement transfer.
+            if(kind.equals("solar"))solarDays(summaryDay,daily);else shuntHistory();
             ArrayDeque<ArchiveTask> pending=new ArrayDeque<>(tasks);
-            Map<Integer,ArchiveSyncPlan.Availability> availability=new HashMap<>();
             while(!pending.isEmpty()){
-                maintain();ArchiveTask task=pending.removeFirst();int ch=task.channel;ArchiveCodec.Level level=task.level;ArchiveCodec.Field field=fields.get(ch);
-                stage=ArchiveSession.label(field.name)+" mit lokalen Daten abgleichen";
+                maintain();ArchiveTask task=pending.removeFirst();int ch=task.channel;ArchiveCodec.Field field=fields.get(ch);
+                stage=ArchiveSession.label(field.name)+" ergänzen";
                 ArchiveSyncPlan.Availability local=availability.get(ch);
-                if(local==null){local=repository.db.archiveAvailability(mac,kind,registers.get(ch),field.name,levels.get(ch),clock,System.currentTimeMillis(),this::maintain);availability.put(ch,local);}
-                ArchiveSyncPlan.Request request=ArchiveSyncPlan.next(task.cursor,task.remaining,level.oldest,level.period,batches.get(ch),clock,local);
+                long at=System.currentTimeMillis();repository.db.archiveRecentLive(mac,kind,field.name,liveChecked.get(ch),local);liveChecked.put(ch,at);
+                long oldest=task.cursor-(long)(task.remaining-1)*task.period;
+                ArchiveSyncPlan.Request request=ArchiveSyncPlan.next(task.cursor,task.remaining,oldest,task.period,batches.get(ch),clock,local);
                 skipped+=request.skipped-request.deferred;unmapped+=request.deferred;processed+=request.skipped;task.remaining-=request.skipped;task.cursor=request.cursor;
-                if(request.skipped>0)progress("Lokaler Abgleich · "+skipped+" vorhanden · "+unmapped+" ohne Zeitreferenz zurückgestellt");
-                int count=request.count;
-                if(count==0){nextArchiveTurn(task,taskCount);continue;}
-                byte[] reply=exchange(0xec5b,ArchiveCodec.trendQuery(ch,task.cursor,count));
-                if(reply==null){unknown++;nextArchiveTurn(task,taskCount);continue;}
-                ArchiveCodec.Block block=new ArchiveCodec.Block(reply,field,ch,count);
-                if(block.count==0){nextArchiveTurn(task,taskCount);continue;}
+                if(request.count==0){if(task.more())pending.addLast(task);continue;}
+                byte[] reply=exchange(0xec5b,ArchiveCodec.trendQuery(ch,request.cursor,request.count));
+                if(reply==null){unknown++;trace("Geplanter Bereich nicht unterstützt · später erneut prüfen");continue;}
+                ArchiveCodec.Block block=new ArchiveCodec.Block(reply,field,ch,request.count);
+                if(!ArchiveSyncPlan.matches(request,task.period,block)){unknown++;trace("Archivantwort weicht vom Abrufplan ab · Bereich später neu prüfen");continue;}
                 List<long[]> times=new ArrayList<>();List<Double> values=new ArrayList<>();
                 for(int i=0;i<block.count;i++){
                     if(block.values[i]==null){missing++;continue;}
@@ -314,12 +328,9 @@ public final class ArchiveService extends Service {
                 for(long[] window:ArchiveSyncPlan.completed(block,clock,System.currentTimeMillis())){
                     repository.db.cover(mac,registers.get(ch),block.period,window[0],window[1]);local.imported(block.period,window[0],window[1]);
                 }
-                processed+=block.count;task.remaining-=block.count;
-                long next=block.time-(long)block.count*block.period;nextArchiveTurn(task,taskCount);
+                processed+=block.count;task.remaining-=block.count;task.cursor=block.time-(long)block.count*block.period;
                 progress(ArchiveSession.label(field.name)+" · "+Math.min(100,(int)(processed*100L/Math.max(1,total)))+" % · "+changed+" Werte übernommen");
-                if(block.period!=level.period){unknown++;trace("Abweichende Archivauflösung · Bereich zurückgestellt");continue;}
-                if(next>=task.cursor){unknown++;trace("Archivantwort ohne Zeitfortschritt · Bereich zurückgestellt");continue;}
-                task.cursor=next;if(task.cursor>=level.oldest&&task.remaining>0)pending.addLast(task);
+                if(task.more())pending.addLast(task);
             }
             repository.invalidateStats();String result=changed+" neue oder ergänzte Werte · "+missing+" ohne Messwert";
             if(skipped>0)result+=" · "+skipped+" bereits vorhanden, nicht geladen";
@@ -329,19 +340,19 @@ public final class ArchiveService extends Service {
         }catch(Exception e){
             String reason=e instanceof GattFailure?"GATT "+((GattFailure)e).status:e instanceof TimeoutException?"Zeitüberschreitung":e instanceof IllegalArgumentException||e instanceof LinkClosed||e instanceof GattRejected||e instanceof IllegalStateException?e.getMessage():e instanceof SecurityException?"Bluetooth-Berechtigung fehlt":"Verbindung beendet";
             reason=ArchiveDiagnostic.clean(reason);
-            String result=(cancelled?"Import abgebrochen · automatische Abrufe 30 Minuten pausiert":e instanceof BudgetReached?"Abgleich pausiert · Zeitlimit erreicht":stage+": "+reason)+". "+changed+" Archivwerte übernommen. Weitere Daten unter Geräte → Gerätearchiv ergänzen nachladen.";
-            trace(cancelled?"Abgebrochen":e instanceof BudgetReached?"Zeitbudget erreicht · gespeicherte Werte bleiben erhalten":stage+" · "+reason);traceSummary();saveDiagnostics(result);
+            String result=(cancelled?"Import abgebrochen · automatische Abrufe 30 Minuten pausiert":stage+": "+reason)+". "+changed+" Archivwerte übernommen. Weitere Daten unter Geräte → Gerätearchiv ergänzen nachladen.";
+            trace(cancelled?"Abgebrochen":stage+" · "+reason);traceSummary();saveDiagnostics(result);
             repository.invalidateStats();repository.archiveState(mac,false,result,processed,total);repository.message(result);
         }finally{closeGatt();repository.archiveAttemptFinished(mac,cancelled);}
     }
     private void traceSummary(){trace(blocks+" Datenblöcke · "+changed+" übernommene Werte · "+skipped+" lokal vorhanden, nicht geladen · "+missing+" fehlend · "+unmapped+" ohne sichere Zeit");trace(link.sent()+" Datenpakete gesendet · "+link.received()+" empfangen · "+link.grants()+" Empfangsfreigaben");}
-    private void solarDays() throws Exception {
-        stage("Solar-Tageswerte lesen");LocalDate today=LocalDate.now();
-        for(int day=0;day<31;day++){
+    private void solarDays(LocalDate today,List<Integer> days) throws Exception {
+        stage("Solar-Tageswerte ergänzen");
+        for(int day:days){
+            if(!LocalDate.now().equals(today)){trace("Tageswechsel · Tageswerte beim nächsten Abgleich prüfen");break;}
             String date=today.minusDays(day).toString();
-            if(day>0&&repository.db.archiveDayComplete(mac,date))continue;
             byte[] b=read(0x1050+day);
-            if(!LocalDate.now().equals(today)){today=LocalDate.now();day=-1;continue;}
+            if(!LocalDate.now().equals(today))break;
             if(b==null||b.length!=34)continue;
             long yield=ArchiveCodec.u(b,1,4);if(yield==ArchiveCodec.NA)continue;
             JSONObject p=new JSONObject().put("day",date).put("device",mac).put("origin","archive")

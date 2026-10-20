@@ -6,6 +6,13 @@ import static org.junit.Assert.*;
 
 public class EnergyIntegralTest {
     private EnergyIntegral.Sample sample(long seconds,double watts,int period,String origin){return new EnergyIntegral.Sample(seconds*1000,watts,period,"test-device",origin);}
+    @Test public void storingTheLiveCadenceDoesNotBreakEnergyAtTheAppUpdateBoundary(){
+        EnergyIntegral.Result r=EnergyIntegral.calculate(Arrays.asList(sample(0,60,0,"live"),sample(10,60,10,"live"),sample(20,60,10,"live")),0,20000,false);
+        assertEquals(1.0/3,r.wh,1e-9);assertEquals(20000,r.coveredMillis);
+    }
+    @Test public void recordedLiveCadenceLeavesMissedReceptionIntervalsOpen(){
+        assertNull(EnergyIntegral.calculate(Arrays.asList(sample(0,60,10,"live"),sample(20,60,10,"live")),0,20000,false).wh);
+    }
     @Test public void resolvesFractionsBelowTheDeviceTenWhSteps(){
         List<EnergyIntegral.Sample> data=new ArrayList<>();for(int t=0;t<=3600;t+=30)data.add(sample(t,3,30,"archive"));
         EnergyIntegral.Result r=EnergyIntegral.calculate(data,0,3600000,false);

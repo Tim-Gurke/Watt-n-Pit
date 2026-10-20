@@ -37,6 +37,8 @@ public final class ArchiveSyncPlan {
     public static final class Availability {
         private final Map<Integer, Intervals> live = new LinkedHashMap<>(), archive = new LinkedHashMap<>();
         private final long now;
+        private long lastLive=Long.MIN_VALUE;
+        private int lastLiveStep;
         public Availability(Collection<Integer> periods, long now) {
             this.now = now;
             for (int period : periods) {
@@ -45,9 +47,17 @@ public final class ArchiveSyncPlan {
             }
         }
         public void reading(long time, String origin, int resolution) {
+            int liveStep=resolution>0?resolution:10;
+            boolean joinsLive=origin.equals("live")&&lastLive!=Long.MIN_VALUE&&time>lastLive&&
+                    time-lastLive<=Math.min(liveStep,lastLiveStep)*1500L;
             for (int period : live.keySet()) {
                 long tolerance = Math.min(45000L, Math.max(500L, period * 500L));
-                if (origin.equals("live")) live.get(period).add(time - tolerance, time + tolerance);
+                if (origin.equals("live")) {
+                    live.get(period).add(time-tolerance,time+tolerance);
+                    // The chosen recording cadence is not a reception gap. Only adjacent,
+                    // sufficiently close non-null samples of this field form a live span.
+                    if(joinsLive)live.get(period).add(lastLive,time);
+                }
                 else if ((origin.equals("archive") || origin.equals("csv")) && resolution > 0 && resolution <= period) {
                     // Equal-resolution samples cover their own instant; finer samples have the same
                     // bounded matching tolerance as the existing archive/live merge.
@@ -55,6 +65,7 @@ public final class ArchiveSyncPlan {
                     archive.get(period).add(time - near, time + near);
                 } else if (origin.equals("csv") && resolution == 0) archive.get(period).add(time, time);
             }
+            if(origin.equals("live")&&time>lastLive){lastLive=time;lastLiveStep=liveStep;}
         }
         public void imported(int period, long from, long to) {
             Intervals intervals = archive.get(period);
@@ -73,6 +84,45 @@ public final class ArchiveSyncPlan {
         public final long cursor;
         public final int skipped, count, deferred;
         Request(long cursor, int skipped, int count,int deferred) { this.cursor = cursor; this.skipped = skipped; this.count = count;this.deferred=deferred; }
+    }
+
+    /** A contiguous missing range, independent of the transport's packet size. */
+    public static final class Window {
+        public final long cursor;
+        public final int count;
+        private Window(long cursor,int count){this.cursor=cursor;this.count=count;}
+    }
+
+    /** Immutable preflight result. No measurement request is needed to construct it. */
+    public static final class Plan {
+        public final List<Window> windows;
+        public final int known,deferred,needed;
+        private Plan(List<Window> windows,int known,int deferred,int needed){
+            this.windows=Collections.unmodifiableList(windows);
+            this.known=known;this.deferred=deferred;this.needed=needed;
+        }
+    }
+
+    public static Plan plan(ArchiveCodec.Level level,ArchiveCodec.Clock clock,Availability local){
+        List<Window> windows=new ArrayList<>();int known=0,deferred=0,needed=0,count=0;long start=0;
+        for(int i=0;i<level.capacity;i++){
+            long cursor=level.newest-(long)i*level.period;
+            if(cursor<level.oldest)break;
+            Long time=clock.millis(cursor);
+            boolean missing=local.importable(time)&&!local.known(time,level.period);
+            if(missing){if(count==0)start=cursor;count++;needed++;}
+            else{
+                if(count>0){windows.add(new Window(start,count));count=0;}
+                if(local.importable(time))known++;else deferred++;
+            }
+        }
+        if(count>0)windows.add(new Window(start,count));
+        return new Plan(windows,known,deferred,needed);
+    }
+
+    /** Reject changed device layouts before treating a reply as a planned range. */
+    public static boolean matches(Request request,int period,ArchiveCodec.Block block){
+        return block.count>0&&block.count<=request.count&&block.time==request.cursor&&block.period==period;
     }
 
     /** Skip known samples and stop a request before the next known sample, even inside a batch. */
@@ -102,7 +152,7 @@ public final class ArchiveSyncPlan {
             Long time = clock.millis(cursor);
             if (time != null) { from = Math.min(from, time); to = Math.max(to, time); }
         }
-        return from == Long.MAX_VALUE ? new long[]{0, 0} : new long[]{Math.max(0, from - 45000), to + 45000};
+        return from == Long.MAX_VALUE ? new long[]{0, 0} : new long[]{Math.max(0, from - 90000), to + 90000};
     }
 
     /** Persist completed responses, including unavailable values, without bridging unknown clock epochs. */

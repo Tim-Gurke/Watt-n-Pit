@@ -98,9 +98,11 @@ public final class EnergyIntegral {
         List<Sample> sorted=new ArrayList<>(samples);sorted.sort(Comparator.comparingLong(s->s.time));
         Map<String,Sample> previous=new HashMap<>();List<Event> events=new ArrayList<>();int id=0;
         for(Sample s:sorted){
-            String key=s.device+"\n"+s.origin+"\n"+s.period;Sample a=previous.put(key,s);
+            boolean live=s.origin.equals("live");
+            String key=s.device+"\n"+s.origin+"\n"+(live?0:s.period);Sample a=previous.put(key,s);
             if(a==null||!Double.isFinite(a.watts)||!Double.isFinite(s.watts)||(!signed&&(a.watts<0||s.watts<0)))continue;
             long dt=s.time-a.time,limit=s.period>0?s.period*1500L:90000;
+            if(live&&a.period>0)limit=Math.min(limit,a.period*1500L);
             if(dt<=0||dt>limit)continue;
             long start=Math.max(from,a.time),end=Math.min(to,s.time);if(end<=start)continue;
             Segment segment=new Segment(a,s,start,end,id++);events.add(new Event(start,segment,true));events.add(new Event(end,segment,false));

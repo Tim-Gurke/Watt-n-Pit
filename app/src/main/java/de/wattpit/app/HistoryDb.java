@@ -54,6 +54,12 @@ final class HistoryDb extends SQLiteOpenHelper {
         }
         return local;
     }
+    /** Catch live data recorded after preflight without reloading historical rows. */
+    void archiveRecentLive(String device,String kind,String field,long since,ArchiveSyncPlan.Availability local){
+        try(Cursor c=getReadableDatabase().rawQuery(ArchiveSyncPlan.readingsSql(field),new String[]{device,kind,""+Math.max(0,since-45000),""+Long.MAX_VALUE})){
+            while(c.moveToNext())if(c.getString(1).equals("live"))local.reading(c.getLong(0),"live",0);
+        }
+    }
     synchronized void cover(String device,int channel,int period,long from,long to){
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         String where="device=? AND channel=? AND period=? AND start<=? AND end>=?";

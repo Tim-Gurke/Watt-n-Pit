@@ -179,7 +179,91 @@ public class ArchiveSyncPlanTest {
     }
     @Test public void boundsIncludeSeparatedClockEpochs() {
         long[] bounds=ArchiveSyncPlan.bounds(Arrays.asList(new ArchiveCodec.Level(8,30,1000)),clock());
-        assertEquals(t(790)-45000,bounds[0]);assertEquals(t(1000)+45000,bounds[1]);
+        assertEquals(t(790)-90000,bounds[0]);assertEquals(t(1000)+90000,bounds[1]);
+    }
+    @Test public void tenSecondRecordingAlreadyCoversAOneSecondDeviceArchive(){
+        ArchiveSyncPlan.Availability a=local(1);
+        for(long time=1000;time<=4600;time+=10)a.reading(t(time),"live",10);
+        ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(new ArchiveCodec.Level(3601,1,4600),clock(),a);
+        assertEquals(3601,plan.known);assertEquals(0,plan.needed);assertTrue(plan.windows.isEmpty());
+    }
+    @Test public void legacyRecordingsUseThePreviousTenSecondDefault(){
+        ArchiveSyncPlan.Availability a=local(1);
+        for(long time=1000;time<=1060;time+=10)a.reading(t(time),"live",0);
+        assertEquals(0,ArchiveSyncPlan.plan(new ArchiveCodec.Level(61,1,1060),clock(),a).needed);
+    }
+    @Test public void theSelectedOneMinuteCadenceDoesNotCreateArtificialSecondGaps(){
+        ArchiveSyncPlan.Availability a=local(1);
+        a.reading(t(1000),"live",60);a.reading(t(1061),"live",60);
+        assertEquals(0,ArchiveSyncPlan.plan(new ArchiveCodec.Level(62,1,1061),clock(),a).needed);
+    }
+    @Test public void aMissingLiveSampleLeavesItsActualReceptionGapInThePlan(){
+        ArchiveSyncPlan.Availability a=local(1);
+        for(long time:new long[]{1000,1010,1030,1040})a.reading(t(time),"live",10);
+        ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(new ArchiveCodec.Level(41,1,1040),clock(),a);
+        assertEquals(19,plan.needed);assertEquals(22,plan.known);assertEquals(1,plan.windows.size());
+        assertEquals(1029,plan.windows.get(0).cursor);assertEquals(19,plan.windows.get(0).count);
+    }
+    @Test public void anArchiveOrCsvPointCannotJoinTwoLiveSpans(){
+        ArchiveSyncPlan.Availability a=local(1);
+        a.reading(t(1000),"live",10);a.reading(t(1010),"csv",1);a.reading(t(1020),"live",10);
+        assertFalse(a.known(t(1005),1));assertFalse(a.known(t(1015),1));
+    }
+    @Test public void aRecordingCadenceChangeCannotCoverALongReceptionGap(){
+        ArchiveSyncPlan.Availability a=local(1);
+        a.reading(t(1000),"live",10);a.reading(t(1060),"live",60);
+        assertFalse(a.known(t(1030),1));
+    }
+    @Test public void threeWeeksWithoutOpeningTheUiNeedNoTrendTransferIfRecordingContinued(){
+        long end=21L*86400;
+        ArchiveSyncPlan.Availability a=new ArchiveSyncPlan.Availability(Arrays.asList(1,30,900),t(end+100000));
+        for(long time=0;time<=end;time+=10)a.reading(t(time),"live",0);
+        for(ArchiveCodec.Level level:Arrays.asList(new ArchiveCodec.Level(120,1,end),new ArchiveCodec.Level(10000,30,end),new ArchiveCodec.Level(2017,900,end))){
+            ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(level,clock(),a);
+            assertEquals(0,plan.needed);assertEquals(level.capacity,plan.known);assertTrue(plan.windows.isEmpty());
+        }
+    }
+    @Test public void threeDaysAndThreeWeeksOfRealOfflineDataArePlannedWithoutATimeCutoff(){
+        for(int days:new int[]{3,21}){
+            long end=days*86400L;int samples=days*96+1;
+            ArchiveSyncPlan.Availability a=new ArchiveSyncPlan.Availability(Arrays.asList(900),t(end+100000));
+            ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(new ArchiveCodec.Level(samples,900,end),clock(),a);
+            assertEquals(samples,plan.needed);assertEquals(0,plan.known);assertEquals(1,plan.windows.size());
+            assertEquals(end,plan.windows.get(0).cursor);assertEquals(samples,plan.windows.get(0).count);
+        }
+    }
+    @Test public void preflightFindsAllSeparateHolesBeforeTheFirstMeasurementRequest(){
+        ArchiveSyncPlan.Availability a=local(30);
+        for(long time:new long[]{790,880,910,970,1000})a.reading(t(time),"live",0);
+        ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(new ArchiveCodec.Level(8,30,1000),clock(),a);
+        assertEquals(3,plan.needed);assertEquals(5,plan.known);assertEquals(2,plan.windows.size());
+        assertEquals(940,plan.windows.get(0).cursor);assertEquals(1,plan.windows.get(0).count);
+        assertEquals(850,plan.windows.get(1).cursor);assertEquals(2,plan.windows.get(1).count);
+    }
+    @Test public void liveDataArrivingAfterPreflightArePrunedBeforeTheirTransfer(){
+        ArchiveSyncPlan.Availability a=local(30);
+        ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(new ArchiveCodec.Level(8,30,1000),clock(),a);
+        a.reading(t(1000),"live",10);
+        ArchiveSyncPlan.Window w=plan.windows.get(0);
+        ArchiveSyncPlan.Request request=next(a,w.cursor,w.count,790,8);
+        assertEquals(8,plan.needed);assertEquals(1,request.skipped);assertEquals(7,request.count);assertEquals(970,request.cursor);
+    }
+    @Test public void aPartialMatchingReplyCanBeStoredAndTheRemainderStaysMissing(){
+        ArchiveSyncPlan.Availability a=local(30);ArchiveSyncPlan.Request request=next(a,1000,8,790,8);
+        ArchiveCodec.Block partial=block(1000,30,2,false);
+        assertTrue(ArchiveSyncPlan.matches(request,30,partial));
+        for(long[] w:ArchiveSyncPlan.completed(partial,clock(),t(20000)))a.imported(30,w[0],w[1]);
+        assertEquals(6,ArchiveSyncPlan.plan(new ArchiveCodec.Level(8,30,1000),clock(),a).needed);
+    }
+    @Test public void changedOrEmptyDeviceRepliesCannotMarkAPlannedRangeComplete(){
+        ArchiveSyncPlan.Request request=next(local(30),1000,8,790,8);
+        assertFalse(ArchiveSyncPlan.matches(request,30,block(970,30,2,false)));
+        assertFalse(ArchiveSyncPlan.matches(request,30,block(1000,60,2,false)));
+        assertFalse(ArchiveSyncPlan.matches(request,30,block(1000,0,0,false)));
+    }
+    @Test public void unknownTimeReferencesAreCountedInPreflightWithoutADataRequest(){
+        ArchiveSyncPlan.Plan plan=ArchiveSyncPlan.plan(new ArchiveCodec.Level(8,30,1000),new ArchiveCodec.Clock(),local(30));
+        assertEquals(8,plan.deferred);assertEquals(0,plan.needed);assertTrue(plan.windows.isEmpty());
     }
     @Test(expected=IllegalArgumentException.class) public void sqlOnlyAcceptsKnownMeasurements() {
         ArchiveSyncPlan.readingsSql("voltage OR 1=1");
