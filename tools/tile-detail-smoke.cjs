@@ -95,7 +95,7 @@ const path=require('node:path');
  assert.equal(await page.locator('#addTile').isVisible(),false);
  await page.locator('[data-page="overview"]').click();assert.equal(await page.locator('header #addTile').count(),1);
  await page.setViewportSize({width:390,height:844});
- await page.waitForFunction(()=>document.querySelector('#overview>#overviewHeader'));
+ await page.locator('#overview>#overviewHeader').waitFor();
  await verifyUnchanged();
  // The settings choice remains the regular persistent editor.
  await page.locator('[data-tile="default-solar"]').click();await page.locator('#tileActionSettings').click();await page.locator('#tileTitle').fill('Meine Solarleistung');await page.locator('#saveTile').click();
