@@ -185,10 +185,9 @@ final class Repository {
                     if (key == null) { key = KeyVault.decrypt(c.getString("secret")); keys.put(mac,key); }
                     Reading r = VictronDecoder.decode(packet,key);
                     if (!r.kind.equals(c.getString("kind"))) throw new IllegalArgumentException("Gerätetyp stimmt nicht. Einrichtung prüfen.");
-                    r.device = mac; r.timestamp = now;
-                    latest.put(mac,r); errors.remove(mac);
                     int seconds = prefs.getInt("sampleSeconds",10);
-                    r.period=seconds;
+                    r.device = mac; r.timestamp = now; r.period=seconds;
+                    latest.put(mac,r); errors.remove(mac);
                     if (now - stored.getOrDefault(mac,0L) >= seconds * 1000L) { db.insert(r); stored.put(mac,now); }
                 } catch (Exception e) { errors.put(mac,safeError(e)); }
             }
