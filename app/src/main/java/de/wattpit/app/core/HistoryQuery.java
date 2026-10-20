@@ -25,6 +25,10 @@ public final class HistoryQuery {
         Selection s=select(from,to,metric,source);
         return new HistoryQuery("SELECT "+s.field+",ts FROM readings WHERE "+s.where+" ORDER BY ts DESC LIMIT 1",s.args);
     }
+    public static HistoryQuery powerDevices(long from,long to,String source){
+        Selection s=select(from,to,"batteryVoltage",source,false);
+        return new HistoryQuery("SELECT DISTINCT device,kind FROM readings WHERE "+s.where,s.args);
+    }
     public static HistoryQuery rawPower(long from,long to,String metric,String source){
         if(!metric.equals("solar")&&!metric.equals("batteryPower"))throw new IllegalArgumentException("Keine Leistungsmessgröße.");
         return raw(from,to,metric,source);

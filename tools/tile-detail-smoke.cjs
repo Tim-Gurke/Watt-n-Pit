@@ -67,7 +67,7 @@ const path=require('node:path');
  for(const viewport of [{width:320,height:800},{width:360,height:800},{width:390,height:844},{width:700,height:960},{width:844,height:1100},{width:640,height:360},{width:760,height:360},{width:832,height:390},{width:1100,height:844}]){
   const {width,height}=viewport,landscape=width>height;
   await page.setViewportSize(viewport);
-  await page.waitForFunction(expected=>document.body.classList.contains('overview-landscape')===expected,landscape);
+  await page.locator(landscape?'body.overview-landscape':'body:not(.overview-landscape)').waitFor();
   for(const theme of ['light','dark']){
    if(await page.locator('html').getAttribute('data-theme')!==theme)await page.locator('#themeToggle').click();
    assert.equal(await page.evaluate(()=>document.body.scrollWidth>innerWidth),false,'overview overflow '+width);

@@ -87,4 +87,11 @@ public class HistoryQueryTest {
         assertEquals(2,count);
     }
 
+    @Test public void complementaryShuntFieldsDiscoverAPlotEvenWithoutAStoredPowerColumn() throws Exception {
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,voltage,current,period) VALUES (200000,'complementary','shunt','archive',12,NULL,10),(230000,'complementary','shunt','archive',NULL,-5,30)");
+        HistoryQuery q=HistoryQuery.powerDevices(190000,240000,"all");boolean found=false;
+        try(PreparedStatement statement=db.prepareStatement(q.sql)){for(int i=0;i<q.args.length;i++)statement.setString(i+1,q.args[i]);try(ResultSet r=statement.executeQuery()){while(r.next())if(r.getString(1).equals("complementary"))found=true;}}
+        assertTrue(found);
+    }
+
 }

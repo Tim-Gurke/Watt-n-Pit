@@ -161,6 +161,12 @@ final class HistoryDb extends SQLiteOpenHelper {
                 devices.computeIfAbsent(device,k->new ArrayList<>()).add(new SampleTimeline.Sample(c.getLong(0),c.getDouble(1),c.getInt(2),device,c.getString(4)));
             }
         }
+        if(metric.equals("power")||metric.equals("batteryPower")){
+            HistoryQuery candidates=HistoryQuery.powerDevices(Math.max(0,from-EnergyIntegral.LOOKAROUND),Math.min(System.currentTimeMillis(),to+EnergyIntegral.LOOKAROUND),source);
+            try(Cursor c=getReadableDatabase().rawQuery(candidates.sql,candidates.args)){
+                while(c.moveToNext()){String device=c.getString(0);devices.computeIfAbsent(device,k->new ArrayList<>());kinds.put(device,c.getString(1));}
+            }
+        }
         JSONArray result=new JSONArray();
         for(Map.Entry<String,List<SampleTimeline.Sample>> entry:devices.entrySet()){
             List<SampleTimeline.Interval> intervals=kinds.get(entry.getKey()).equals("shunt")&&(metric.equals("power")||metric.equals("batteryPower"))?
@@ -193,7 +199,18 @@ final class HistoryDb extends SQLiteOpenHelper {
         }
         HistoryQuery last=HistoryQuery.latest(from,to,metric,"all");
         try (Cursor c=getReadableDatabase().rawQuery(last.sql,last.args)) { summary.put("last",c.moveToFirst()?c.getDouble(0):JSONObject.NULL); }
-        return new JSONObject().put("summary",summary).put("points",query(from,to,metric,"all"));
+        JSONArray plotted=query(from,to,metric,"all");
+        if(metric.equals("batteryPower")&&plotted.length()>0){
+            JSONObject latest=plotted.getJSONObject(plotted.length()-1);double low=Double.POSITIVE_INFINITY,high=Double.NEGATIVE_INFINITY;
+            for(int i=0;i<plotted.length();i++){JSONObject p=plotted.getJSONObject(i);low=Math.min(low,p.getDouble("v"));high=Math.max(high,p.getDouble("v"));if(p.getLong("t")>latest.getLong("t"))latest=p;}
+            if(summary.isNull("last")||latest.getLong("t")>summary.optLong("lastTime"))summary.put("last",latest.getDouble("v")).put("lastTime",latest.getLong("t"));
+            summary.put("min",Math.min(summary.optDouble("min",low),low)).put("max",Math.max(summary.optDouble("max",high),high));
+            if(summary.isNull("avg")){
+                EnergyIntegral.Result energy=EnergyIntegral.calculateIntervals(batteryIntervals(from,to,"all",null),from,to,false,true);
+                if(energy.wh!=null&&energy.coveredMillis>0)summary.put("avg",energy.wh*3600000/energy.coveredMillis);
+            }
+        }
+        return new JSONObject().put("summary",summary).put("points",plotted);
     }
 
     JSONObject energyData(long from,long to,String metric,String source) throws Exception {
