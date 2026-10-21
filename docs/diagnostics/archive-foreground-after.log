@@ -1,0 +1,17 @@
+RESULT successful_hour_connections=0 measurement_requests=0 repeated_points=0
+PASS successful archive is not restarted while foreground remains open
+PASS reopening still fetches the accumulated archive-only PV-voltage data
+PASS reopening leaves no available archive-only data gap
+PASS completed archive points are never requested twice
+PASS a foreground return can fetch new data before five minutes have elapsed
+PASS short foreground return fills the new available range
+PASS one foreground attempt reaches a simulated unavailable GATT connection
+RESULT failed_half_hour_retries=0
+PASS continuous live packets do not repeatedly retry a failed GATT session
+PASS a real reception gap and recovery permits one pending retry
+PASS recovery imports the remaining archived data
+PASS completed recovery does not start another archive loop
+PASS manual cancellation pause also blocks a foreground or reception trigger
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.

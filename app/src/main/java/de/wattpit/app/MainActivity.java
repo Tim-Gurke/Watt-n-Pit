@@ -90,7 +90,7 @@ public final class MainActivity extends Activity {
         }
     }
     @Override protected void onStop(){foreground=false;web.removeCallbacks(retryIncompleteArchive);stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
-    private final Runnable retryIncompleteArchive=new Runnable(){@Override public void run(){startAutomaticImport();web.postDelayed(this,15000);}};
+    private final Runnable retryIncompleteArchive=new Runnable(){@Override public void run(){startAutomaticImport(true);web.postDelayed(this,15000);}};
     private void startAutomaticImport(){
         startAutomaticImport(false);
     }
@@ -237,6 +237,7 @@ public final class MainActivity extends Activity {
 
     private boolean repositoryArchiveActive(){return repository.archiveBusy;}
     final class Bridge {
+        @JavascriptInterface public String appVersion(){return BuildConfig.VERSION_NAME;}
         @JavascriptInterface public String syncState(){return repository.syncState();}
         @JavascriptInterface public String backgroundArchive(long runId){return repository.archiveRun.background(runId)?"":"Dieser Synchronisationslauf ist bereits beendet. Bitte erneut versuchen.";}
         @JavascriptInterface public void requestHistory(String json){

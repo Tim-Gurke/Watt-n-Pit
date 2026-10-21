@@ -1,6 +1,10 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const deviceNative=window.WattPit||null;
+if(typeof deviceNative?.appVersion==='function'){
+  const version=deviceNative.appVersion();
+  document.querySelectorAll('[data-app-version]').forEach(element=>element.textContent=version);
+}
 let readRepaint,readsDirty=false;
 function repaintReads(){
   if(!readsDirty||lifecycle?.blocked)return;

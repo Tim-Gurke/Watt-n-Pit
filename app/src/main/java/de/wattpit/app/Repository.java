@@ -21,6 +21,7 @@ final class Repository {
     private final Map<String,String> errors = new HashMap<>();
     private final Map<String,byte[]> keys = new HashMap<>();
     private final Map<String,Long> stored = new HashMap<>();
+    private final Map<String,Long> archiveReception = new ConcurrentHashMap<>();
     volatile boolean running = false;
     volatile boolean archiveBusy=false;
     final ArchiveRun archiveRun=new ArchiveRun();
@@ -93,9 +94,8 @@ final class Repository {
         JSONArray due=new JSONArray(),all=new JSONArray(prefs.getString("devices","[]"));long now=System.currentTimeMillis();
         for(int i=0;i<all.length();i++){JSONObject cfg=all.getJSONObject(i);String mac=cfg.getString("mac");
             long next=prefs.getLong("archiveNext."+mac,0);
-            if((retriesOnly&&!prefs.getBoolean("archivePending."+mac,false))||!ArchiveSchedule.automaticDue(next,now))continue;
+            if((retriesOnly&&(!prefs.getBoolean("archivePending."+mac,false)||!archiveReceptionRecovered(mac,now)))||!ArchiveSchedule.automaticDue(next,now))continue;
             if(ArchiveSchedule.automaticDue(next,now,archiveNeedsData(cfg,now)))due.put(cfg);
-            else prefs.edit().putLong("archiveNext."+mac,ArchiveSchedule.nextAutomatic(now,false)).apply();
         }
         return due;
     }
@@ -134,10 +134,15 @@ final class Repository {
         if(!prefs.edit().putString("archivePlan."+mac,plan.toString()).commit())throw new IllegalStateException("Archivplan konnte nicht gespeichert werden.");
     }
     void archiveAttemptStarted(String mac){
-        if(!prefs.edit().putBoolean("archivePending."+mac,true).commit())throw new IllegalStateException("Archivfortschritt konnte nicht gespeichert werden.");
+        if(!prefs.edit().putBoolean("archivePending."+mac,true).putLong("archiveAttemptReception."+mac,archiveReception.getOrDefault(mac,0L)).commit())throw new IllegalStateException("Archivfortschritt konnte nicht gespeichert werden.");
     }
-    void archiveAttemptFinished(String mac,boolean cancelled,boolean complete){prefs.edit().putLong("archiveNext."+mac,ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),cancelled))
-            .putBoolean("archivePending."+mac,!cancelled&&!complete).apply();}
+    void archiveAttemptFinished(String mac,boolean cancelled,boolean complete){prefs.edit().putLong("archiveNext."+mac,complete&&!cancelled?0:ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),cancelled))
+            .putBoolean("archivePending."+mac,!cancelled&&!complete).putLong("archiveAttemptReception."+mac,archiveReception.getOrDefault(mac,0L)).apply();}
+    private boolean archiveReceptionRecovered(String mac,long now){
+        Reading live=latest.get(mac);
+        return live!=null&&now>=live.timestamp&&now-live.timestamp<=45000
+                &&archiveReception.getOrDefault(mac,0L)>prefs.getLong("archiveAttemptReception."+mac,0);
+    }
     void pauseAutomaticArchives(){
         try{JSONArray all=configs();SharedPreferences.Editor edit=prefs.edit();long next=ArchiveSchedule.nextAutomatic(System.currentTimeMillis(),true);
             for(int i=0;i<all.length();i++){String mac=all.getJSONObject(i).getString("mac");edit.putLong("archiveNext."+mac,next).putBoolean("archivePending."+mac,false);}edit.apply();
@@ -233,11 +238,18 @@ final class Repository {
                     if (!r.kind.equals(c.getString("kind"))) throw new IllegalArgumentException("Gerätetyp stimmt nicht. Einrichtung prüfen.");
                     int seconds = prefs.getInt("sampleSeconds",10);
                     r.device = mac; r.timestamp = now; r.period=seconds;
-                    latest.put(mac,r); errors.remove(mac);
-                    if (now - stored.getOrDefault(mac,0L) >= seconds * 1000L) { db.insert(r); stored.put(mac,now); }
+                    recordLive(r);
                 } catch (Exception e) { errors.put(mac,safeError(e)); }
             }
         } catch (Exception e) { message(safeError(e)); }
+    }
+
+    /** A continued broadcast stream is not a reason to retry a failed GATT session. */
+    synchronized void recordLive(Reading reading){
+        String mac=reading.device;Reading previous=latest.get(mac);
+        if(previous==null||reading.timestamp-previous.timestamp>45000)archiveReception.put(mac,reading.timestamp);
+        latest.put(mac,reading);errors.remove(mac);
+        if(reading.timestamp-stored.getOrDefault(mac,0L)>=reading.period*1000L){db.insert(reading);stored.put(mac,reading.timestamp);}
     }
 
     private String bondState(String mac){
