@@ -58,4 +58,3 @@ const path=require('node:path');
  if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.setViewportSize({width:390,height:844});await page.locator('#editDashboard').click();await card.evaluate(el=>el.scrollIntoView({block:'center'}));await verifyCurves();await card.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'mini-history-resized.png')});}
  assert.deepEqual(errors,[]);await browser.close();console.log('Overview calendar ranges, local database queries, touch cancel, height drag, keyboard bounds, storage failure, separate profiles and reload persistence passed.');
 })().catch(e=>{console.error(e);process.exit(1);});
-
