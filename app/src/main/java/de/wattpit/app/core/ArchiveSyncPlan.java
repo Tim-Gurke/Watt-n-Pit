@@ -58,9 +58,12 @@ public final class ArchiveSyncPlan {
                 if(lower!=null&&time-lower<=SampleTimeline.limit(origin,resolution))ranges.add(lower,time);
                 if(upper!=null&&upper-time<=SampleTimeline.limit(origin,resolution))ranges.add(time,upper);
             }
-            if(exact.containsKey(resolution))exact.get(resolution).add(time,time);
+            // A request cursor is rounded forward to the device sample grid. The
+            // same-resolution sample at t answers cursors in (t-period,t]. This
+            // is not permission to bridge a gap using a nearby live reading.
+            if(exact.containsKey(resolution))exact.get(resolution).add(time-resolution*1000L+1,time);
         }
-        public void imported(int period,long from,long to){Intervals ranges=checked.get(period);if(ranges!=null)ranges.add(from,to);}
+        public void imported(int period,long from,long to){Intervals ranges=checked.get(period);if(ranges!=null)ranges.add(from-period*1000L+1,to);}
         void received(ArchiveCodec.Block block,ArchiveCodec.Clock clock){
             for(int i=0;i<block.count;i++)if(block.values[i]!=null){Long time=clock.millis(block.time-(long)i*block.period);if(importable(time))reading(time,"archive",block.period);}
             for(long[] range:completed(block,clock,now))imported(block.period,range[0],range[1]);
@@ -122,10 +125,17 @@ public final class ArchiveSyncPlan {
      * The live recording gets its normal reception interval before a new point is considered missing.
      * A real connection always reads fresh device metadata before requesting measurements. */
     public static List<ArchiveCodec.Level> advance(List<ArchiveCodec.Level> levels,long deviceNow,ArchiveCodec.Clock clock,long before){
-        if(deviceNow<0||deviceNow>ArchiveCodec.NA)throw new IllegalArgumentException("Ungültige Gerätezeit.");
+        long captured=0;for(ArchiveCodec.Level level:levels)captured=Math.max(captured,level.newest);
+        return advance(levels,captured,deviceNow,clock,before);
+    }
+    public static List<ArchiveCodec.Level> advance(List<ArchiveCodec.Level> levels,long capturedUptime,long deviceNow,ArchiveCodec.Clock clock,long before){
+        if(capturedUptime<0||deviceNow<0||deviceNow>ArchiveCodec.NA)throw new IllegalArgumentException("Ungültige Gerätezeit.");
+        long elapsed=Math.max(0,deviceNow-capturedUptime);
         List<ArchiveCodec.Level> result=new ArrayList<>();
         for(ArchiveCodec.Level level:levels){
-            long newest=level.newest+Math.max(0,(deviceNow-level.newest)/level.period)*level.period;
+            // Older/coarser tiers must retain their age. Their heads are not
+            // current-time samples merely because the app has been reopened.
+            long newest=level.newest+elapsed/level.period*level.period;
             result.add(new ArchiveCodec.Level(level.capacity,level.period,newest));
         }
         return through(result,clock,before);
@@ -148,9 +158,32 @@ public final class ArchiveSyncPlan {
         return false;
     }
 
-    /** Reject changed device layouts before treating a reply as a planned range. */
+    /** Victron rounds the cursor forward, by strictly less than one returned interval. */
     public static boolean matches(Request request,int period,ArchiveCodec.Block block){
-        return block.count>0&&block.count<=request.count&&block.time==request.cursor&&block.period==period;
+        return block.count>0&&block.count<=request.count&&block.period==period&&
+                block.time>=request.cursor&&block.time-request.cursor<period;
+    }
+
+    /** Ignore late blocks before they can be stored against another outstanding request. */
+    public static boolean related(int channel,Request request,int period,byte[] payload){
+        if(payload==null||payload.length<8)return false;
+        int count=payload[5]&255,returnedPeriod=(int)ArchiveCodec.u(payload,6,2);
+        long time=ArchiveCodec.u(payload,1,4);
+        if((payload[0]&255)!=channel||count>request.count)return false;
+        int window=count==0?period:returnedPeriod;
+        return (count==0||returnedPeriod>=period)&&time>=request.cursor&&time-request.cursor<window;
+    }
+
+    /** Map a confirmed unavailable tier tail without joining across a device reboot. */
+    public static List<long[]> unavailable(long cursor,int count,int period,ArchiveCodec.Clock clock,Availability local){
+        List<long[]> ranges=new ArrayList<>();long from=0,to=0;boolean open=false;
+        for(int i=0;i<count;i++){
+            Long time=clock.millis(cursor-(long)i*period);
+            if(!local.importable(time)){if(open)ranges.add(new long[]{from,to});open=false;}
+            else if(open&&time==from-period*1000L)from=time;
+            else{if(open)ranges.add(new long[]{from,to});from=to=time;open=true;}
+        }
+        if(open)ranges.add(new long[]{from,to});return ranges;
     }
 
     /** Skip known samples and stop a request before the next known sample, even inside a batch. */

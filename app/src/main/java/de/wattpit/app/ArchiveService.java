@@ -42,7 +42,7 @@ public final class ArchiveService extends Service {
     private boolean automatic;
     private String mac="",kind="";
     private int changed,missing,unmapped,processed,total,unknown,blocks,skipped;
-    private long lastNotification;
+    private long lastNotification,importStarted;
     private static UUID uuid(int n){return UUID.fromString(String.format(Locale.ROOT,"306b%04x-b081-4037-83dc-e59fcc3cdfd0",n));}
     private final BluetoothGattCallback callback=new BluetoothGattCallback(){
         @Override public void onConnectionStateChange(BluetoothGatt g,int status,int state){
@@ -61,7 +61,7 @@ public final class ArchiveService extends Service {
     private void incoming(BluetoothGattCharacteristic c,byte[] v){
         UUID id=c.getUuid();
         if(CONTROL.equals(id)){link.control(v);return;}
-        if(DATA.equals(id))link.receivedData();
+        if(DATA.equals(id)||BULK.equals(id))link.receivedData();
         if((DATA.equals(id)||BULK.equals(id))&&!received.offer(v.clone()))cancelled=true;
     }
     private void complete(String type,int status){CompletableFuture<Integer> op=operation;if(op!=null&&type.equals(operationType))op.complete(status);}
@@ -70,7 +70,7 @@ public final class ArchiveService extends Service {
     private void trace(String text){synchronized(diagnostics){if(diagnostics.size()>=80)diagnostics.remove(0);diagnostics.add(ArchiveDiagnostic.clean(text));}}
     private void saveDiagnostics(String result){try{
         JSONArray lines;synchronized(diagnostics){lines=new JSONArray(diagnostics);}
-        repository.archiveDiagnostics(kind,new JSONObject().put("result",result).put("steps",lines).put("stored",changed).put("blocks",blocks).put("skipped",skipped).put("missing",missing).put("unmapped",unmapped).put("sentPackets",link.sent()).put("receivedPackets",link.received()).put("receiveGrants",link.grants()));
+        repository.archiveDiagnostics(kind,new JSONObject().put("result",result).put("steps",lines).put("durationMs",SystemClock.elapsedRealtime()-importStarted).put("stored",changed).put("blocks",blocks).put("skipped",skipped).put("missing",missing).put("unmapped",unmapped).put("sentPackets",link.sent()).put("receivedPackets",link.received()).put("receiveGrants",link.grants()));
     }catch(JSONException ignored){}}
     private static final class GattFailure extends IOException{
         private static final long serialVersionUID=1;final int status;
@@ -150,17 +150,19 @@ public final class ArchiveService extends Service {
             descriptor.setValue(value);return gatt.writeDescriptor(descriptor);});
     }
     private byte[] exchange(int reg,byte[] command) throws Exception {
+        return exchange(reg,command,null);
+    }
+    private byte[] exchange(int reg,byte[] command,java.util.function.Predicate<byte[]> accept) throws Exception {
         check();messages.removeIf(m->m.reg==reg);
         maintain();
         write(data,command);
-        if(command[0]==6)write(data,ArchiveCodec.read(reg));
         long deadline=SystemClock.elapsedRealtime()+12000;
         while(SystemClock.elapsedRealtime()<deadline){
             check();
             while(!messages.isEmpty()){
                 ArchiveCodec.Message m=messages.removeFirst();
                 if(m.reg!=reg)continue;
-                if(m.code==8)return m.data;
+                if(m.code==8){if(accept==null||accept.test(m.data))return m.data;continue;}
                 if(command[0]==5||m.status!=3)return null; // Unsupported field, never a trend data block.
             }
             maintain();
@@ -228,6 +230,7 @@ public final class ArchiveService extends Service {
         finally{main.post(this::stopSelf);}
     }
     private void runImport(){
+        importStarted=SystemClock.elapsedRealtime();
         boolean importComplete=false;
         try {
             JSONObject cfg=null;JSONArray list=repository.configs();for(int i=0;i<list.length();i++)if(list.getJSONObject(i).getString("mac").equals(mac))cfg=list.getJSONObject(i);
@@ -283,9 +286,8 @@ public final class ArchiveService extends Service {
                 availability.put(ch,repository.db.archiveAvailability(mac,kind,registers.get(ch),field.name,levels.get(ch),clock,at,this::maintain));
                 liveChecked.put(ch,at);
             }
-            ArchiveTransferPlan transfer=new ArchiveTransferPlan(clock,availability,batches);int tierCount=0;
-            for(List<ArchiveCodec.Level> tier:levels.values())tierCount=Math.max(tierCount,tier.size());
-            for(int tier=0;tier<tierCount;tier++)for(int ch:channelOrder)if(tier<levels.get(ch).size()){
+            ArchiveTransferPlan transfer=new ArchiveTransferPlan(clock,availability,batches);
+            for(int ch:channelOrder)for(int tier=0;tier<levels.get(ch).size();tier++){
                 maintain();ArchiveCodec.Level level=levels.get(ch).get(tier);
                 ArchiveSyncPlan.Plan plan=transfer.add(ch,level);
                 skipped+=plan.known;unmapped+=plan.deferred;total+=plan.needed;
@@ -320,7 +322,8 @@ public final class ArchiveService extends Service {
                 }
                 int ch=requested.channel;ArchiveCodec.Field field=fields.get(ch);stage=ArchiveSession.label(field.name)+" ergänzen";
                 ArchiveSyncPlan.Request request=requested.request;
-                byte[] reply=exchange(0xec5b,ArchiveCodec.trendQuery(ch,request.cursor,request.count));
+                byte[] reply=exchange(0xec5b,ArchiveCodec.trendQuery(ch,request.cursor,request.count),
+                        bytes->ArchiveSyncPlan.related(ch,request,requested.period,bytes));
                 if(reply==null){
                     trace("Leere Archivantwort · verbleibenden Bedarf neu planen");
                     refreshTransfer(ch,transfer,levels,batches,registers,fields,clock,liveChecked,metadataAt);total=transfer.processed+transfer.remaining();continue;
@@ -337,6 +340,12 @@ public final class ArchiveService extends Service {
                 // Only the actual returned times are covered; the requested range stays pending.
                 List<long[]> completed=ArchiveSyncPlan.completed(block,clock,System.currentTimeMillis());
                 int added=repository.db.archiveBlock(mac,kind,field.name,registers.get(ch),block.period,times,values,completed);changed+=added;blocks++;
+                List<long[]> unavailable=transfer.unavailable(block);
+                if(!unavailable.isEmpty()){
+                    repository.db.archiveBlock(mac,kind,field.name,registers.get(ch),requested.period,
+                            Collections.emptyList(),Collections.emptyList(),unavailable);
+                    trace(ArchiveSession.label(field.name)+" · Ende der "+requested.period+"-s-Stufe, gröbere Stufe folgt");
+                }
                 if(added>0)repository.invalidateStats();
                 ArchiveSyncPlan.Availability local=availability.get(ch);
                 for(long[] window:completed)local.imported(block.period,window[0],window[1]);

@@ -115,7 +115,7 @@ final class Repository {
                 JSONObject channel=channels.getJSONObject(i);JSONArray tiers=channel.getJSONArray("levels");List<ArchiveCodec.Level> levels=new ArrayList<>();
                 if(tiers.length()==0)return true;
                 for(int j=0;j<tiers.length();j++){JSONArray tier=tiers.getJSONArray(j);levels.add(new ArchiveCodec.Level(tier.getInt(0),tier.getInt(1),tier.getLong(2)));}
-                levels=ArchiveSyncPlan.advance(levels,deviceNow,clock,before);
+                levels=ArchiveSyncPlan.advance(levels,saved.getLong("uptime"),deviceNow,clock,before);
                 ArchiveSyncPlan.Availability local=db.archiveAvailability(mac,kind,channel.getInt("register"),channel.getString("field"),levels,clock,now,()->{});
                 if(ArchiveSyncPlan.needsData(levels,clock,local))return true;
             }

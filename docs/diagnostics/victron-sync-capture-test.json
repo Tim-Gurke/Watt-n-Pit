@@ -1,0 +1,95 @@
+{
+  "scope": "Actual HistoryDb, Repository and incoming notification method with Android API adapters and real SQLite. Public sanitized VictronConnect samples, fresh-process resume and three-hour missing window. No Android lifecycle, physical GATT connection or radio speed benchmark.",
+  "fixture_sha256": "d0ec0530eb9c8639727f31ddd575a65fc41d090690393e40286c67026fed7fec",
+  "phases": {
+    "atomic_write": {
+      "exit_code": 0,
+      "checks": [
+        "injected failure reached the real HistoryDb checkpoint write",
+        "failed checkpoint rolls back its measurement",
+        "rollback preserves the previous confirmation",
+        "successful block keeps both measurements"
+      ]
+    },
+    "atomic_resume": {
+      "exit_code": 0,
+      "checks": [
+        "fresh JVM resumes with zero repeated valid or unavailable points",
+        "confirmed unavailable point creates no fabricated reading",
+        "an interrupted attempt remains pending after a fresh JVM"
+      ]
+    },
+    "live_and_offline": {
+      "exit_code": 0,
+      "checks": [
+        "actual Repository starts no archive when all live data exist",
+        "advancing five minutes with continued recording still needs no connection",
+        "three offline days are found despite a recent live sample",
+        "only the device with missing data is selected",
+        "three offline weeks remain eligible for backfill",
+        "one device's gap cannot cause another device's archive connection",
+        "a new device gets its first real metadata preflight"
+      ]
+    },
+    "metadata_resume": {
+      "exit_code": 0,
+      "checks": [
+        "cached device layout survives restart and finds the remaining gap",
+        "cached device layout survives restart without restarting a complete device"
+      ]
+    },
+    "config_write": {
+      "exit_code": 0,
+      "checks": [
+        "native preferences accept and store overview range sunrise",
+        "native preferences accept and store overview range today",
+        "native preferences accept and store overview range last6h",
+        "native preferences accept and store overview range last24h",
+        "native preferences accept and store overview range yesterday",
+        "native preferences accept and store overview range week",
+        "native preferences accept and store overview range month",
+        "native backup import preserves the separate history heights",
+        "native backup import clamps history height to safe bounds",
+        "invalid overview range cannot partially replace saved settings"
+      ]
+    },
+    "config_resume": {
+      "exit_code": 0,
+      "checks": [
+        "fresh JVM retains overview range and both history heights"
+      ]
+    },
+    "capture_write": {
+      "exit_code": 0,
+      "checks": [
+        "actual incoming method merges both characteristics and replenishes all 956 captured fragments",
+        "actual HistoryDb import completes the captured 45-day archive in fewer than 500 block reads with zero replans",
+        "every valid captured measurement survives the actual HistoryDb without alteration",
+        "actual Repository opens no GATT session for the fully stored captured archive"
+      ]
+    },
+    "capture_resume": {
+      "exit_code": 0,
+      "checks": [
+        "fresh JVM reopens the captured archive with zero measurement requests",
+        "every valid captured measurement survives the actual HistoryDb without alteration",
+        "fresh Repository cache preserves real tier ages and does not start an unnecessary connection"
+      ]
+    },
+    "capture_gap": {
+      "exit_code": 0,
+      "checks": [
+        "three missing captured hours use fewer than 100 block reads without replaying the older archive",
+        "every valid captured measurement survives the actual HistoryDb without alteration",
+        "completed three-hour recovery causes no repeated transfer"
+      ]
+    }
+  },
+  "full_block_requests": 465,
+  "three_missing_hour_requests": 70,
+  "repeat_measurement_requests": 0,
+  "all_captured_valid_measurements": 8411,
+  "jvm_unit_tests": 176,
+  "node_tests": 65,
+  "physical_radio_test": false
+}

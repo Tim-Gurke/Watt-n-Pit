@@ -55,11 +55,80 @@ public final class ArchiveStorageProof {
         }
         repo.saveArchivePlan(device,kind,end,at,clock,levels,fields,ids);
     }
+    private static int captureImport(HistoryDb history,CapturedVictronDevice peer)throws Exception{
+        Map<Integer,List<ArchiveCodec.Level>> levels=peer.levels();Map<Integer,ArchiveSyncPlan.Availability> local=new HashMap<>();Map<Integer,Integer> batches=new HashMap<>();
+        for(int ch:levels.keySet()){
+            local.put(ch,history.archiveAvailability("capture-shunt","shunt",peer.register(ch),peer.field(ch).name,levels.get(ch),peer.clock(),peer.now(),()->{}));
+            batches.put(ch,peer.registers.get(0xec4a+ch)[1]&255);
+        }
+        ArchiveTransferPlan plan=new ArchiveTransferPlan(peer.clock(),local,batches);
+        for(int ch:levels.keySet())for(ArchiveCodec.Level level:levels.get(ch))plan.add(ch,level);
+        ArchiveTransferPlan.Read r;int calls=0;
+        while((r=plan.next(ch->{}))!=null){
+            if(++calls>550)throw new AssertionError("Captured transfer loops");byte[] raw=peer.reply(r);
+            if(!ArchiveSyncPlan.related(r.channel,r.request,r.period,raw))throw new AssertionError("Captured reply filtered out");
+            ArchiveCodec.Field field=peer.field(r.channel);ArchiveCodec.Block block=new ArchiveCodec.Block(raw,field,r.channel,r.request.count);
+            List<long[]> times=new ArrayList<>();List<Double> values=new ArrayList<>();
+            for(int i=0;i<block.count;i++)if(block.values[i]!=null){times.add(new long[]{peer.clock().millis(block.time-(long)i*block.period),block.period});values.add(block.values[i]);}
+            history.archiveBlock("capture-shunt","shunt",field.name,peer.register(r.channel),block.period,times,values,ArchiveSyncPlan.completed(block,peer.clock(),peer.now()));
+            List<long[]> unavailable=plan.unavailable(block);
+            if(!unavailable.isEmpty())history.archiveBlock("capture-shunt","shunt",field.name,peer.register(r.channel),r.period,Collections.emptyList(),Collections.emptyList(),unavailable);
+            if(!plan.accept(block))throw new AssertionError("Captured reply causes unnecessary replan");
+        }
+        for(int ch:levels.keySet()){
+            ArchiveSyncPlan.Availability saved=history.archiveAvailability("capture-shunt","shunt",peer.register(ch),peer.field(ch).name,levels.get(ch),peer.clock(),peer.now(),()->{});
+            if(ArchiveSyncPlan.needsData(levels.get(ch),peer.clock(),saved))throw new AssertionError("SQLite audit requests the captured archive again");
+        }
+        return calls;
+    }
+    private static void captureValues(SQLiteDatabase db,CapturedVictronDevice peer){
+        Map<String,Double> actual=new HashMap<>();
+        for(int ch:peer.levels().keySet())try(Cursor c=db.rawQuery("SELECT ts,period,"+peer.field(ch).name+" FROM readings WHERE device='capture-shunt' AND "+peer.field(ch).name+" IS NOT NULL",null)){
+            while(c.moveToNext())actual.put(ch+":"+c.getInt(1)+":"+((c.getLong(0)-CapturedVictronDevice.EPOCH)/1000),c.getDouble(2));
+        }
+        require(actual.equals(peer.validValues()),"every valid captured measurement survives the actual HistoryDb without alteration");
+    }
+    private static void captureIncoming(CapturedVictronDevice peer)throws Exception{
+        IncomingHarness h=new IncomingHarness();ArchiveCodec.Stream stream=new ArchiveCodec.Stream();int window=128,decoded=0,parts=0;
+        for(CapturedVictronDevice.Pair pair:peer.pairs){
+            byte[] frame=new byte[pair.response.length+6];byte[] prefix={8,3,0x19,(byte)0xec,0x5b,(byte)(0x40+pair.response.length)};
+            if(pair.response.length>=24){frame=new byte[pair.response.length+7];prefix=new byte[]{8,3,0x19,(byte)0xec,0x5b,0x58,(byte)pair.response.length};}
+            System.arraycopy(prefix,0,frame,0,prefix.length);System.arraycopy(pair.response,0,frame,prefix.length,pair.response.length);
+            int cut=frame.length/2;
+            for(byte[] part:new byte[][]{Arrays.copyOfRange(frame,0,cut),Arrays.copyOfRange(frame,cut,frame.length)}){
+                if(window--<=0)throw new AssertionError("Combined register notification credits exhausted");
+                h.feed((parts++%2)==0?3:4,part);int grant;while((grant=h.link.receiveGrant())>0)window+=grant;
+                byte[] bytes;while((bytes=h.received.poll())!=null)for(ArchiveCodec.Message message:stream.feed(bytes)){
+                    if(message.reg!=0xec5b||!Arrays.equals(message.data,peer.pairs.get(decoded).response))throw new AssertionError("Merged capture stream changed");decoded++;
+                }
+            }
+        }
+        require(decoded==peer.pairs.size()&&h.link.received()==parts&&!h.cancelled,"actual incoming method merges both characteristics and replenishes all 956 captured fragments");
+    }
     public static void main(String[] args)throws Exception{
         System.setProperty("wattpit.test.database",args[0]);Class.forName("org.sqlite.JDBC");
         Repository repo=Repository.get(new TestContext(Path.of(args[0]+".prefs")));HistoryDb history=repo.db;SQLiteDatabase db=history.getWritableDatabase();
         long epoch=1700000000000L;ArchiveCodec.Clock c=clock(epoch);
-        if(args[1].equals("atomic_write")){
+        if(args[1].startsWith("capture_")){
+            CapturedVictronDevice peer=new CapturedVictronDevice(Path.of(args[2]));
+            if(args[1].equals("capture_write")){
+                captureIncoming(peer);int requests=captureImport(history,peer);require(requests>0&&requests<500,"actual HistoryDb import completes the captured 45-day archive in fewer than 500 block reads with zero replans");captureValues(db,peer);
+                Map<Integer,ArchiveCodec.Field> fields=new LinkedHashMap<>();Map<Integer,Integer> registers=new LinkedHashMap<>();
+                for(int ch:peer.levels().keySet()){fields.put(ch,peer.field(ch));registers.put(ch,peer.register(ch));}
+                repo.saveArchivePlan("capture-shunt","shunt",ArchiveCodec.u(peer.registers.get(0xec5a),0,4),peer.now(),peer.clock(),peer.levels(),fields,registers);
+                require(!repo.archiveNeedsData(new JSONObject().put("mac","capture-shunt").put("kind","shunt"),peer.now()),"actual Repository opens no GATT session for the fully stored captured archive");
+                System.out.println("RESULT captured_full_reads="+requests);
+            }else if(args[1].equals("capture_resume")){
+                require(captureImport(history,peer)==0,"fresh JVM reopens the captured archive with zero measurement requests");captureValues(db,peer);require(!repo.archiveNeedsData(new JSONObject().put("mac","capture-shunt").put("kind","shunt"),peer.now()),"fresh Repository cache preserves real tier ages and does not start an unnecessary connection");
+            }else{
+                long from=peer.now()-3*3600000L;
+                db.delete("readings","device='capture-shunt' AND ts>=?",new String[]{""+from});
+                db.execSQL("DELETE FROM archive_coverage WHERE device='capture-shunt' AND start>=?",new Object[]{from});
+                db.execSQL("UPDATE archive_coverage SET end=? WHERE device='capture-shunt' AND end>=?",new Object[]{from-1,from});
+                int requests=captureImport(history,peer);require(requests>0&&requests<100,"three missing captured hours use fewer than 100 block reads without replaying the older archive");captureValues(db,peer);
+                require(captureImport(history,peer)==0,"completed three-hour recovery causes no repeated transfer");System.out.println("RESULT captured_three_hour_reads="+requests);
+            }
+        }else if(args[1].equals("atomic_write")){
             history.archiveBlock("atomic","solar","solar",0xec8a,30,Arrays.asList(new long[]{epoch+10000,30}),Arrays.asList(10.0),Arrays.asList(new long[]{epoch+10000,epoch+10000}));
             db.execSQL("CREATE TRIGGER fail_ack BEFORE INSERT ON archive_coverage BEGIN SELECT RAISE(ABORT,'injected checkpoint failure'); END");
             boolean failed=false;

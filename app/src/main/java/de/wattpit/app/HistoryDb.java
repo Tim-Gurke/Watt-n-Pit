@@ -8,7 +8,6 @@ import android.database.sqlite.SQLiteOpenHelper;
 import de.wattpit.app.core.CsvCodec;
 import de.wattpit.app.core.Reading;
 import de.wattpit.app.core.HistoryQuery;
-import de.wattpit.app.core.ArchiveMerge;
 import de.wattpit.app.core.ArchiveCodec;
 import de.wattpit.app.core.ArchiveSyncPlan;
 import de.wattpit.app.core.EnergyIntegral;
@@ -88,8 +87,6 @@ final class HistoryDb extends SQLiteOpenHelper {
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();int changed=0;
         try {for(int i=0;i<times.size();i++){
             long[] t=times.get(i);Double value=numbers.get(i);if(value==null)continue;
-            ArchiveMerge match=ArchiveMerge.existing(field,device,kind,t[0],(int)t[1],value);
-            try(Cursor c=db.rawQuery(match.sql,match.args)){if(c.moveToFirst())continue;}
             ContentValues v=new ContentValues();v.put(field,value);
             String[] key={String.valueOf(t[0]),device,String.valueOf(t[1])};
             boolean exists;Double old=null;

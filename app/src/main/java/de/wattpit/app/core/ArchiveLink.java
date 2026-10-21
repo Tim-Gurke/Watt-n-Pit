@@ -14,7 +14,7 @@ public final class ArchiveLink {
         if(sendCredits==0)return false;
         sendCredits--;sent++;return true;
     }
-    /** Only the DATA characteristic consumes this window; BULK has a separate path. */
+    /** Both register characteristics consume the shared notification window. */
     public synchronized void receivedData(){pendingReceive++;received++;}
     public synchronized int receiveGrant(){
         if(pendingReceive<REFILL)return 0;
