@@ -14,7 +14,7 @@ const path=require('node:path');
    return {points,summary:{from,to,last:points.at(-1)?.v??null,avg:20,min:4,max:36,coverage:1}};
   };
   window.miniCalls=[];window.mock.settings.miniRange=localStorage.getItem('mini-range')||'today';
-  window.WattPit={snapshot:()=>JSON.stringify(window.mock),dashboard:()=>localStorage.getItem('detail-board')||'{}',saveDashboard:json=>{if(window.failSave)return 'Test: Speichern fehlgeschlagen';window.saves++;localStorage.setItem('detail-board',json);return '';},settings:json=>{Object.assign(window.mock.settings,JSON.parse(json));localStorage.setItem('mini-range',window.mock.settings.miniRange);return '';},history:(from,to,metric)=>{window.miniCalls.push({from,to,metric});return JSON.stringify({points:[{t:from,v:10,kind:'solar',device:'SOLAR',origin:'archive'},{t:to-1,v:20,kind:'solar',device:'SOLAR',origin:'archive'}]});},dashboardHistory:(from,to,metric)=>{window.calls.push({from,to,metric});return JSON.stringify(series(from,to,metric));},energyHistory:(from,to)=>JSON.stringify({solar:series(from,to,'solarEnergy'),consumption:series(from,to,'consumptionEnergy'),balance:series(from,to,'batteryEnergy')})};
+  window.WattPit={snapshot:()=>JSON.stringify(window.mock),dashboard:()=>localStorage.getItem('detail-board')||'{}',saveDashboard:json=>{if(window.failSave)return 'Test: Speichern fehlgeschlagen';window.saves++;localStorage.setItem('detail-board',json);return '';},settings:json=>{Object.assign(window.mock.settings,JSON.parse(json));localStorage.setItem('mini-range',window.mock.settings.miniRange);return '';},history:(from,to,metric)=>{window.miniCalls.push({from,to,metric});return JSON.stringify({points:Array.from({length:241},(_,i)=>['solar','shunt'].map(kind=>{const v=kind==='solar'?Math.max(0,Math.sin(i/10))*100:Math.sin(i/14)*40-10,t=from+(to-from-1)*i/240;return {t,last:t,v,min:v,max:v,n:1,period:Math.ceil((to-from)/240000),kind,device:kind==='solar'?'SOLAR':'SHUNT',origin:'archive'};})).flat()});},dashboardHistory:(from,to,metric)=>{window.calls.push({from,to,metric});return JSON.stringify(series(from,to,metric));},energyHistory:(from,to)=>JSON.stringify({solar:series(from,to,'solarEnergy'),consumption:series(from,to,'consumptionEnergy'),balance:series(from,to,'batteryEnergy')})};
  });
  await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
  const periods=['sunrise','today','yesterday','week','month','last6h','last24h'];
@@ -27,6 +27,10 @@ const path=require('node:path');
  }
  await page.locator('#miniRange').selectOption('month');await page.reload();assert.equal(await page.locator('#miniRange').inputValue(),'month');
  const card=page.locator('#miniHistory'),handle=page.locator('#miniHistoryResize');assert.equal(await handle.isVisible(),false);
+ const verifyCurves=async()=>{
+  const colors=await page.locator('#miniChart').evaluate(el=>{const ctx=el.getContext('2d'),data=ctx.getImageData(0,0,el.width,el.height).data;let solar=0,battery=0;for(let y=25;y<el.height-40;y++)for(let x=60;x<el.width-15;x++){const i=(y*el.width+x)*4,r=data[i],g=data[i+1],b=data[i+2];if(r>150&&g>70&&g<200&&b<140)solar++;if(g>120&&g>r*1.2&&b>r*1.1)battery++;}return {solar,battery};});
+  assert.ok(colors.solar>30&&colors.battery>30,'both measured curves must remain painted '+JSON.stringify(colors));
+ };await verifyCurves();
  const drag=async(delta)=>{
   await card.evaluate(el=>el.scrollIntoView({block:'center'}));const box=await handle.boundingBox();
   await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2+delta,{steps:8});await page.mouse.up();
@@ -35,7 +39,7 @@ const path=require('node:path');
  const before=await page.evaluate(()=>({tiles:dashboard.config.tiles,calls:window.miniCalls.length,height:dashboard.config.historyHeight.compact}));
  await drag(110);assert.equal(await card.evaluate(el=>el.offsetHeight),before.height+110);assert.equal(await page.evaluate(()=>dashboard.config.historyHeight.compact),430);
  assert.equal(await page.evaluate(()=>window.miniCalls.length),before.calls,'height adjustment must redraw without requesting history');
- assert.deepEqual(await page.evaluate(()=>dashboard.config.tiles),before.tiles,'history resizing must not move measurement tiles');
+ assert.deepEqual(await page.evaluate(()=>dashboard.config.tiles),before.tiles,'history resizing must not move measurement tiles');await verifyCurves();
  assert.equal(await page.locator('#miniChart').evaluate(el=>el.height),await page.locator('#miniChart').evaluate(el=>Math.round(el.getBoundingClientRect().height*devicePixelRatio)),'canvas must match its resized pixels');
  // An interrupted touch restores the previous height and does not save a partial drag.
  await card.evaluate(el=>el.scrollIntoView({block:'center'}));let box=await handle.boundingBox();const cdp=await page.context().newCDPSession(page),touch={x:Math.round(box.x+22),y:Math.round(box.y+22),id:1};
@@ -51,7 +55,7 @@ const path=require('node:path');
   await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.body.scrollWidth>innerWidth),false,'overview overflow '+width);
   const bounds=await page.locator('#miniChart').boundingBox(),outer=await card.boundingBox();assert.ok(bounds.height>=80&&bounds.y+bounds.height<=outer.y+outer.height,'chart escaped its card');
  }
- if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.setViewportSize({width:390,height:844});await card.scrollIntoViewIfNeeded();await card.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'mini-history-resized.png')});}
+ if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.setViewportSize({width:390,height:844});await page.locator('#editDashboard').click();await card.evaluate(el=>el.scrollIntoView({block:'center'}));await verifyCurves();await card.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'mini-history-resized.png')});}
  assert.deepEqual(errors,[]);await browser.close();console.log('Overview calendar ranges, local database queries, touch cancel, height drag, keyboard bounds, storage failure, separate profiles and reload persistence passed.');
 })().catch(e=>{console.error(e);process.exit(1);});
 
