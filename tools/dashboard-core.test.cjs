@@ -290,3 +290,27 @@ test('native gap flags govern all charts across source changes and long supporte
  assert.equal(C.seriesGap(a,b,15000),false);assert.equal(C.seriesGap(a,{...b,gap:true}),true);
  assert.equal(C.seriesGap(a,{...b,device:'B',gap:false}),true);assert.equal(C.seriesGap(a,{...b,gap:undefined},15000),true);
 });
+
+test('overview calendar ranges include full yesterday and seven or thirty calendar days',()=>{
+  const now=new Date(2027,0,3,14,25).getTime(),midnight=new Date(2027,0,3).getTime();
+  const weather={days:[{day:'2027-01-03',sunrise:now-3600000}]};
+  for(const [mode,from,to] of [['yesterday',new Date(2027,0,2).getTime(),midnight],['week',new Date(2026,11,28).getTime(),now],['month',new Date(2026,11,5).getTime(),now]]){
+    const window=C.miniWindow(mode,weather,now);assert.equal(window.from,from);assert.equal(window.to,to);
+    assert.deepEqual(C.solarQueryWindow(window),{from,to});assert.deepEqual(C.solarPlotWindow(window,[{t:from-3600000,v:50,kind:'solar'}]),window,'old sunlight must not expand a calendar range');
+  }
+});
+test('overview rolling hours remain exact durations',()=>{
+  const now=new Date(2026,9,26,11).getTime();
+  for(const hours of [6,24]){const window=C.miniWindow('last'+hours+'h',{},now);assert.equal(window.from,now-hours*3600000);assert.equal(window.to,now);}
+});
+test('yesterday follows local calendar boundaries across both Berlin daylight saving changes',()=>{
+  const {execFileSync}=require('node:child_process');
+  const result=JSON.parse(execFileSync(process.execPath,['-e',`const C=require(${JSON.stringify(require.resolve('../app/src/main/assets/dashboard-core.js'))});console.log(JSON.stringify([new Date(2026,2,30,12),new Date(2026,9,26,12)].map(d=>{const w=C.miniWindow('yesterday',{},d.getTime());return [(w.to-w.from)/3600000,new Date(w.from).getHours(),new Date(w.to).getHours()]})))`],{env:{...process.env,TZ:'Europe/Berlin'},encoding:'utf8'}));
+  assert.deepEqual(result,[[23,0,0],[25,0,0]]);
+});
+test('overview height preserves independent profiles and safely migrates older layouts',()=>{
+  const old=C.defaults();delete old.historyHeight;const migrated=C.normalize(old);assert.deepEqual(migrated.historyHeight,{compact:320,wide:380});assert.deepEqual(migrated.tiles,old.tiles);
+  migrated.historyHeight={compact:456,wide:712};assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(migrated))).historyHeight,migrated.historyHeight);
+  migrated.historyHeight={compact:-100,wide:100000};assert.deepEqual(C.normalize(migrated).historyHeight,{compact:300,wide:1000});
+  migrated.historyHeight={compact:'url(secret)',wide:null};assert.deepEqual(C.normalize(migrated).historyHeight,{compact:320,wide:380});
+});

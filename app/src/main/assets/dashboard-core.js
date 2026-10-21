@@ -129,7 +129,7 @@
       compact:[[0,0,4,6],[4,0,8,6],[0,6,6,6],[6,6,6,6],[0,12,4,3],[0,15,4,3],[0,18,12,4],[4,12,8,6]],
       wide:[[0,0,2,4],[2,0,2,8],[7,0,3,8],[4,0,3,8],[0,4,2,2],[0,6,2,2],[0,8,12,4],[10,0,2,8]]
     };
-    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
+    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,historyHeight:historyHeight(),blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
       const t=tile(id,'default-'+id);
       for(const profile of ['compact','wide']){const [x,y,w,h]=layouts[profile][i];t.layouts[profile]={x,y,w,h};}
       if(id==='soc'){t.fontSize=20;t.scaleMode='auto';}
@@ -138,6 +138,9 @@
       if(id==='power')t.title='Aktuell';
       return t;
     })};
+  }
+  function historyHeight(input={}) {
+    return Object.fromEntries(['compact','wide'].map(profile=>[profile,finite(input?.[profile])?Math.round(clamp(Number(input[profile]),300,1000)):profile==='wide'?380:320]));
   }
   function normalize(input) {
     if (!input || !Array.isArray(input.tiles)) return defaults();
@@ -160,7 +163,7 @@
       const sunrise=t.metric==='solarEnergy'&&energyPeriod.mode==='today'&&(migrating||t.period.mode==='sunrise');
       t.period={...energyPeriod,mode:sunrise?'sunrise':energyPeriod.mode};
     }
-    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles};
+    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,historyHeight:historyHeight(input.historyHeight),blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles};
   }
   function windowFor(t,now=Date.now(),weather={}) {
     if(CATALOG[t.metric].widget)return null;
@@ -235,6 +238,15 @@
   function miniWindow(mode,weather={},now=Date.now()) {
     const midnight=new Date(now);midnight.setHours(0,0,0,0);
     if(mode==='last6h')return {from:now-6*3600000,to:now,label:'Letzte 6 Stunden',note:''};
+    if(mode==='last24h')return {from:now-24*3600000,to:now,label:'Letzte 24 Stunden',note:''};
+    if(mode==='yesterday'){
+      const from=new Date(midnight);from.setDate(from.getDate()-1);
+      return {from:from.getTime(),to:midnight.getTime(),label:'Gestern',note:''};
+    }
+    if(mode==='week'||mode==='month'){
+      const from=new Date(midnight),days=mode==='week'?7:30;from.setDate(from.getDate()-days+1);
+      return {from:from.getTime(),to:now,label:mode==='week'?'Woche':'Monat',note:`Letzte ${days} Kalendertage einschließlich heute.`};
+    }
     const today={from:midnight.getTime(),to:now,label:'Heute',note:''};
     if(mode==='today')return today;
     try {

@@ -17,11 +17,12 @@ public final class ArchiveStorageProof {
         Properties values=new Properties();if(Files.exists(path))try(InputStream in=Files.newInputStream(path)){values.load(in);}
         return (SharedPreferences)Proxy.newProxyInstance(SharedPreferences.class.getClassLoader(),new Class<?>[]{SharedPreferences.class},(proxy,m,a)->{
             if(m.getName().equals("edit")){
-                Map<String,String> changes=new HashMap<>();
+                Map<String,String> changes=new HashMap<>();Set<String> removed=new HashSet<>();
                 return Proxy.newProxyInstance(SharedPreferences.Editor.class.getClassLoader(),new Class<?>[]{SharedPreferences.Editor.class},(editor,method,args)->{
                     String name=method.getName();
-                    if(name.startsWith("put")){changes.put((String)args[0],String.valueOf(args[1]));return editor;}
-                    if(name.equals("apply")||name.equals("commit")){values.putAll(changes);try(OutputStream out=Files.newOutputStream(path)){values.store(out,"Test preferences");}return name.equals("commit")?true:null;}
+                    if(name.startsWith("put")){removed.remove((String)args[0]);changes.put((String)args[0],String.valueOf(args[1]));return editor;}
+                    if(name.equals("remove")){changes.remove((String)args[0]);removed.add((String)args[0]);return editor;}
+                    if(name.equals("apply")||name.equals("commit")){removed.forEach(values::remove);values.putAll(changes);try(OutputStream out=Files.newOutputStream(path)){values.store(out,"Test preferences");}return name.equals("commit")?true:null;}
                     throw new UnsupportedOperationException(name);
                 });
             }
@@ -30,6 +31,7 @@ public final class ArchiveStorageProof {
                 case "getString":return v==null?a[1]:v;
                 case "getBoolean":return v==null?a[1]:Boolean.parseBoolean(v);
                 case "getInt":return v==null?a[1]:Integer.parseInt(v);
+                case "getFloat":return v==null?a[1]:Float.parseFloat(v);
                 case "getLong":return v==null?a[1]:Long.parseLong(v);
                 case "contains":return v!=null;
                 default:throw new UnsupportedOperationException(m.getName());
@@ -75,6 +77,26 @@ public final class ArchiveStorageProof {
             require(!ArchiveSyncPlan.needsData(levels,c,local),"fresh JVM resumes with zero repeated valid or unavailable points");
             require(count(db,"readings","device='atomic' AND ts="+(epoch+70000))==0,"confirmed unavailable point creates no fabricated reading");
             require(repo.prefs.getBoolean("archivePending.atomic",false),"an interrupted attempt remains pending after a fresh JVM");
+        }else if(args[1].equals("config_write")){
+            for(String mode:new String[]{"sunrise","today","last6h","last24h","yesterday","week","month"}){
+                repo.saveSettings(new JSONObject().put("miniRange",mode));
+                require(repo.prefs.getString("miniRange","").equals(mode),"native preferences accept and store overview range "+mode);
+            }
+            JSONObject backup=new JSONObject().put("format","wattnpit-settings").put("version",1)
+                .put("settings",new JSONObject().put("theme","dark").put("palette","classic").put("miniRange","month").put("capacity",100).put("sampleSeconds",10))
+                .put("dashboard",new JSONObject().put("version",1).put("blockOrder",new JSONArray("[\"tiles\",\"history\",\"record\"]")).put("tiles",new JSONArray()).put("historyHeight",new JSONObject().put("compact",460).put("wide",640)))
+                .put("equipment",new JSONObject().put("version",1).put("groups",new JSONArray()));
+            repo.importConfiguration(backup.toString());
+            require(new JSONObject(repo.prefs.getString("dashboard-v1","{}")).getJSONObject("historyHeight").getInt("wide")==640,"native backup import preserves the separate history heights");
+            backup.getJSONObject("dashboard").getJSONObject("historyHeight").put("compact",1).put("wide",5000);
+            JSONObject heights=ConfigurationBackup.normalize(backup.toString()).getJSONObject("dashboard").getJSONObject("historyHeight");
+            require(heights.getInt("compact")==300&&heights.getInt("wide")==1000,"native backup import clamps history height to safe bounds");
+            backup.getJSONObject("settings").put("miniRange","unknown");boolean rejected=false;
+            try{repo.importConfiguration(backup.toString());}catch(IllegalArgumentException expected){rejected=true;}
+            require(rejected&&repo.prefs.getString("miniRange","").equals("month"),"invalid overview range cannot partially replace saved settings");
+        }else if(args[1].equals("config_resume")){
+            JSONObject heights=new JSONObject(repo.prefs.getString("dashboard-v1","{}")).getJSONObject("historyHeight");
+            require(repo.prefs.getString("miniRange","").equals("month")&&heights.getInt("compact")==460&&heights.getInt("wide")==640,"fresh JVM retains overview range and both history heights");
         }else if(args[1].equals("metadata_resume")){
             JSONArray configs=repo.configs();long now=System.currentTimeMillis();
             require(repo.archiveNeedsData(configs.getJSONObject(0),now),"cached device layout survives restart and finds the remaining gap");

@@ -9,7 +9,7 @@
     if(!input||input.format!=='wattnpit-settings'||input.version!==1)fail('Diese Datei ist keine unterstützte Watt’n’Pit-Einstellungssicherung.');
     if(JSON.stringify(input).length>256000)fail('Die Einstellungsdatei ist zu groß.');
     const s=input.settings;
-    if(!s||!['light','dark'].includes(s.theme)||!['classic','blue','green','turquoise','orange','neutral'].includes(s.palette)||!['sunrise','today','last6h'].includes(s.miniRange)||typeof s.capacity!=='number'||!Number.isFinite(s.capacity)||s.capacity<1||s.capacity>10000||![5,10,30,60].includes(s.sampleSeconds))fail('Die allgemeinen Einstellungen sind ungültig.');
+    if(!s||!['light','dark'].includes(s.theme)||!['classic','blue','green','turquoise','orange','neutral'].includes(s.palette)||!['sunrise','today','last6h','last24h','yesterday','week','month'].includes(s.miniRange)||typeof s.capacity!=='number'||!Number.isFinite(s.capacity)||s.capacity<1||s.capacity>10000||![5,10,30,60].includes(s.sampleSeconds))fail('Die allgemeinen Einstellungen sind ungültig.');
     const board=input.dashboard,ids=new Set();
     if(!board||board.version!==1||!Array.isArray(board.tiles)||board.tiles.length>64)fail('Die gesicherte Übersicht ist ungültig.');
     for(const tile of board.tiles){

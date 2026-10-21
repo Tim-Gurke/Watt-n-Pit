@@ -15,9 +15,19 @@
       this.a=adapter;this.board=$('dashboardBoard');this.weatherContent=$('weatherStrip');this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
       let stored;
       try { stored=JSON.parse(adapter.native?.dashboard?adapter.native.dashboard():localStorage.getItem('wattpit-dashboard-v1') || '{}'); } catch (_) { stored={}; }
-      this.config=C.normalize(stored);this.saved=copy(this.config);
+      this.config=C.normalize(stored);this.saved=copy(this.config);this.history=$('miniHistory');
+      const handle=$('miniHistoryResize');
+      handle.onpointerdown=event=>this.historyPointerDown(event);
+      handle.onpointermove=event=>this.historyPointerMove(event);
+      handle.onpointerup=event=>this.historyPointerEnd(event,false);
+      handle.onpointercancel=event=>this.historyPointerEnd(event,true);
+      handle.onlostpointercapture=event=>this.historyPointerEnd(event,true);
+      handle.onkeydown=event=>{
+        if(!this.editing||!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;
+        event.preventDefault();this.config.historyHeight[this.profile]=event.key==='Home'?300:event.key==='End'?1000:C.clamp(this.config.historyHeight[this.profile]+(event.key==='ArrowUp'?-20:20),300,1000);this.commit();handle.focus();
+      };
       $('addTile').onclick=()=>this.picker();
-      $('editDashboard').onclick=()=>{this.editing=!this.editing;this.render();};
+      $('editDashboard').onclick=()=>{if(this.historyDrag)this.historyPointerEnd({pointerId:this.historyDrag.pointer},true);this.editing=!this.editing;this.render();};
       $('resetDashboard').onclick=()=>this.reset();
       this.observer=new ResizeObserver(()=>{if(!this.drag)this.layout();});this.observer.observe(this.board);
       this.render();
@@ -35,6 +45,7 @@
     render() {
       this.profile=this.board.clientWidth>=620?'wide':'compact';
       this.board.classList.toggle('is-editing',this.editing);
+      this.history.classList.toggle('is-editing',this.editing);$('miniHistoryResize').hidden=!this.editing;$('miniHistorySize').hidden=!this.editing;
       $('editDashboard').textContent=this.editing?'Fertig':'Anordnen';
       $('editDashboard').setAttribute('aria-pressed',String(this.editing));
       $('layoutHelp').hidden=!this.editing;
@@ -76,7 +87,8 @@
     }
     layout() {
       const profile=this.board.clientWidth>=620?'wide':'compact';
-      if(this.profile!==profile){this.profile=profile;this.render();return;}
+      if(this.profile!==profile){if(this.historyDrag)this.historyPointerEnd({pointerId:this.historyDrag.pointer},true);this.profile=profile;this.render();return;}
+      this.layoutHistory();
       this.row=this.profile==='wide'?30:26;
       const width=this.board.clientWidth;
       for(const t of this.config.tiles){const p=t.layouts[this.profile],el=this.elements.get(t.id);if(!el)continue;
@@ -87,6 +99,27 @@
       const visible=this.config.tiles.filter(t=>!this.elements.get(t.id)?.hidden);
       this.board.style.height=(visible.length?Math.max(...visible.map(t=>{const p=t.layouts[this.profile];return p.y+p.h;}))+(this.editing?2:0):0)*this.row+'px';
       this.fitNumbers();
+    }
+    layoutHistory() {
+      const height=this.config.historyHeight[this.profile];
+      this.history.style.height=height+'px';$('miniHistoryResize').setAttribute('aria-valuenow',String(height));$('miniHistoryResize').setAttribute('aria-valuetext',height+' Pixel');$('miniHistorySize').textContent=height+' px · Höhe ziehen';
+      this.a.resizeMini?.();
+    }
+    historyPointerDown(event) {
+      if(!this.editing||event.button!==0||this.historyDrag)return;
+      event.preventDefault();this.historyDrag={pointer:event.pointerId,startY:event.clientY,profile:this.profile,origin:this.config.historyHeight[this.profile],moved:false};event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    historyPointerMove(event) {
+      const d=this.historyDrag;if(!d||event.pointerId!==d.pointer)return;
+      event.preventDefault();const dy=event.clientY-d.startY;if(Math.abs(dy)>3)d.moved=true;
+      if(d.moved){this.config.historyHeight[d.profile]=Math.round(C.clamp(d.origin+dy,300,1000));this.layoutHistory();}
+    }
+    historyPointerEnd(event,cancelled) {
+      const d=this.historyDrag;if(!d||event.pointerId!==d.pointer)return;
+      this.historyDrag=null;
+      if(cancelled)this.config.historyHeight[d.profile]=d.origin;
+      const handle=$('miniHistoryResize');if(handle.hasPointerCapture(d.pointer))handle.releasePointerCapture(d.pointer);
+      if(!cancelled&&d.moved)this.commit();else this.layoutHistory();
     }
     pointerDown(event,t) {
       if(!this.editing || event.button!==0 || event.target.closest('button'))return;

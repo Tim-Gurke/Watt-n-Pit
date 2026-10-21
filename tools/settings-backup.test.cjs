@@ -49,3 +49,11 @@ test('battery balance tile settings and both layouts survive a portable backup r
   const restored=C.normalize(JSON.parse(JSON.stringify(backup)));
   assert.deepEqual(restored.dashboard.tiles.at(-1),tile);assert.deepEqual(restored.dashboard.tiles.slice(0,-1),backup.dashboard.tiles.slice(0,-1));
 });
+
+test('all overview periods and independent history heights survive portable backup round trips',()=>{
+  for(const miniRange of ['sunrise','today','last6h','last24h','yesterday','week','month']){
+    const backup=sample();backup.settings.miniRange=miniRange;backup.dashboard.historyHeight={compact:450,wide:700};
+    const restored=C.normalize(JSON.parse(JSON.stringify(backup)));assert.equal(restored.settings.miniRange,miniRange);assert.deepEqual(restored.dashboard.historyHeight,{compact:450,wide:700});
+  }
+  const backup=sample();backup.settings.miniRange='unknown';assert.throws(()=>C.normalize(backup));
+});

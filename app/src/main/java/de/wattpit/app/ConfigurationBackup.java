@@ -14,7 +14,7 @@ final class ConfigurationBackup {
         JSONObject s=input.getJSONObject("settings");
         String theme=s.getString("theme"),palette=s.getString("palette"),miniRange=s.getString("miniRange");
         double capacity=s.getDouble("capacity"),seconds=s.getDouble("sampleSeconds");
-        if(!Arrays.asList("light","dark").contains(theme)||!Arrays.asList("classic","blue","green","turquoise","orange","neutral").contains(palette)||!Arrays.asList("sunrise","today","last6h").contains(miniRange)||!Double.isFinite(capacity)||capacity<1||capacity>10000||!Arrays.asList(5.0,10.0,30.0,60.0).contains(seconds))throw new IllegalArgumentException("Die allgemeinen Einstellungen sind ungültig.");
+        if(!Arrays.asList("light","dark").contains(theme)||!Arrays.asList("classic","blue","green","turquoise","orange","neutral").contains(palette)||!Arrays.asList("sunrise","today","last6h","last24h","yesterday","week","month").contains(miniRange)||!Double.isFinite(capacity)||capacity<1||capacity>10000||!Arrays.asList(5.0,10.0,30.0,60.0).contains(seconds))throw new IllegalArgumentException("Die allgemeinen Einstellungen sind ungültig.");
         JSONObject settings=new JSONObject().put("theme",theme).put("palette",palette).put("miniRange",miniRange).put("capacity",capacity).put("sampleSeconds",(int)seconds);
         JSONObject board=input.getJSONObject("dashboard");JSONArray rows=board.getJSONArray("tiles"),tiles=new JSONArray();
         if(board.optInt("version")!=1||rows.length()>64||board.toString().length()>128000)throw new IllegalArgumentException("Die gesicherte Übersicht ist ungültig.");
@@ -39,6 +39,14 @@ final class ConfigurationBackup {
         if(board.optInt("dischargeSignVersion")==1)dashboard.put("dischargeSignVersion",1);
         if(board.optInt("energyFlowVersion")==1)dashboard.put("energyFlowVersion",1);
         if(board.has("energyPeriod"))dashboard.put("energyPeriod",pick(board.getJSONObject("energyPeriod"),"mode","amount","unit","aggregate","resetAt","from","to"));
+        if(board.has("historyHeight")){
+            JSONObject heights=board.getJSONObject("historyHeight"),clean=new JSONObject();
+            for(String profile:new String[]{"compact","wide"}){
+                double value=heights.optDouble(profile,Double.NaN);Object raw=heights.opt(profile);
+                clean.put(profile,raw!=null&&raw!=JSONObject.NULL&&!raw.equals("")&&Double.isFinite(value)?Math.round(Math.max(300,Math.min(1000,value))):profile.equals("wide")?380:320);
+            }
+            dashboard.put("historyHeight",clean);
+        }
         JSONObject place=input.optJSONObject("weatherPlace");if(place==null)place=new JSONObject();
         if(place.length()>0)place=WeatherClient.checkedPlace(place);
         JSONObject result=new JSONObject().put("format","wattnpit-settings").put("version",1).put("settings",settings).put("dashboard",dashboard).put("equipment",Repository.checkedEquipment(input.getJSONObject("equipment"))).put("weatherPlace",place);

@@ -22,3 +22,6 @@ html[data-theme="light"]{--muted:#485c72;--faint:#53667c}html[data-theme="light"
 .energy-toggle{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text);margin:9px 0}
 .energy-toggle input{width:18px;height:18px;min-height:18px;accent-color:var(--blue)}
 .chart-legend .dot.blue{background:var(--blue)}
+
+/* Overview history height follows the saved compact/wide layout. */
+#miniHistory{position:relative;display:flex;flex-direction:column;min-height:300px;max-height:1000px}#miniHistory>.section-heading,#miniHistory>.mini-range,#miniHistory>.mini-legend,#miniPeriodNote{flex-shrink:0}#miniHistory #miniChart{flex:1;min-height:80px;height:0}#miniHistory.is-editing{outline:1px dashed var(--blue);padding-bottom:30px}.mini-history-resize{position:absolute;right:0;bottom:0;width:44px;min-height:44px;border-radius:12px;color:var(--blue);font-size:23px;cursor:ns-resize;touch-action:none;user-select:none}.mini-history-size{position:absolute;left:15px;bottom:7px;font-size:10px;color:var(--muted);pointer-events:none}

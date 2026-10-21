@@ -4,7 +4,7 @@
 
 **Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht.** Sie zeigt Messwerte, Verläufe und Energieauswertungen. Einstellungen an Solarregler und SmartShunt müssen weiterhin über die Victron-Software **VictronConnect** vorgenommen werden. Die Einstellungen in Watt’n’Pit betreffen nur die App und ändern keine Geräteparameter.
 
-**[Android-APK 1.3.7 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.7/Watt-n-Pit-v1.3.7.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.3.8 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.8/Watt-n-Pit-v1.3.8.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
 
@@ -24,7 +24,9 @@ Im Hochformat bleibt die bewährte Anordnung erhalten. Im Querformat stehen Appn
 
 ![Querformat mit gemeinsamem, flachem Kopf und unabhängig angeordneten Kacheln](docs/images/overview-landscape.png)
 
-## Das kann 1.3.7
+## Das kann 1.3.8
+
+- **Verlauf auf der Übersicht:** „So läuft deine Energie.“ bietet zusätzlich Gestern, Woche (7 Kalendertage), Monat (30 Kalendertage) und die letzten 24 Stunden. Die Auswahl bleibt gespeichert. Unter **Anordnen** lässt sich die Kachel am ↕-Griff in der Höhe ändern; schmale und breite Ansicht speichern ihre Höhe unabhängig. Zeitraumwahl liest lokale Messwerte und startet keinen Bluetooth-Import.
 
 - **Direkter Empfang:** SmartSolar und SmartShunt liefern Livewerte über die Bluetooth-Sofortanzeige. Messdaten und Geräteschlüssel bleiben auf dem Telefon.
 - **Synchronisation sichtbar:** Eine Warteanzeige nennt Gerät, Arbeitsschritt und bekannten Fortschritt. **Im Hintergrund synchronisieren** gibt die Bedienung für den aktuellen Durchlauf frei; eine kleine Statusanzeige bleibt erreichbar. **Synchronisation abbrechen** bleibt verfügbar. Die Auswahl gilt für die gesamte Gerätewarteschlange und wird anschließend verworfen. Bereits gespeicherte Daten bleiben erhalten.

@@ -298,7 +298,7 @@ final class Repository {
         String palette=settings.optString("palette",prefs.getString("palette","classic"));
         if(!Arrays.asList("classic","blue","green","turquoise","orange","neutral").contains(palette))throw new IllegalArgumentException("Unbekanntes Farbdesign.");
         String miniRange=settings.optString("miniRange",prefs.getString("miniRange","sunrise"));
-        if(!Arrays.asList("sunrise","today","last6h").contains(miniRange))throw new IllegalArgumentException("Unbekannter Übersichtszeitraum.");
+        if(!Arrays.asList("sunrise","today","last6h","last24h","yesterday","week","month").contains(miniRange))throw new IllegalArgumentException("Unbekannter Übersichtszeitraum.");
         return prefs.edit().putString("miniRange",miniRange).putString("palette",palette).putString("theme",theme).putFloat("capacity",(float)capacity).putInt("sampleSeconds",seconds);
     }
     synchronized boolean importConfiguration(String json)throws Exception{

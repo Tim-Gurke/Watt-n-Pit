@@ -51,6 +51,7 @@ jobs:
           node tools/sync-coverage-smoke.cjs
           node tools/energy-balance-smoke.cjs
           node tools/tile-detail-smoke.cjs
+          node tools/mini-history-smoke.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: Watt-n-Pit-CI-release

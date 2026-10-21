@@ -67,13 +67,15 @@ Solarleistung und Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**
 
 **+ Kachel** öffnet die Auswahl. Neue Kacheln erscheinen am Ende des Rasters. Eine Messkachel antippen und **Kachel-Einstellungen** wählen, um Beschriftung, Einheit, Darstellung und Zeitraum dauerhaft zu ändern. **Großansicht öffnen** zeigt dieselbe Messgröße zum Untersuchen in groß. Als Darstellung stehen je nach Messgröße Zahl, Rundinstrument oder Verlauf zur Wahl.
 
-Unter **Anordnen** die Kacheln ziehen und an der unteren rechten Ecke vergrößern. Das Raster für Position und Größe ist in beiden Formaten doppelt so fein wie zuvor. Überlappungen sind erlaubt. Andere Kacheln behalten ihre Position. **Fertig** beendet die Anordnung. Schmale und breite Ansichten speichern ihre Positionen und Größen getrennt.
+Unter **Anordnen** die Kacheln ziehen und an der unteren rechten Ecke vergrößern. Das Raster für Position und Größe ist in beiden Formaten doppelt so fein wie zuvor. Überlappungen sind erlaubt. Andere Kacheln behalten ihre Position. **Fertig** beendet die Anordnung. Schmale und breite Ansichten speichern ihre Positionen und Größen getrennt. Auch die Höhe von **„So läuft deine Energie.“** ist verstellbar: Unter **Anordnen** den ↕-Griff unten rechts nach oben oder unten ziehen, anschließend **Fertig**. Die Höhe bleibt je Ansicht separat gespeichert und ist in der Einstellungssicherung enthalten. Mit Tastatur ändern ↑/↓ die Höhe in 20-Pixel-Schritten.
 
 ![Anordnungsmodus mit verschiebbaren Kacheln und Reihenfolge der Übersichtsblöcke](images/arrange.png)
 
 *Die Reihenfolge von „Kacheln mit Wetter“, „Verlauf“ und „Start / Pause“ lässt sich über die Pfeile ändern. Innerhalb des Kachelblocks wird direkt gezogen.*
 
 **Einstellungen → Standardübersicht wiederherstellen** stellt die neue Standardansicht einschließlich der Kachelzeiträume für schmale und breite Bildschirme her. Beim normalen App-Update bleiben vorhandene eigene Übersichten erhalten. Messdaten und eingerichtete Geräte werden durch das Wiederherstellen der Standardübersicht nicht verändert.
+
+Bei **„So läuft deine Energie.“** stehen **Seit Sonnenaufgang, Heute, Gestern, Woche, Monat, Letzte 6 Stunden und Letzte 24 Stunden** zur Wahl. Woche umfasst die letzten sieben Kalendertage einschließlich heute, Monat die letzten 30. Gestern zeigt den vollständigen vorherigen Tag; Zeitumstellungen werden berücksichtigt. Die Auswahl bleibt nach einem Neustart erhalten. Es werden vorhandene lokale Messwerte gelesen; fehlende Messzeiten bleiben Lücken.
 
 ## 4. Aktuell, Zeitraum und Skala wählen
 

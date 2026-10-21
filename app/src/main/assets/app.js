@@ -440,7 +440,7 @@ $('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus'
 for(const [id,name] of [['navOverview','overview'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
 lifecycle=new window.WattLifecycle({native,toast,poll,stateChanged:state=>reads?.state(state),completed:()=>{lastHistoryRevision=-1;lastMiniLoad=0;dashboard?.cache.clear();}});
 lifecycle.poll();
-dashboard = new window.WattDashboard({native,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
+dashboard = new window.WattDashboard({native,resizeMini:drawMini,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
 extras = new window.WattExtras({native,getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
 configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,dashboard,equipment,openModal,closeModal,toast,applied:backup=>{
