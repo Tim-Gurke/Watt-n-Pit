@@ -51,9 +51,22 @@ const path=require('node:path');
  await page.evaluate(()=>window.failSave=true);await page.keyboard.press('ArrowUp');assert.equal(await card.evaluate(el=>el.offsetHeight),1000,'failed storage must restore the saved height');await page.evaluate(()=>window.failSave=false);
  await page.locator('#editDashboard').click();assert.equal(await handle.isVisible(),false);
  await page.reload();assert.equal(await card.evaluate(el=>el.offsetHeight),1000);await page.setViewportSize({width:390,height:844});await page.locator('#layoutProfile').filter({hasText:'Schmale Ansicht'}).waitFor();assert.equal(await card.evaluate(el=>el.offsetHeight),430);
+ const layoutBounds=()=>page.evaluate(()=>{
+  const bounds=document.getElementById('miniChart').getBoundingClientRect(),outer=document.getElementById('miniHistory').getBoundingClientRect();
+  return {width:innerWidth,scrollWidth:document.body.scrollWidth,profile:dashboard.profile,boardWidth:dashboard.board.clientWidth,chart:{top:bounds.top,bottom:bounds.bottom,height:bounds.height},card:{top:outer.top,bottom:outer.bottom,height:outer.height}};
+ });
  for(const width of [320,360,390,700,832,1100]){
-  await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.body.scrollWidth>innerWidth),false,'overview overflow '+width);
-  const bounds=await page.locator('#miniChart').boundingBox(),outer=await card.boundingBox();assert.ok(bounds.height>=80&&bounds.y+bounds.height<=outer.y+outer.height,'chart escaped its card');
+  await page.setViewportSize({width,height:844});
+  const beforeLayout=process.env.WATTPIT_LAYOUT_DIAGNOSTICS?await layoutBounds():null;
+  // setViewportSize can return before resize events and ResizeObserver have
+  // laid out the new profile. Two frames allow both to run; measure both
+  // rectangles together so scroll anchoring cannot mix different layouts.
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const afterLayout=await layoutBounds();
+  if(beforeLayout)console.log('RESIZE_LAYOUT '+JSON.stringify({before:beforeLayout,after:afterLayout}));
+  assert.equal(afterLayout.profile,afterLayout.boardWidth>=620?'wide':'compact','dashboard profile '+width);
+  assert.equal(afterLayout.scrollWidth>width,false,'overview overflow '+JSON.stringify(afterLayout));
+  assert.ok(afterLayout.chart.height>=80&&afterLayout.chart.bottom<=afterLayout.card.bottom,'chart escaped its card '+JSON.stringify(afterLayout));
  }
  if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.setViewportSize({width:390,height:844});await page.locator('#editDashboard').click();await card.evaluate(el=>el.scrollIntoView({block:'center'}));await verifyCurves();await card.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'mini-history-resized.png')});}
  assert.deepEqual(errors,[]);await browser.close();console.log('Overview calendar ranges, local database queries, touch cancel, height drag, keyboard bounds, storage failure, separate profiles and reload persistence passed.');
