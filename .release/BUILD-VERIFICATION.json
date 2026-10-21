@@ -1,0 +1,26 @@
+{
+  "version": "1.3.9",
+  "versionCode": 30,
+  "compiledSource": "f799dda5bf72c3f084750039800aab24562c05b6",
+  "unsignedBuildCommit": "6593531eebdda3b39fde616fedeaa93bd8d64b65",
+  "unsignedBuildRun": 39614559024,
+  "publicationSource": "3464de14d3448cd0049c5625e355abc36846268b",
+  "apk": {
+    "file": "Watt-n-Pit-v1.3.9.apk",
+    "size": 190505,
+    "sha256": "512a4ba02937183b7882314f864105036d20b49e4c3363169e90b8f8553265bc",
+    "gitBlobSha": "f37bdafbb9024c8707e9b22f27ab555eb470b39c",
+    "base64Length": 254008,
+    "certificateSha256": "0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2"
+  },
+  "afterBuildChanges": [
+    "tools/mini-history-smoke.cjs"
+  ],
+  "applicationInputsChangedAfterBuild": false,
+  "layoutProbe": {
+    "run": 39615757304,
+    "commit": "c59d79c378a97021a70cdd94fcd7a79208eb41d2",
+    "completeSuccessfulPasses": 3,
+    "scope": "Wait two animation frames for viewport resize and ResizeObserver; read both rectangles atomically. Keep overflow/minimum height checks; add profile assertion. No application change."
+  }
+}
