@@ -58,10 +58,14 @@ const path=require('node:path');
  for(const width of [320,360,390,700,832,1100]){
   await page.setViewportSize({width,height:844});
   const beforeLayout=process.env.WATTPIT_LAYOUT_DIAGNOSTICS?await layoutBounds():null;
-  // setViewportSize can return before resize events and ResizeObserver have
-  // laid out the new profile. Two frames allow both to run; measure both
-  // rectangles together so scroll anchoring cannot mix different layouts.
-  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  // setViewportSize can return before the app's ResizeObserver has laid out
+  // the new profile. Await a real observer delivery and the following frame;
+  // a fixed frame count can still precede a pending resize notification.
+  // Measure both rectangles together so scroll anchoring cannot mix layouts.
+  await page.evaluate(()=>new Promise(resolve=>{
+   const observer=new ResizeObserver(()=>{observer.disconnect();requestAnimationFrame(resolve);});
+   observer.observe(document.getElementById('dashboardBoard'));
+  }));
   const afterLayout=await layoutBounds();
   if(beforeLayout)console.log('RESIZE_LAYOUT '+JSON.stringify({before:beforeLayout,after:afterLayout}));
   assert.equal(afterLayout.profile,afterLayout.boardWidth>=620?'wide':'compact','dashboard profile '+width);
