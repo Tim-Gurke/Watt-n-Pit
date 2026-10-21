@@ -44,13 +44,11 @@ public class ArchiveSyncPlanTest {
         ArchiveSyncPlan.Request r=next(a,1000,8,790,8);
         assertEquals(2,r.skipped);assertEquals(940,r.cursor);assertEquals(2,r.count);
     }
-    @Test public void recentArchiveTailIsRefreshedButLiveDataNeedNoOverlap() {
+    @Test public void recentConfirmedTailIsNotDownloadedAgain() {
         ArchiveSyncPlan.Availability a=new ArchiveSyncPlan.Availability(Arrays.asList(30),t(1000));
         a.imported(30,t(790),t(1000));
-        assertEquals(3,next(a,1000,8,790,8).count);
-        a.reading(t(1000),"live",0);
-        ArchiveSyncPlan.Request r=next(a,1000,8,790,8);
-        assertEquals(1,r.skipped);assertEquals(2,r.count);
+        assertEquals(8,next(a,1000,8,790,8).skipped);
+        assertEquals(0,next(a,1000,8,790,8).count);
     }
     @Test public void restartUsesStoredSamplesEvenBeforeCoverageWasCommitted() {
         ArchiveSyncPlan.Availability a=local(30);
@@ -127,17 +125,36 @@ public class ArchiveSyncPlanTest {
     @Test public void emptyDeviceResponseCreatesNoCoverage() {
         assertTrue(ArchiveSyncPlan.completed(block(1000,0,0,false),clock(),t(20000)).isEmpty());
     }
-    @Test public void aFreshUnavailableReplyIsAcknowledgedOnlyWithinItsCurrentRun(){
-        ArchiveCodec.Block b=block(1000,30,1,true);
-        assertTrue(ArchiveSyncPlan.completed(b,clock(),t(1000)).isEmpty());
-        List<long[]> received=ArchiveSyncPlan.completed(b,clock(),t(1000),false);assertEquals(1,received.size());
-        ArchiveSyncPlan.Availability audit=new ArchiveSyncPlan.Availability(Arrays.asList(30),t(1000),false);
-        ArchiveSyncPlan.Availability later=new ArchiveSyncPlan.Availability(Arrays.asList(30),t(1000));
-        for(long[] r:received){audit.imported(30,r[0],r[1]);later.imported(30,r[0],r[1]);}
-        assertTrue(audit.known(t(1000),30));assertFalse(later.known(t(1000),30));
+    @Test public void aFreshUnavailableReplySurvivesRestartWithoutInventingAMeasurement(){
+        ArchiveCodec.Block b=block(1000,30,1,true);assertNull(b.values[0]);
+        List<long[]> received=ArchiveSyncPlan.completed(b,clock(),t(1000));assertEquals(1,received.size());
+        ArchiveSyncPlan.Availability later=new ArchiveSyncPlan.Availability(Arrays.asList(30),t(1001));
+        for(long[] r:received)later.imported(30,r[0],r[1]);
+        assertTrue(later.known(t(1000),30));
     }
     @Test public void aFutureClockErrorCannotBecomeAFinalAuditAcknowledgement(){
-        assertTrue(ArchiveSyncPlan.completed(block(1000,30,1,false),clock(),t(0),false).isEmpty());
+        assertTrue(ArchiveSyncPlan.completed(block(1000,30,1,false),clock(),t(0)).isEmpty());
+    }
+    @Test public void recentStoredMeasurementsAreAlreadyKnownEvenWithoutAnOldMarker(){
+        ArchiveSyncPlan.Availability a=new ArchiveSyncPlan.Availability(Arrays.asList(30),t(1000));
+        a.reading(t(1000),"archive",30);assertTrue(a.known(t(1000),30));
+    }
+    @Test public void cachedLayoutCanFindNewMissingValuesBeforeConnecting(){
+        List<ArchiveCodec.Level> old=Arrays.asList(new ArchiveCodec.Level(10,30,1000));
+        List<ArchiveCodec.Level> advanced=ArchiveSyncPlan.advance(old,1061,clock(),t(1045));
+        assertEquals(1,advanced.size());assertEquals(1030,advanced.get(0).newest);assertEquals(9,advanced.get(0).capacity);
+        ArchiveSyncPlan.Availability a=local(30);a.imported(30,t(0),t(1000));
+        assertTrue(ArchiveSyncPlan.needsData(advanced,clock(),a));
+        a.reading(t(990),"live",10);for(long v=1000;v<=1060;v+=10)a.reading(t(v),"live",10);
+        assertFalse(ArchiveSyncPlan.needsData(advanced,clock(),a));
+    }
+    @Test public void theLiveReceptionIntervalDefersOnlyTheUnsettledTail(){
+        List<ArchiveCodec.Level> levels=ArchiveSyncPlan.advance(Arrays.asList(new ArchiveCodec.Level(121,1,1000)),1060,clock(),t(1045));
+        assertEquals(1045,levels.get(0).newest);assertEquals(940,levels.get(0).oldest);assertEquals(106,levels.get(0).capacity);
+    }
+    @Test public void aRefreshedDeviceHeadCannotMoveThisRunsEnd(){
+        List<ArchiveCodec.Level> levels=ArchiveSyncPlan.through(Arrays.asList(new ArchiveCodec.Level(10,30,1060)),clock(),t(1000));
+        assertEquals(1000,levels.get(0).newest);assertEquals(790,levels.get(0).oldest);assertEquals(8,levels.get(0).capacity);
     }
     private Connection database() throws Exception {
         Connection db=DriverManager.getConnection("jdbc:sqlite::memory:");

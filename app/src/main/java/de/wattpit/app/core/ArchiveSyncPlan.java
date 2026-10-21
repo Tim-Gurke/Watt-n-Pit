@@ -39,12 +39,9 @@ public final class ArchiveSyncPlan {
         private final Map<Integer,Intervals> actual=new LinkedHashMap<>(),checked=new LinkedHashMap<>(),exact=new LinkedHashMap<>();
         private final Map<Integer,long[]> windows=new HashMap<>();
         private final Map<Integer,TreeSet<Long>> archived=new HashMap<>();
-        private final long now;private final boolean refreshRecent;private long lastLive=Long.MIN_VALUE;private int lastLiveStep;
+        private final long now;private long lastLive=Long.MIN_VALUE;private int lastLiveStep;
         public Availability(Collection<Integer> periods,long now){
-            this(periods,now,true);
-        }
-        public Availability(Collection<Integer> periods,long now,boolean refreshRecent){
-            this.now=now;this.refreshRecent=refreshRecent;for(int p:periods){if(p<1)throw new IllegalArgumentException("Ungültige Archivauflösung.");actual.put(p,new Intervals());checked.put(p,new Intervals());exact.put(p,new Intervals());}
+            this.now=now;for(int p:periods){if(p<1)throw new IllegalArgumentException("Ungültige Archivauflösung.");actual.put(p,new Intervals());checked.put(p,new Intervals());exact.put(p,new Intervals());}
         }
         public void reading(long time,String origin,int resolution){
             if(origin.equals("live")){
@@ -54,8 +51,6 @@ public final class ArchiveSyncPlan {
             }
             if(!(origin.equals("archive")||origin.equals("csv")))return;
             if(resolution<=0){if(origin.equals("csv"))for(Intervals ranges:actual.values())ranges.add(time,time);return;}
-            long stableBefore=now-2L*resolution*1000;
-            if(refreshRecent&&time>=stableBefore)return;
             TreeSet<Long> times=archived.computeIfAbsent(resolution,k->new TreeSet<>());
             Long lower=times.floor(time),upper=times.ceiling(time);times.add(time);
             for(int p:actual.keySet())if(resolution<=p){
@@ -77,8 +72,7 @@ public final class ArchiveSyncPlan {
             if(bounds!=null){long half=period*500L;from=Math.max(bounds[0],time-half);to=Math.min(bounds[1],time+half);}
             // A nearby point alone cannot cover a real hole. Its surrounding archive cell
             // must be supported, or this exact resolution must already have been read.
-            return actual.get(period).covers(from,to)||exact.get(period).contains(time)||
-                    (!refreshRecent||time<now-2L*period*1000)&&checked.get(period).contains(time);
+            return actual.get(period).covers(from,to)||exact.get(period).contains(time)||checked.get(period).contains(time);
         }
         public boolean importable(Long time){return time!=null&&time>=0&&time<=now+300000;}
     }
@@ -124,6 +118,36 @@ public final class ArchiveSyncPlan {
         return new Plan(windows,known,deferred,needed);
     }
 
+    /** Predict only candidate times from the last device layout, then use the normal local plan.
+     * The live recording gets its normal reception interval before a new point is considered missing.
+     * A real connection always reads fresh device metadata before requesting measurements. */
+    public static List<ArchiveCodec.Level> advance(List<ArchiveCodec.Level> levels,long deviceNow,ArchiveCodec.Clock clock,long before){
+        if(deviceNow<0||deviceNow>ArchiveCodec.NA)throw new IllegalArgumentException("Ungültige Gerätezeit.");
+        List<ArchiveCodec.Level> result=new ArrayList<>();
+        for(ArchiveCodec.Level level:levels){
+            long newest=level.newest+Math.max(0,(deviceNow-level.newest)/level.period)*level.period;
+            result.add(new ArchiveCodec.Level(level.capacity,level.period,newest));
+        }
+        return through(result,clock,before);
+    }
+
+    /** Preserve the original oldest boundary while keeping one fixed end for this run. */
+    public static List<ArchiveCodec.Level> through(List<ArchiveCodec.Level> levels,ArchiveCodec.Clock clock,long before){
+        List<ArchiveCodec.Level> result=new ArrayList<>();
+        for(ArchiveCodec.Level level:levels){
+            long newest=level.newest;
+            int count=level.capacity;
+            while(count>0){Long time=clock.millis(newest);if(time==null||time<=before)break;newest-=level.period;count--;}
+            if(count>0)result.add(new ArchiveCodec.Level(count,level.period,newest));
+        }
+        return result;
+    }
+
+    public static boolean needsData(List<ArchiveCodec.Level> levels,ArchiveCodec.Clock clock,Availability local){
+        for(ArchiveCodec.Level level:levels)if(plan(level,clock,local).needed>0)return true;
+        return false;
+    }
+
     /** Reject changed device layouts before treating a reply as a planned range. */
     public static boolean matches(Request request,int period,ArchiveCodec.Block block){
         return block.count>0&&block.count<=request.count&&block.time==request.cursor&&block.period==period;
@@ -161,15 +185,11 @@ public final class ArchiveSyncPlan {
 
     /** Persist completed responses, including unavailable values, without bridging unknown clock epochs. */
     public static List<long[]> completed(ArchiveCodec.Block block, ArchiveCodec.Clock clock, long now) {
-        return completed(block,clock,now,true);
-    }
-    /** Recent acknowledgements are valid for this run's audit, but not a later skip marker. */
-    public static List<long[]> completed(ArchiveCodec.Block block, ArchiveCodec.Clock clock, long now,boolean stableOnly) {
         List<long[]> windows = new ArrayList<>();
         long from = 0, to = 0; boolean open = false;
         for (int i = 0; i < block.count; i++) {
             Long time = clock.millis(block.time - (long) i * block.period);
-            if (time == null || time>now+300000 || stableOnly&&time >= now - 2L * block.period * 1000) {
+            if (time == null || time<0 || time>now+300000) {
                 if (open) windows.add(new long[]{from, to});
                 open = false;
             } else if (open && time == from - block.period * 1000L) from = time;

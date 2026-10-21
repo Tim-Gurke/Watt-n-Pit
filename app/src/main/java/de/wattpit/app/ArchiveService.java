@@ -234,9 +234,12 @@ public final class ArchiveService extends Service {
             if(cfg==null)throw new IllegalArgumentException("Bitte zuerst ein Gerät einrichten.");kind=cfg.getString("kind");
             BluetoothManager manager=getSystemService(BluetoothManager.class);BluetoothAdapter adapter=manager==null?null:manager.getAdapter();
             if(adapter==null||!adapter.isEnabled())throw new IllegalArgumentException("Bitte Bluetooth einschalten.");
+            if(automatic&&!repository.archiveNeedsData(cfg,System.currentTimeMillis())){importComplete=true;return;}
+            repository.archiveAttemptStarted(mac);
             connect(adapter.getRemoteDevice(mac));
             stage("Archivmetadaten lesen");
             long currentUptime=ArchiveCodec.u(require(0xec5a),0,4);
+            long metadataAt=System.currentTimeMillis();
             byte[] ids=require(0xec5d);if(ids.length!=16)throw new IllegalArgumentException("Unbekannte Archivkanäle.");
             ArchiveCodec.Clock clock=repository.archiveClock(mac,currentUptime);
             byte[] anchor=read(0xec5f);if(anchor!=null)clock.anchors(anchor);repository.saveArchiveClock(mac,currentUptime,clock);
@@ -268,6 +271,8 @@ public final class ArchiveService extends Service {
                 batches.put(ch,Math.max(1,Math.min(config[1]&255,56/field.width)));
             }
             if(fields.isEmpty())throw new IllegalArgumentException("Keine unterstützten Trendkanäle gefunden.");
+            repository.saveArchivePlan(mac,kind,currentUptime,metadataAt,clock,levels,fields,registers);
+            levels.replaceAll((ch,tier)->ArchiveSyncPlan.through(tier,clock,metadataAt));
             List<Integer> channelOrder=new ArrayList<>(fields.keySet());channelOrder.sort(Comparator.comparingInt(ch->ArchiveSession.priority(fields.get(ch).name)));
             // Finish the complete per-device preflight before the first measurement read.
             stage("Lokale Aufzeichnung vollständig abgleichen");
@@ -293,7 +298,6 @@ public final class ArchiveService extends Service {
             // Summary reads are also chosen before any measurement transfer.
             if(kind.equals("solar"))solarDays(summaryDay,daily);else shuntHistory();
             int audits=0,unmappedValues=0;
-            Map<Integer,List<long[]>> confirmed=new HashMap<>();
             while(true){
                 ArchiveTransferPlan.Read requested=transfer.next(ch->{
                     maintain();long at=System.currentTimeMillis();
@@ -304,8 +308,7 @@ public final class ArchiveService extends Service {
                     stage("Gespeicherten Bestand abschließend prüfen");int remaining=0;
                     for(int ch:channelOrder){
                         maintain();long at=System.currentTimeMillis();
-                        ArchiveSyncPlan.Availability saved=repository.db.archiveAvailability(mac,kind,registers.get(ch),fields.get(ch).name,levels.get(ch),clock,at,false,this::maintain);
-                        for(long[] range:confirmed.getOrDefault(ch,Collections.emptyList()))saved.imported((int)range[0],range[1],range[2]);
+                        ArchiveSyncPlan.Availability saved=repository.db.archiveAvailability(mac,kind,registers.get(ch),fields.get(ch).name,levels.get(ch),clock,at,this::maintain);
                         int needed=0;for(ArchiveCodec.Level level:levels.get(ch))needed+=ArchiveSyncPlan.plan(level,clock,saved).needed;
                         remaining+=needed;
                         if(needed>0)transfer.replace(ch,levels.get(ch),saved,batches.get(ch));
@@ -320,29 +323,26 @@ public final class ArchiveService extends Service {
                 byte[] reply=exchange(0xec5b,ArchiveCodec.trendQuery(ch,request.cursor,request.count));
                 if(reply==null){
                     trace("Leere Archivantwort · verbleibenden Bedarf neu planen");
-                    refreshTransfer(ch,transfer,levels,batches,registers,fields,clock,liveChecked);total=transfer.processed+transfer.remaining();continue;
+                    refreshTransfer(ch,transfer,levels,batches,registers,fields,clock,liveChecked,metadataAt);total=transfer.processed+transfer.remaining();continue;
                 }
                 ArchiveCodec.Block block=new ArchiveCodec.Block(reply,field,ch,request.count);
                 List<long[]> times=new ArrayList<>();List<Double> values=new ArrayList<>();
                 for(int i=0;i<block.count;i++){
                     if(block.values[i]==null){missing++;continue;}
                     long uptime=block.time-(long)i*block.period;Long time=clock.millis(uptime);
-                    if(time==null||time>System.currentTimeMillis()+300000){unmappedValues++;continue;}
+                    if(time==null||time<0||time>System.currentTimeMillis()+300000){unmappedValues++;continue;}
                     times.add(new long[]{time,block.period});values.add(block.values[i]);
                 }
                 // Keep valid returned samples even when the device has changed archive tiers.
                 // Only the actual returned times are covered; the requested range stays pending.
-                int added=repository.db.archiveBlock(mac,kind,field.name,times,values);changed+=added;blocks++;
+                List<long[]> completed=ArchiveSyncPlan.completed(block,clock,System.currentTimeMillis());
+                int added=repository.db.archiveBlock(mac,kind,field.name,registers.get(ch),block.period,times,values,completed);changed+=added;blocks++;
                 if(added>0)repository.invalidateStats();
                 ArchiveSyncPlan.Availability local=availability.get(ch);
-                for(long[] window:ArchiveSyncPlan.completed(block,clock,System.currentTimeMillis())){
-                    repository.db.cover(mac,registers.get(ch),block.period,window[0],window[1]);local.imported(block.period,window[0],window[1]);
-                }
-                for(long[] range:ArchiveSyncPlan.completed(block,clock,System.currentTimeMillis(),false))
-                    confirmed.computeIfAbsent(ch,k->new ArrayList<>()).add(new long[]{block.period,range[0],range[1]});
+                for(long[] window:completed)local.imported(block.period,window[0],window[1]);
                 if(!transfer.accept(block)){
                     trace("Archivaufteilung hat sich geändert · verbleibenden Bedarf neu planen");
-                    refreshTransfer(ch,transfer,levels,batches,registers,fields,clock,liveChecked);total=transfer.processed+transfer.remaining();continue;
+                    refreshTransfer(ch,transfer,levels,batches,registers,fields,clock,liveChecked,metadataAt);total=transfer.processed+transfer.remaining();continue;
                 }
                 processed=transfer.processed;skipped=transfer.skipped;unmapped=transfer.deferred+unmappedValues;
                 progress(ArchiveSession.label(field.name)+" · "+Math.min(100,(int)(processed*100L/Math.max(1,total)))+" % · "+changed+" Werte übernommen");
@@ -363,10 +363,11 @@ public final class ArchiveService extends Service {
     }
     private void refreshTransfer(int ch,ArchiveTransferPlan transfer,Map<Integer,List<ArchiveCodec.Level>> levels,
                                  Map<Integer,Integer> batches,Map<Integer,Integer> registers,Map<Integer,ArchiveCodec.Field> fields,
-                                 ArchiveCodec.Clock clock,Map<Integer,Long> liveChecked)throws Exception{
+                                 ArchiveCodec.Clock clock,Map<Integer,Long> liveChecked,long target)throws Exception{
         maintain();byte[] config=require(0xec4a+ch),refs=require(0xec52+ch);
         List<ArchiveCodec.Level> current=ArchiveCodec.levels(config,refs);
         if(current.isEmpty())throw new IllegalStateException("Gerätearchiv vorübergehend nicht verfügbar. Abgleich unvollständig");
+        current=ArchiveSyncPlan.through(current,clock,target);
         long at=System.currentTimeMillis();ArchiveCodec.Field field=fields.get(ch);
         ArchiveSyncPlan.Availability saved=repository.db.archiveAvailability(mac,kind,registers.get(ch),field.name,current,clock,at,this::maintain);
         int batch=Math.max(1,Math.min(config[1]&255,56/field.width));

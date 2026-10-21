@@ -113,7 +113,10 @@ public final class ArchiveCodec {
     }
     public static final class Level {
         public final int capacity,period;public final long newest,oldest;
-        Level(int n,int p,long t){capacity=n;period=p;newest=t;oldest=Math.max(0,t-(long)(n-1)*p);}
+        public Level(int n,int p,long t){
+            if(n<1||n>10000||p<1||p>65535||t<0||t>NA)throw new IllegalArgumentException("Ungültige Archivaufteilung.");
+            capacity=n;period=p;newest=t;oldest=Math.max(0,t-(long)(n-1)*p);
+        }
     }
     public static List<Level> levels(byte[] config,byte[] refs){
         if(config.length<2||config[0]<1||config[0]>8||config.length<2+4*config[0]||refs.length<4*config[0])throw new IllegalArgumentException("Unbekannte Archivaufteilung.");

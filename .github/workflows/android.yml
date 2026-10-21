@@ -26,6 +26,15 @@ jobs:
         run: node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs tools/settings-backup.test.cjs tools/tile-detail.test.cjs tools/read-bridge.test.cjs
       - name: Tests, Lint und Android-Build
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
+      - name: Archivbedarf, Neustart und atomare Speicherung prüfen
+        run: |
+          deps="$RUNNER_TEMP/wattpit-proof-deps"
+          mkdir -p "$deps"
+          curl --fail --location --retry 2 --max-time 120 https://repo.maven.apache.org/maven2/org/xerial/sqlite-jdbc/3.46.1.0/sqlite-jdbc-3.46.1.0.jar -o "$deps/sqlite-jdbc-3.46.1.0.jar"
+          curl --fail --location --retry 2 --max-time 120 https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar -o "$deps/slf4j-api-1.7.36.jar"
+          curl --fail --location --retry 2 --max-time 120 https://repo.maven.apache.org/maven2/org/robolectric/android-all/15-robolectric-12468137/android-all-15-robolectric-12468137.jar -o "$deps/android-api35.jar"
+          python3 tools/prove-archive-delta.py --output app/build/reports/archive-delta-proof --sqlite-jar "$deps/sqlite-jdbc-3.46.1.0.jar" --slf4j-jar "$deps/slf4j-api-1.7.36.jar"
+          python3 tools/prove-archive-storage.py --output app/build/reports/archive-storage-proof --android-jar "$deps/android-api35.jar" --sqlite-jar "$deps/sqlite-jdbc-3.46.1.0.jar" --slf4j-jar "$deps/slf4j-api-1.7.36.jar"
       - name: Native Abdeckung in allen Kurven prüfen
         env:
           WATTPIT_CHROMIUM: /usr/bin/google-chrome
@@ -53,6 +62,10 @@ jobs:
             app/build/reports/tests/
             app/build/reports/lint-results-debug.html
             app/build/reports/sync-coverage/
+            app/build/reports/archive-delta-proof/report.json
+            app/build/reports/archive-delta-proof/*.requests.tsv
+            app/build/reports/archive-storage-proof/report.json
+            app/build/reports/archive-storage-proof/results.log
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/publish/')
