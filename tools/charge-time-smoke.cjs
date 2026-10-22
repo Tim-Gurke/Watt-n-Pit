@@ -13,6 +13,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  const before=await page.evaluate(()=>structuredClone(dashboard.config.tiles));
  await page.locator('#addTile').click();await page.locator('#tileSearch').fill('Restladezeit');await page.locator('[data-metric="chargeTime"]').click();
  const id=await page.evaluate(()=>dashboard.config.tiles.find(t=>t.metric==='chargeTime').id),tile=page.locator(`[data-tile="${id}"]`);
+ const resized=async viewport=>{await page.setViewportSize(viewport);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
  assert.deepEqual(await page.evaluate(()=>dashboard.config.tiles.filter(t=>t.metric!=='chargeTime')),before,'adding the tile must preserve the existing dashboard');
  assert.equal(await tile.locator('.tile-number').textContent(),'≈ 3,0');assert.match(await tile.locator('.tile-hint').textContent(),/Bis 100 %/);
  for(let i=0;i<10;i++)await page.evaluate(()=>poll());assert.equal(await page.evaluate(()=>dashboard.chargeEstimator.samples.length),1);
@@ -36,14 +37,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  await page.locator('#detailClose').click();assert.equal(await tile.locator('.tile-number').textContent(),'≈ 3,0');assert.equal(await tile.locator('.tile-unit').textContent(),'h');
  assert.equal(await page.evaluate(()=>window.chargeQueries.includes(undefined)),false,'no undefined backend may be queried for the live-only estimate');
  for(const viewport of [{width:320,height:800},{width:390,height:844},{width:844,height:390}]){
-  await page.setViewportSize(viewport);
+  await resized(viewport);
   for(const theme of ['light','dark']){
    await page.evaluate(theme=>{window.fixture.settings.theme=theme;window.fixture.readings[0].t=Date.now();poll();},theme);await tile.scrollIntoViewIfNeeded();
    assert.equal(await tile.locator('.tile-hint').isVisible(),true);assert.equal(await page.evaluate(()=>document.body.scrollWidth>innerWidth),false);
    assert.ok(await tile.locator('.tile-number').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'estimate must fit the tile');
   }
  }
- await page.setViewportSize({width:390,height:844});await tile.scrollIntoViewIfNeeded();
+ await resized({width:390,height:844});await tile.scrollIntoViewIfNeeded();
  const output=process.env.WATTPIT_SCREENSHOT_DIR;if(output){fs.mkdirSync(output,{recursive:true});await page.locator('#toast').evaluate(el=>el.hidden=true);await tile.screenshot({path:path.join(output,'charge-time.png')});}
  await page.reload();assert.equal(await page.locator(`[data-tile="${id}"] .tile-number`).textContent(),'≈ 3,0');
  assert.deepEqual(errors,[]);await browser.close();console.log('Restladezeit: picker, net current/capacity, missing and stale readings, charging/full states, live-only detail, units/gauge, saved layout and both themes/orientations passed.');
