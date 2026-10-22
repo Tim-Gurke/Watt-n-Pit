@@ -13,7 +13,7 @@
   class WattDashboard {
     constructor(adapter) {
       this.a=adapter;this.board=$('dashboardBoard');this.weatherContent=$('weatherStrip');this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
-      this.chargeEstimator=new C.ChargeEstimator();this.chargeDemo=null;this.chargeEstimate=null;
+      this.chargeEstimator=new C.BatteryTimeEstimator();this.chargeDemo=null;this.chargeEstimate=null;
       let stored;
       try { stored=JSON.parse(adapter.native?.dashboard?adapter.native.dashboard():localStorage.getItem('wattpit-dashboard-v1') || '{}'); } catch (_) { stored={}; }
       this.config=C.normalize(stored);this.saved=copy(this.config);this.history=$('miniHistory');
@@ -228,6 +228,10 @@
         el.style.setProperty('--tile-color',this.paint(t.color,t,true));
         el.style.setProperty('--tile-muted',this.paint(getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),t,true));
         const m=C.CATALOG[t.metric];let window=C.windowFor(t,now,snapshot.weather);
+        if(t.metric==='chargeTime'){
+          const label=C.tileLabel(t,this.chargeEstimate);el.querySelector('.tile-label').textContent=label;
+          el.setAttribute('aria-label',label+' anpassen');el.querySelector('.tile-menu').setAttribute('aria-label',label+' bearbeiten');
+        }
         const query=window&&t.metric==='solar'&&t.period.mode==='sunrise'?C.solarQueryWindow(window):window;
         let data=window?this.data(t,m.flow?flowWindow:query,m.flow?solarFrom:query.from,m.flow?solarTo:query.to):null;
         if(window&&t.period.mode==='sunrise'&&(t.metric==='solar'||m.flow==='solar'))window=C.solarPlotWindow(window,data?.points||[],m.flow==='solar'?data?.summary:null);
@@ -308,7 +312,7 @@
     }
     choose(id) {
       const t=this.config.tiles.find(t=>t.id===id);if(!t)return;
-      this.a.openModal(t.title||C.CATALOG[t.metric].label,`<div class="tile-actions"><button class="primary" id="tileActionDetail">Großansicht öffnen</button><button class="secondary" id="tileActionSettings">Kachel-Einstellungen</button></div>`);
+      this.a.openModal(C.tileLabel(t,this.chargeEstimate),`<div class="tile-actions"><button class="primary" id="tileActionDetail">Großansicht öffnen</button><button class="secondary" id="tileActionSettings">Kachel-Einstellungen</button></div>`);
       $('tileActionSettings').onclick=()=>this.editor(id);
       $('tileActionDetail').onclick=()=>{this.a.closeModal();if(!this.detail)this.detail=new window.WattTileDetail(this);this.detail.open(id);};
     }

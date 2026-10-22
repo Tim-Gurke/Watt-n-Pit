@@ -4,7 +4,7 @@
 
 **Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht.** Sie zeigt Messwerte, Verläufe und Energieauswertungen. Einstellungen an Solarregler und SmartShunt müssen weiterhin über die Victron-Software **VictronConnect** vorgenommen werden. Die Einstellungen in Watt’n’Pit betreffen nur die App und ändern keine Geräteparameter.
 
-**[Android-APK 1.3.11 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.11/Watt-n-Pit-v1.3.11.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.3.12 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.12/Watt-n-Pit-v1.3.12.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
 
@@ -16,17 +16,18 @@ Die Screenshots zeigen die Bedienoberfläche mit frei erfundenen Beispieldaten. 
 |---|---|
 | ![Watt’n’Pit: Übersicht mit Solar-, Akku- und Wetterkacheln, dunkel](docs/images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](docs/images/overview-light.png) |
 
-*Die Standardübersicht: Ladezustand und aktuelle Solarleistung oben, „Bilanz“ und Solarertrag darunter. Anschließend stehen Batteriespannung und aktuelle Batteriebilanz links neben dem berechneten Verbrauch. Die flache Wetterkachel schließt den Kachelblock ab.*
+*Beispiele frei angepasster Übersichten. Die neue Hochkant-Standardansicht ist dreispaltig: links Ladezustand, automatische Akkuzeit, Spannung und aktuelle Batteriebilanz; daneben Solarleistung und Verbrauch; rechts Solarertrag und Bilanz. Darunter folgen Wetter und Ladephase.*
 
 Solarleistung und Solarertrag beginnen standardmäßig **seit Sonnenaufgang**; Verbrauch und Bilanz zählen **ab Mitternacht**, einschließlich des nächtlichen Verbrauchs. Alle vier Verlaufskacheln verwenden automatische Skalen. Neue Installationen und „Standardübersicht wiederherstellen“ erhalten diese Anordnung; beim Update bleiben gespeicherte eigene Übersichten erhalten.
 
-Im Hochformat bleibt die bewährte Anordnung erhalten. Im Querformat stehen Appname, Überschrift, Zustand, **+ Kachel**, Ansichtsart und **Anordnen** gemeinsam im flachen Kopf. Das Raster ist in beiden Formaten doppelt so fein. Die Restlaufzeit bleibt unter **+ Kachel → Akku → Restlaufzeit** verfügbar.
+Die Hochkant-Vorlage enthält zehn Kacheln und eine Verlaufshöhe von 465 Pixeln. Im Querformat stehen Appname, Überschrift, Zustand, **+ Kachel**, Ansichtsart und **Anordnen** gemeinsam im flachen Kopf. Das Raster ist in beiden Formaten doppelt so fein. Die Restlaufzeit bleibt unter **+ Kachel → Akku → Restlaufzeit** verfügbar.
 
 ![Querformat mit gemeinsamem, flachem Kopf und unabhängig angeordneten Kacheln](docs/images/overview-landscape.png)
 
-## Das kann 1.3.11
+## Das kann 1.3.12
 
-- **Restladezeit:** Unter **+ Kachel → Akku → Restladezeit** eine zusätzliche Zahl oder ein Rundinstrument bis 100 % anzeigen. Die Schätzung verwendet Ladezustand, eingestellte Ah-Kapazität und den Netto-Ladestrom des SmartShunt, zeitgewichtet über bis zu fünf Minuten. Stunden, Minuten, Tage und Sekunden sind wählbar. Bei Entladung steht „Wird nicht geladen“, ohne aktuelle Daten „—“. Sonne, Verbraucher und der abnehmende Ladestrom gegen Ladeende beeinflussen die verbleibende Zeit; das Zeichen ≈ kennzeichnet die Näherung. Bestehende Übersichten bleiben erhalten.
+- **Restladezeit und Restlaufzeit automatisch:** Die bisherige Restladezeit-Kachel wechselt beim Laden zur Schätzung bis 100 % und beim Entladen zur Restlaufzeit vom SmartShunt. Titel und Zeit wechseln gemeinsam; bestehende Kacheln erhalten die Automatik direkt mit dem Update. Der Netto-Stromtrend wird über bis zu eine Minute gemittelt und ein Wechsel mit 30 Sekunden frischen Messwerten bestätigt. Bei ausgeglichener Bilanz oder fehlenden Werten steht „—“. Stunden, Minuten, Tage und Sekunden sind wählbar.
+- **Neue Hochkant-Vorlage:** Zehn Kacheln, kompaktere Größen, automatische Akkuzeit und Ladephase sowie 465 Pixel Verlaufshöhe. Vorhandene eigene Anordnungen bleiben gespeichert; neue Installationen oder **Standardübersicht wiederherstellen** verwenden die neue Vorlage.
 
 ![Restladezeit bis 100 Prozent mit frei erfundenen Beispieldaten](docs/images/charge-time.png)
 
@@ -68,7 +69,7 @@ Im Hochformat bleibt die bewährte Anordnung erhalten. Im Querformat stehen Appn
 
 Beim ersten Öffnen den Cockpit-Hinweis lesen und **Verstanden** wählen. Er erscheint auch bei bestehenden Installationen einmal nach diesem Update. Die Bestätigung bleibt nur auf diesem Gerät und wird nicht mit Einstellungen exportiert.
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.11/Watt-n-Pit-v1.3.11.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.12/Watt-n-Pit-v1.3.12.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.

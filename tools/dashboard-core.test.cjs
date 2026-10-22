@@ -2,6 +2,65 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const C=require('../app/src/main/assets/dashboard-core.js');
 
+test('automatic battery time starts in the observed direction and uses the Shunt runtime independently of charge inputs',()=>{
+  const t=1000000,r={device:'a',t,current:10,soc:70,ttg:480};
+  const charging=new C.BatteryTimeEstimator().update(r,100,t);assert.equal(charging.minutes,180);assert.equal(charging.mode,'charge');assert.equal(C.tileLabel(C.tile('chargeTime'),charging),'Restladezeit');
+  const discharging=new C.BatteryTimeEstimator().update({...r,current:-2,soc:null},0,t);assert.equal(discharging.minutes,480);assert.equal(discharging.mode,'discharge');assert.equal(C.tileLabel(C.tile('chargeTime'),discharging),'Restlaufzeit');
+  assert.equal(C.displayValue(C.tile('chargeTime'),null,r,null,{settings:{capacity:100}},discharging),480);
+  assert.equal(C.liveValue('remaining',r,null,{settings:{capacity:100}},t),480);
+});
+test('a short reversal hides the incompatible forecast without flipping the confirmed time label',()=>{
+  const e=new C.BatteryTimeEstimator(),t=1000000,read=(s,current)=>e.update({device:'a',t:t+s*1000,current,soc:70,ttg:480},100,t+s*1000);
+  for(let s=0;s<=60;s+=10)read(s,10);
+  for(const s of [70,80]){const r=read(s,-10);assert.equal(r.mode,'charge');assert.equal(r.minutes,null);assert.equal(r.state,'changing');}
+  const resumed=read(90,10);assert.equal(resumed.mode,'charge');assert.equal(resumed.state,'charging');assert.ok(resumed.minutes>180);
+});
+test('sustained reversed current switches once after a confirmed trend and displays only a real Shunt time',()=>{
+  const e=new C.BatteryTimeEstimator(),t=1000000;let result,flips=0,previous='charge';
+  const read=(s,current,ttg=480)=>e.update({device:'a',t:t+s*1000,current,soc:70,ttg},100,t+s*1000);
+  for(let s=0;s<=60;s+=10)read(s,10);
+  for(let s=70;s<=180;s+=10){result=read(s,-10);if(result.mode!==previous){flips++;previous=result.mode;assert.ok(s>=100);}if(s<=90)assert.equal(result.mode,'charge');}
+  assert.equal(flips,1);assert.equal(result.mode,'discharge');assert.equal(result.minutes,480);
+  assert.equal(read(190,-10,null).minutes,null);assert.equal(read(200,-10,-1).minutes,null);
+  assert.equal(read(210,-10,0).minutes,0);assert.equal(read(220,-10,Infinity).state,'runtimeUnavailable');
+});
+test('polling the same packet cannot supply the fresh confirmation needed for a time-mode switch',()=>{
+  const e=new C.BatteryTimeEstimator(),t=1000000;
+  e.update({t,current:-10,soc:70,ttg:480},100,t);
+  e.update({t:t+30000,current:10,soc:70,ttg:480},100,t+30000);
+  const packet={t:t+40000,current:10,soc:70,ttg:480};e.update(packet,100,t+40000);
+  const held=e.update(packet,100,t+70000);assert.equal(held.mode,'discharge');assert.equal(held.minutes,null);assert.equal(e.samples.length,3);
+  const fresh=e.update({...packet,t:t+70000},100,t+70000);assert.equal(fresh.mode,'charge');assert.equal(fresh.minutes,180);
+});
+test('a newly confirmed charge estimate excludes the previous discharge phase',()=>{
+  const e=new C.BatteryTimeEstimator(),t=1000000;let result;
+  for(let s=0;s<=300;s+=10)e.update({device:'a',t:t+s*1000,current:-20,soc:70,ttg:90},100,t+s*1000);
+  for(let s=310;s<=420;s+=10)result=e.update({device:'a',t:t+s*1000,current:2,soc:70,ttg:null},100,t+s*1000);
+  assert.equal(result.mode,'charge');assert.equal(result.average,2);assert.equal(result.minutes,900);
+});
+test('balanced current has no time forecast and a full charge is reported only in a charging phase',()=>{
+  const e=new C.BatteryTimeEstimator(),t=1000000;let result=e.update({t,current:0,soc:100,ttg:480},100,t);
+  assert.equal(result.mode,'idle');assert.equal(result.minutes,null);assert.equal(C.chargeHint(result),'Zeit derzeit nicht bestimmbar');assert.equal(C.tileLabel(C.tile('chargeTime'),result),'Akkuzeit');
+  for(let s=10;s<=50;s+=10)result=e.update({t:t+s*1000,current:10,soc:100,ttg:null},100,t+s*1000);
+  assert.equal(result.mode,'charge');assert.equal(result.minutes,0);assert.equal(result.state,'full');
+  for(let s=60;s<=100;s+=10)result=e.update({t:t+s*1000,current:0,soc:100,ttg:480},100,t+s*1000);
+  assert.equal(result.mode,'idle');assert.equal(result.minutes,null);
+});
+test('stale values, device changes and receiver gaps discard both the time mode and its pending transition',()=>{
+  const t=1000000;
+  for(const next of [{device:'b',t:t+10000,current:-2,soc:70,ttg:120},{device:'a',t:t+46000,current:-2,soc:70,ttg:120},{device:'a',t:t-1000,current:-2,soc:70,ttg:120}]){
+    const e=new C.BatteryTimeEstimator();e.update({device:'a',t,current:10,soc:70,ttg:480},100,t);
+    assert.equal(e.update(next,100,next.t).minutes,120);assert.equal(e.samples.length,1);
+    const lost=e.update(next,100,next.t+45001);assert.equal(lost.mode,null);assert.equal(lost.minutes,null);assert.equal(e.samples.length,0);
+  }
+});
+test('automatic time labels respect custom captions and missing charge or runtime inputs stay unavailable',()=>{
+  const tile=C.tile('chargeTime');tile.title='Meine Akkuzeit';const t=1000000;
+  for(const current of [10,-10]){const r=new C.BatteryTimeEstimator().update({t,current,soc:null,ttg:null},100,t);assert.equal(r.minutes,null);assert.equal(C.tileLabel(tile,r),'Meine Akkuzeit');}
+  const board=C.defaults();board.tiles=board.tiles.slice(0,8);board.tiles[0].layouts.compact={x:1,y:3,w:5,h:4};board.tiles[0].layouts.wide={x:2,y:9,w:4,h:5};board.historyHeight={compact:410,wide:520};
+  const restored=C.normalize(JSON.parse(JSON.stringify(board)));assert.deepEqual(restored,board);
+});
+
 test('charge time uses configured Ah, state of charge and net Shunt current, independent of solar watts',()=>{
   const estimate=new C.ChargeEstimator(),now=1000000,r={device:'shunt-a',t:now,soc:70,current:10},before=structuredClone(r);
   const result=estimate.update(r,100,now);assert.equal(result.minutes,180);assert.equal(result.state,'charging');
@@ -62,7 +121,7 @@ test('the optional charge tile preserves units and layout and offers live number
   const restored=C.normalize({energyFlowVersion:1,tiles:[tile]}).tiles[0];
   assert.equal(restored.unit,'min');assert.equal(restored.type,'number');assert.equal(restored.period.mode,'live');assert.equal(C.windowFor(restored),null);
   assert.equal(C.format(3,C.tile('chargeTime')),'≈ 3,0');assert.equal(C.format(0,C.tile('chargeTime')),'0,0');assert.equal(C.format(null,tile),'—');
-  assert.equal(C.defaults().tiles.some(t=>t.metric==='chargeTime'),false);
+  assert.equal(C.defaults().tiles.some(t=>t.metric==='chargeTime'),true);
 });
 
 test('runtime can be displayed in seconds, hours and days without changing the Shunt value',()=>{
@@ -203,10 +262,12 @@ test('readable numbers handle shorthand white, custom dark surfaces and transpar
   }
   assert.notEqual(C.readableColor('#e8bb57','#fff','#f4f6f9'),'#ffffff');
 });
-test('the standard overview follows the eight-tile settings arrangement',()=>{
+test('the standard portrait overview follows the approved ten-tile layout and preserves the existing wide positions',()=>{
   const board=C.defaults();
-  assert.deepEqual(board.tiles.map(t=>t.metric),['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy']);
-  assert.deepEqual(board.tiles.map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:6},{x:4,y:0,w:8,h:6},{x:0,y:6,w:6,h:6},{x:6,y:6,w:6,h:6},{x:0,y:12,w:4,h:3},{x:0,y:15,w:4,h:3},{x:0,y:18,w:12,h:4},{x:4,y:12,w:8,h:6}]);
+  assert.deepEqual(board.tiles.map(t=>t.metric),['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy','state','chargeTime']);
+  assert.deepEqual(board.tiles.map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:5},{x:4,y:0,w:4,h:7},{x:8,y:7,w:4,h:5.5},{x:8,y:0,w:4,h:7},{x:0,y:7.5,w:4,h:2.5},{x:0,y:10,w:4,h:2.5},{x:0,y:12.5,w:12,h:4},{x:4,y:7,w:4,h:5.5},{x:4,y:16.5,w:4,h:3.5},{x:0,y:5,w:4,h:2.5}]);
+  assert.deepEqual(board.tiles.slice(0,8).map(t=>t.layouts.wide),[{x:0,y:0,w:2,h:4},{x:2,y:0,w:2,h:8},{x:7,y:0,w:3,h:8},{x:4,y:0,w:3,h:8},{x:0,y:4,w:2,h:2},{x:0,y:6,w:2,h:2},{x:0,y:8,w:12,h:4},{x:10,y:0,w:2,h:8}]);
+  assert.deepEqual(board.historyHeight,{compact:465,wide:380});
   assert.equal(board.tiles[1].valueMode,'live');assert.equal(board.tiles[1].scaleMode,'auto');
 });
 test('sunrise tile periods survive reload without changing customized layouts or live selection',()=>{
@@ -255,7 +316,7 @@ test('sign reversal survives reload and reflects fixed bounds while existing and
 });
 
 test('legacy weather blocks become one compact tile without moving existing layouts',()=>{
-  const board=C.defaults();board.tiles=board.tiles.filter(t=>t.metric!=='weather');board.blockOrder=['record','weather','tiles','history'];board.tiles[0].layouts.compact={x:3,y:21,w:6,h:6};
+  const board=C.defaults();board.tiles=board.tiles.filter(t=>!['weather','state','chargeTime'].includes(t.metric));board.blockOrder=['record','weather','tiles','history'];board.tiles[0].layouts.compact={x:3,y:21,w:6,h:6};
   const before=structuredClone(board.tiles),migrated=C.normalize(board),weather=migrated.tiles.at(-1);
   assert.deepEqual(migrated.tiles.slice(0,-1),before);assert.equal(weather.metric,'weather');
   assert.deepEqual(weather.layouts.compact,{x:0,y:27,w:12,h:4});assert.deepEqual(weather.layouts.wide,{x:0,y:8,w:12,h:4});
@@ -372,8 +433,8 @@ test('yesterday follows local calendar boundaries across both Berlin daylight sa
   assert.deepEqual(result,[[23,0,0],[25,0,0]]);
 });
 test('overview height preserves independent profiles and safely migrates older layouts',()=>{
-  const old=C.defaults();delete old.historyHeight;const migrated=C.normalize(old);assert.deepEqual(migrated.historyHeight,{compact:320,wide:380});assert.deepEqual(migrated.tiles,old.tiles);
+  const old=C.defaults();delete old.historyHeight;const migrated=C.normalize(old);assert.deepEqual(migrated.historyHeight,{compact:465,wide:380});assert.deepEqual(migrated.tiles,old.tiles);
   migrated.historyHeight={compact:456,wide:712};assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(migrated))).historyHeight,migrated.historyHeight);
   migrated.historyHeight={compact:-100,wide:100000};assert.deepEqual(C.normalize(migrated).historyHeight,{compact:300,wide:1000});
-  migrated.historyHeight={compact:'url(secret)',wide:null};assert.deepEqual(C.normalize(migrated).historyHeight,{compact:320,wide:380});
+  migrated.historyHeight={compact:'url(secret)',wide:null};assert.deepEqual(C.normalize(migrated).historyHeight,{compact:465,wide:380});
 });

@@ -8,7 +8,7 @@
   const CATALOG = {
     soc:          {label:'Ladezustand', group:'Akku', kind:'shunt', field:'soc', units:['%'], min:0, max:100, digits:1, color:'#65cbb0'},
     remaining:    {label:'Restlaufzeit', group:'Akku', kind:'shunt', field:'ttg', backend:'ttg', units:['h','d','min','s'], min:0, max:1440, digits:1, color:'#81baf4', hint:'Restlaufzeit vom SmartShunt; beim Laden oft nicht verfügbar.'},
-    chargeTime:   {label:'Restladezeit', group:'Akku', kind:'shunt', units:['h','min','d','s'], min:0, max:1440, digits:1, color:'#65cbb0', liveOnly:true, hint:'Geschätzte Zeit bis 100 % aus Ladezustand, eingestellter Batteriekapazität und Netto-Ladestrom am SmartShunt. Zeitgewichteter Mittelwert über bis zu fünf Minuten; laufende Verbraucher sind berücksichtigt. Bei wechselnder Sonne und sinkendem Strom gegen Ladeende ungenauer. Kein gespeicherter Verlauf.'},
+    chargeTime:   {label:'Restladezeit / Restlaufzeit', group:'Akku', kind:'shunt', units:['h','min','d','s'], min:0, max:1440, digits:1, color:'#65cbb0', liveOnly:true, hint:'Automatisch nach dem Netto-Batteriestrom: beim Laden geschätzte Zeit bis 100 % aus Ladezustand und eingestellter Batteriekapazität; beim Entladen Restlaufzeit vom SmartShunt. Der Trend verwendet bis zu eine Minute, ein Wechsel braucht 30 Sekunden Bestätigung mit frischen Messwerten. Die Ladezeit wird über bis zu fünf Minuten gemittelt; laufende Verbraucher sind berücksichtigt. Sonne und sinkender Strom gegen Ladeende beeinflussen die Schätzung. Kein gespeicherter Verlauf.'},
     remainingAh:  {label:'Kapazität im Akku', group:'Akku', kind:'shunt', field:'soc', backend:'soc', units:['Ah','mAh'], min:0, max:100, digits:1, color:'#65cbb0', calculated:'capacity', hint:'Rechnerisch: Ladezustand × eingestellte Batteriekapazität.'},
     remainingWh:  {label:'Energie im Akku', group:'Akku', kind:'shunt', backend:'storedEnergy', units:['Wh','kWh'], min:0, max:1400, digits:0, color:'#65cbb0', calculated:'energy', hint:'Näherung aus Kapazität, Ladezustand und momentaner Spannung; keine nutzbare Energieprognose.'},
     power:        {label:'Batteriebilanz', group:'Akku', kind:'shunt', field:'power', backend:'batteryPower', units:['W','kW'], min:-1000, max:1000, digits:0, color:'#65cbb0', hint:'+ Laden · − Entladen. Alle Quellen und Verbraucher am Shunt.'},
@@ -45,39 +45,94 @@
   const numeric = (x,fallback,a,b) => finite(x) ? clamp(Number(x),a,b) : fallback;
   const color = (x,fallback) => /^#[0-9a-f]{6}$/i.test(x || '') ? x : fallback;
   // Only live Shunt readings enter this estimate. Repeated UI polls add no samples.
-  class ChargeEstimator {
-    constructor(){this.reset();}
-    reset(){this.samples=[];this.device=null;this.updated=null;}
-    update(reading,capacity,now=Date.now()){
-      const unavailable=()=>({minutes:null,state:'unavailable',average:null,seconds:0});
-      if(!reading||!finite(reading.t)||!finite(reading.current)||!finite(reading.soc)||!finite(capacity)||Number(capacity)<=0||Number(reading.soc)<0||Number(reading.soc)>100||!finite(now)||now<Number(reading.t)||now-Number(reading.t)>45000){this.reset();return unavailable();}
+  class CurrentAverage {
+    constructor(){this.generation=0;this.reset();}
+    reset(){this.samples=[];this.device=null;this.updated=null;this.generation++;}
+    update(reading,now=Date.now()){
+      if(!reading||!finite(reading.t)||!finite(reading.current)||!finite(now)||now<Number(reading.t)||now-Number(reading.t)>45000){this.reset();return null;}
       const t=Number(reading.t),current=Number(reading.current),device=reading.device||reading.kind||'shunt',last=this.samples.at(-1);
       if(device!==this.device||this.updated!==null&&now<this.updated||last&&(t<last.t||t-last.t>45000))this.reset();
       this.device=device;this.updated=now;
       if(!this.samples.length||t>this.samples.at(-1).t)this.samples.push({t,current});
+      else this.samples.at(-1).current=current;
       const cutoff=now-300000;
       while(this.samples.length>1&&this.samples[1].t<=cutoff)this.samples.shift();
+      return {...this.window(now,cutoff),trend:this.window(now,now-60000).average};
+    }
+    window(now,from){
       let area=0,duration=0;
       for(let i=0;i<this.samples.length;i++){
-        const a=this.samples[i],b=this.samples[i+1],start=Math.max(cutoff,a.t),end=b?b.t:now;
+        const a=this.samples[i],b=this.samples[i+1],start=Math.max(from,a.t),end=b?b.t:now;
         if(end<=start)continue;
         const startCurrent=b?a.current+(b.current-a.current)*(start-a.t)/(b.t-a.t):a.current;
         area+=(startCurrent+(b?b.current:a.current))/2*(end-start);duration+=end-start;
       }
-      const average=duration?area/duration:current,base={average,seconds:duration/1000};
-      if(Number(reading.soc)===100)return {...base,minutes:0,state:'full'};
-      if(current<=.03)return {...base,minutes:null,state:'inactive'};
-      if(average<=.03)return {...base,minutes:null,state:'waiting'};
-      const minutes=(100-Number(reading.soc))/100*Number(capacity)/average*60;
-      return {...base,minutes:Number.isFinite(minutes)?minutes:null,state:Number.isFinite(minutes)?'charging':'unavailable'};
+      return {average:duration?area/duration:this.samples.at(-1)?.current??null,seconds:duration/1000};
+    }
+  }
+  const validChargeInputs=(r,capacity)=>r&&finite(r.soc)&&Number(r.soc)>=0&&Number(r.soc)<=100&&finite(capacity)&&Number(capacity)>0;
+  function chargeForecast(reading,capacity,base){
+    if(!validChargeInputs(reading,capacity))return {...base,minutes:null,state:'unavailable'};
+    if(Number(reading.soc)===100)return {...base,minutes:0,state:'full'};
+    if(Number(reading.current)<=.03)return {...base,minutes:null,state:'inactive'};
+    if(base.average<=.03)return {...base,minutes:null,state:'waiting'};
+    const minutes=(100-Number(reading.soc))/100*Number(capacity)/base.average*60;
+    return {...base,minutes:Number.isFinite(minutes)?minutes:null,state:Number.isFinite(minutes)?'charging':'unavailable'};
+  }
+  class ChargeEstimator {
+    constructor(){this.current=new CurrentAverage();}
+    get samples(){return this.current.samples;}
+    reset(){this.current.reset();}
+    update(reading,capacity,now=Date.now()){
+      if(!validChargeInputs(reading,capacity)){this.reset();return {minutes:null,state:'unavailable',average:null,seconds:0};}
+      const average=this.current.update(reading,now);
+      return average?chargeForecast(reading,capacity,average):{minutes:null,state:'unavailable',average:null,seconds:0};
+    }
+  }
+  class BatteryTimeEstimator {
+    constructor(){this.current=new CurrentAverage();this.clearMode();this.generation=this.current.generation;}
+    get samples(){return this.current.samples;}
+    clearMode(){this.mode=null;this.pending=null;this.pendingSince=null;this.modeSince=null;}
+    reset(){this.current.reset();this.clearMode();this.generation=this.current.generation;}
+    update(reading,capacity,now=Date.now()){
+      const average=this.current.update(reading,now);
+      if(this.generation!==this.current.generation){this.clearMode();this.generation=this.current.generation;}
+      if(!average)return {mode:null,minutes:null,state:'unavailable',average:null,seconds:0};
+      const direction=a=>a>.03?'charge':a<-.03?'discharge':'idle';
+      const instant=direction(Number(reading.current)),trend=direction(average.trend),target=instant==='idle'?'idle':instant===trend?instant:null;
+      if(this.mode===null&&target!==null){this.mode=target;this.modeSince=Number(reading.t);}
+      if(target===null||target===this.mode){this.pending=null;this.pendingSince=null;}
+      else{
+        if(this.pending!==target){this.pending=target;this.pendingSince=now;}
+        // A repeated old packet cannot confirm a change merely because the UI keeps polling.
+        if(Number(reading.t)-this.pendingSince>=30000){this.mode=target;this.modeSince=this.pendingSince;this.pending=null;this.pendingSince=null;}
+      }
+      const base={...average,mode:this.mode};
+      if(this.mode===null||target!==this.mode||this.pending!==null)return {...base,minutes:null,state:'changing'};
+      if(this.mode==='idle')return {...base,minutes:null,state:'balanced'};
+      if(this.mode==='discharge'){
+        const minutes=finite(reading.ttg)&&Number(reading.ttg)>=0?Number(reading.ttg):null;
+        return {...base,minutes,state:minutes===null?'runtimeUnavailable':'discharging'};
+      }
+      // A confirmed new charging phase does not inherit the preceding discharge current.
+      return {...chargeForecast(reading,capacity,this.current.window(now,Math.max(now-300000,this.modeSince))),mode:'charge'};
     }
   }
   function chargeHint(estimate){
+    if(estimate?.state==='balanced')return 'Zeit derzeit nicht bestimmbar';
+    if(estimate?.state==='changing')return 'Trendwechsel wird geprüft';
+    if(estimate?.state==='discharging')return 'Restlaufzeit vom SmartShunt';
+    if(estimate?.state==='runtimeUnavailable')return 'Restlaufzeit vom SmartShunt fehlt';
     if(estimate?.state==='full')return '100 % laut SmartShunt';
     if(estimate?.state==='inactive')return 'Wird nicht geladen';
     if(estimate?.state==='waiting')return 'Noch kein stabiler Ladestrom';
     if(estimate?.state==='charging')return estimate.seconds<60?'Bis 100 % · Mittelung läuft an':'Bis 100 % · Ø bis 5 min';
     return 'Kein aktueller Shuntwert oder Kapazität fehlt';
+  }
+  function tileLabel(t,estimate){
+    if(t.title)return t.title;
+    if(t.metric!=='chargeTime')return CATALOG[t.metric].label;
+    return estimate?.mode==='charge'?'Restladezeit':estimate?.mode==='discharge'?'Restlaufzeit':'Akkuzeit';
   }
   function readableColor(foreground,background,page,opacity=100,target=7) {
     const rgb=hex=>{hex=hex.trim();if(/^#[0-9a-f]{3}$/i.test(hex))hex='#'+[...hex.slice(1)].map(c=>c+c).join('');return [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));};
@@ -130,7 +185,7 @@
     const m=CATALOG[metric] || CATALOG.soc;
     return {id:id || 'tile-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),metric:CATALOG[metric]?metric:'soc',title:'',unit:m.units[0],type:m.widget?'weather':m.energy?'chart':metric==='soc'?'gauge':'number',
       digits:m.digits,fontSize:32,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,reverseSign:metric==='dischargeEnergy',min:m.min,max:m.max,scaleMode:m.energy?'auto':'fixed',valueMode:'history',background:'auto',opacity:100,
-      period:{mode:m.energy?'today':'live',amount:6,unit:'h',aggregate:m.energy?'last':'avg',resetAt:Date.now(),from:0,to:0},layouts:{compact:position(m.widget?{w:12,h:4}:{h:m.energy?6:metric==='chargeTime'?4:3}),wide:position(m.widget?{w:12,h:4}:{h:m.energy?6:metric==='chargeTime'?4:3},true)}};
+      period:{mode:m.energy?'today':'live',amount:6,unit:'h',aggregate:m.energy||m.status?'last':'avg',resetAt:Date.now(),from:0,to:0},layouts:{compact:position(m.widget?{w:12,h:4}:{h:m.energy?6:metric==='chargeTime'?4:3}),wide:position(m.widget?{w:12,h:4}:{h:m.energy?6:metric==='chargeTime'?4:3},true)}};
   }
   function normalizeTile(input,seen) {
     if (!input || !CATALOG[input.metric]) return null;
@@ -159,11 +214,11 @@
     return result;
   }
   function defaults() {
-    const ids=['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy'];
+    const ids=['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy','state','chargeTime'];
     const energyPeriod={...tile('energyBalance').period};
     const layouts={
-      compact:[[0,0,4,6],[4,0,8,6],[0,6,6,6],[6,6,6,6],[0,12,4,3],[0,15,4,3],[0,18,12,4],[4,12,8,6]],
-      wide:[[0,0,2,4],[2,0,2,8],[7,0,3,8],[4,0,3,8],[0,4,2,2],[0,6,2,2],[0,8,12,4],[10,0,2,8]]
+      compact:[[0,0,4,5],[4,0,4,7],[8,7,4,5.5],[8,0,4,7],[0,7.5,4,2.5],[0,10,4,2.5],[0,12.5,12,4],[4,7,4,5.5],[4,16.5,4,3.5],[0,5,4,2.5]],
+      wide:[[0,0,2,4],[2,0,2,8],[7,0,3,8],[4,0,3,8],[0,4,2,2],[0,6,2,2],[0,8,12,4],[10,0,2,8],[0,12,4,3],[0,15,4,4]]
     };
     return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,historyHeight:historyHeight(),blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
       const t=tile(id,'default-'+id);
@@ -176,7 +231,7 @@
     })};
   }
   function historyHeight(input={}) {
-    return Object.fromEntries(['compact','wide'].map(profile=>[profile,finite(input?.[profile])?Math.round(clamp(Number(input[profile]),300,1000)):profile==='wide'?380:320]));
+    return Object.fromEntries(['compact','wide'].map(profile=>[profile,finite(input?.[profile])?Math.round(clamp(Number(input[profile]),300,1000)):profile==='wide'?380:465]));
   }
   function normalize(input) {
     if (!input || !Array.isArray(input.tiles)) return defaults();
@@ -314,5 +369,5 @@
     }
     return {...window,from:Math.max(window.dayFrom??window.from,from),to:Math.min(window.dayTo??window.to,to)};
   }
-  return {seriesGap,CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,ChargeEstimator,chargeHint,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow,solarQueryWindow,solarPlotWindow};
+  return {seriesGap,CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,ChargeEstimator,BatteryTimeEstimator,chargeHint,tileLabel,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow,solarQueryWindow,solarPlotWindow};
 });

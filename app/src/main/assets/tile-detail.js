@@ -140,6 +140,7 @@
       const primary=this.series[0],m=C.CATALOG[this.tile.metric];
       if(this.period.mode==='sunrise'&&(this.tile.metric==='solar'||m.flow==='solar')){const full=this.view.from===this.base.from&&this.view.to===this.base.to;this.base=C.solarPlotWindow(this.base,primary.data.points||[],m.flow==='solar'?primary.data.summary:null);if(full)this.view={from:this.base.from,to:this.base.to};}
       const shunt=this.a.reading('shunt'),chargeEstimate=this.tile.metric==='chargeTime'?this.d.updateChargeEstimate(shunt,snapshot):null;
+      if(this.tile.metric==='chargeTime')$('tileDetailTitle').textContent=C.tileLabel(this.tile,chargeEstimate);
       let value=this.valueMode==='live'?C.signedValue(this.tile,C.liveValue(this.tile.metric,shunt,this.a.reading('solar'),snapshot,Date.now(),chargeEstimate)):C.signedValue(this.tile,C.historicalValue(this.tile.metric,primary.data.summary?.[this.valueMode],snapshot.settings.capacity||100));
       value=C.convert(value,this.tile.unit,this.tile.metric);
       const color=this.d.paint(this.tile.color,this.tile,true),reading=$('detailReading');reading.style.setProperty('--tile-color',color);reading.style.setProperty('--number-size','42px');
