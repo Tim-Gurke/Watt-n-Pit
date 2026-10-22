@@ -14,9 +14,9 @@ Die Screenshots zeigen die Bedienoberfläche mit frei erfundenen Beispieldaten. 
 
 | Dunkles Design | Helles Design |
 |---|---|
-| ![Watt’n’Pit: Übersicht mit Solar-, Akku- und Wetterkacheln, dunkel](docs/images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](docs/images/overview-light.png) |
+| ![Neue Hochkant-Vorlage mit zehn Kacheln im dunklen Design](docs/images/portrait-1.3.12-dark.png) | ![Dieselbe Hochkant-Vorlage im hellen Design](docs/images/portrait-1.3.12-light.png) |
 
-*Beispiele frei angepasster Übersichten. Die neue Hochkant-Standardansicht ist dreispaltig: links Ladezustand, automatische Akkuzeit, Spannung und aktuelle Batteriebilanz; daneben Solarleistung und Verbrauch; rechts Solarertrag und Bilanz. Darunter folgen Wetter und Ladephase.*
+*Die neue Hochkant-Standardansicht ist dreispaltig: links Ladezustand, automatische Akkuzeit, Spannung und aktuelle Batteriebilanz; daneben Solarleistung und Verbrauch; rechts Solarertrag und Bilanz. Darunter folgen Wetter und Ladephase. Werte, Farben, Größen und Positionen bleiben frei einstellbar.*
 
 Solarleistung und Solarertrag beginnen standardmäßig **seit Sonnenaufgang**; Verbrauch und Bilanz zählen **ab Mitternacht**, einschließlich des nächtlichen Verbrauchs. Alle vier Verlaufskacheln verwenden automatische Skalen. Neue Installationen und „Standardübersicht wiederherstellen“ erhalten diese Anordnung; beim Update bleiben gespeicherte eigene Übersichten erhalten.
 
@@ -29,7 +29,9 @@ Die Hochkant-Vorlage enthält zehn Kacheln und eine Verlaufshöhe von 465 Pixeln
 - **Restladezeit und Restlaufzeit automatisch:** Die bisherige Restladezeit-Kachel wechselt beim Laden zur Schätzung bis 100 % und beim Entladen zur Restlaufzeit vom SmartShunt. Titel und Zeit wechseln gemeinsam; bestehende Kacheln erhalten die Automatik direkt mit dem Update. Der Netto-Stromtrend wird über bis zu eine Minute gemittelt und ein Wechsel mit 30 Sekunden frischen Messwerten bestätigt. Bei ausgeglichener Bilanz oder fehlenden Werten steht „—“. Stunden, Minuten, Tage und Sekunden sind wählbar.
 - **Neue Hochkant-Vorlage:** Zehn Kacheln, kompaktere Größen, automatische Akkuzeit und Ladephase sowie 465 Pixel Verlaufshöhe. Vorhandene eigene Anordnungen bleiben gespeichert; neue Installationen oder **Standardübersicht wiederherstellen** verwenden die neue Vorlage.
 
-![Restladezeit bis 100 Prozent mit frei erfundenen Beispieldaten](docs/images/charge-time.png)
+| Beim Laden | Beim Entladen |
+|---|---|
+| ![Automatische Akkuzeit als Restladezeit bis 100 Prozent](docs/images/battery-time-charge.png) | ![Dieselbe Kachel als Restlaufzeit vom SmartShunt](docs/images/battery-time-runtime.png) |
 
 - **Daten nachladen:** Neben dem kompakten Play-/Pauseknopf steht auf der Übersicht ein eigener Nachladeknopf. Er prüft beide eingerichteten Geräte und ergänzt fehlende Archivwerte auch direkt nach einem abgebrochenen Abruf. Bereits gespeicherte Werte bleiben erhalten.
 - **Abbruch bestätigen:** Ein Tipp auf „Synchronisation abbrechen“ öffnet zuerst eine Bestätigung. „Weiter synchronisieren“ ist die sichere Vorauswahl; erst „Abbruch bestätigen“ beendet den Abruf.

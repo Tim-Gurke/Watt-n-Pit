@@ -61,9 +61,9 @@ Falls nichts ankommt: Bluetooth und Reichweite prüfen, VictronConnect vom Gerä
 
 | Dunkles Design | Helles Design |
 |---|---|
-| ![Übersicht mit Messkacheln, berechnetem Verbrauch und Wetterkachel, dunkel](images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](images/overview-light.png) |
+| ![Neue Hochkant-Vorlage mit zehn Kacheln im dunklen Design](images/portrait-1.3.12-dark.png) | ![Dieselbe Hochkant-Vorlage im hellen Design](images/portrait-1.3.12-light.png) |
 
-*Beispiele einer frei angepassten Übersicht. Die neue Standardvorlage umfasst zehn Kacheln; Werte, Farben, Größen und Positionen sind frei einstellbar.*
+*Die neue Standardvorlage umfasst zehn Kacheln; Werte, Farben, Größen und Positionen sind frei einstellbar.*
 
 Die neue Hochkant-Vorlage ist dreispaltig: links Ladezustand, automatische Restlade-/Restlaufzeit, Batteriespannung und die mit „Aktuell“ beschriftete Batteriebilanz. In der Mitte stehen Solarleistung und Verbrauch; rechts Solarertrag und Bilanz. Darunter liegen die flache Wetterkachel und die Ladephase. Der Verlauf ist standardmäßig 465 Pixel hoch. Vorhandene eigene Anordnungen werden beim Update erhalten. Neue Installationen und **Einstellungen → Standardübersicht wiederherstellen** erhalten die neue Vorlage.
 
@@ -85,7 +85,9 @@ Die Ladezeit verwendet einen Mittelwert über bis zu fünf Minuten der aktuellen
 
 Stunden sind voreingestellt; Minuten, Tage und Sekunden sowie Zahl und Rundinstrument sind wählbar. Die Großansicht verwendet dieselbe Automatik und zeigt die Erklärung. Historische Zeiträume und Vergleichskurven sind für diese Live-Kachel ausgeblendet. Die separate Kachel **Restlaufzeit** bleibt weiterhin verfügbar.
 
-![Restladezeit als frei erfundenes Beispiel](images/charge-time.png)
+| Beim Laden | Beim Entladen |
+|---|---|
+| ![Automatische Akkuzeit als Restladezeit bis 100 Prozent](images/battery-time-charge.png) | ![Dieselbe Kachel als Restlaufzeit vom SmartShunt](images/battery-time-runtime.png) |
 
 Solarleistung und Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. Nach Sonnenuntergang endet ihre Zeitachse dort; der erreichte Wh-Ertrag bleibt sichtbar. Verwertbare Erzeugung davor oder danach erweitert das Fenster und wird mitgezählt. Die Aufzeichnung läuft weiter. Ohne gültigen Sonnenuntergang reicht das Solarfenster mit erkennbarem Hinweis bis jetzt. Verbrauch und Bilanz beziehen sich auf **heute ab Mitternacht** und enthalten damit auch die Nacht. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
 
