@@ -53,6 +53,7 @@ jobs:
           node tools/tile-detail-smoke.cjs
           node tools/mini-history-smoke.cjs
           node tools/reload-daily-smoke.cjs
+          node tools/charge-time-smoke.cjs
           node tools/lifecycle-smoke.cjs
           node tools/background-sync-smoke.cjs
       - uses: actions/upload-artifact@v4

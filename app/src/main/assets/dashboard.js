@@ -13,6 +13,7 @@
   class WattDashboard {
     constructor(adapter) {
       this.a=adapter;this.board=$('dashboardBoard');this.weatherContent=$('weatherStrip');this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
+      this.chargeEstimator=new C.ChargeEstimator();this.chargeDemo=null;this.chargeEstimate=null;
       let stored;
       try { stored=JSON.parse(adapter.native?.dashboard?adapter.native.dashboard():localStorage.getItem('wattpit-dashboard-v1') || '{}'); } catch (_) { stored={}; }
       this.config=C.normalize(stored);this.saved=copy(this.config);this.history=$('miniHistory');
@@ -202,9 +203,16 @@
       for(const kind of Object.keys(result))result[kind].summary={...this.summary(result[kind].points),last:totals[kind],coverage:1,from:kind==='solar'?solarFrom:window.from,to:kind==='solar'?solarTo:window.to};
       return result;
     }
+    updateChargeEstimate(shunt=this.a.reading('shunt'),snapshot=this.a.getSnapshot()) {
+      const demo=this.a.isDemo();
+      if(demo!==this.chargeDemo){this.chargeEstimator.reset();this.chargeDemo=demo;}
+      this.chargeEstimate=this.chargeEstimator.update(shunt,snapshot.settings.capacity,Date.now());
+      return this.chargeEstimate;
+    }
     update() {
       if(this.a.isBlocked?.()||!this.a.getSnapshot)return;
       const snapshot=this.a.getSnapshot(),shunt=this.a.reading('shunt'),solar=this.a.reading('solar'),now=this.a.dataTime?.()??Date.now();
+      this.updateChargeEstimate(shunt,snapshot);
       const flowWindow=C.windowFor({metric:'energyBalance',type:'chart',period:this.config.energyPeriod},now,snapshot.weather);
       const solarTile=this.config.tiles.find(t=>t.metric==='solarEnergy'),solarWindow=solarTile?C.windowFor(solarTile,now,snapshot.weather):flowWindow;
       const solarFrom=solarTile?.period.mode==='sunrise'?solarWindow.solarFrom??solarWindow.from:flowWindow.from;
@@ -224,7 +232,7 @@
         let data=window?this.data(t,m.flow?flowWindow:query,m.flow?solarFrom:query.from,m.flow?solarTo:query.to):null;
         if(window&&t.period.mode==='sunrise'&&(t.metric==='solar'||m.flow==='solar'))window=C.solarPlotWindow(window,data?.points||[],m.flow==='solar'?data?.summary:null);
         if(window?.solarFrom!=null&&t.metric==='solar'&&!m.flow&&data){const points=(data.points||[]).filter(p=>p.t>=window.from&&p.t<=window.to);data={...data,points,summary:this.summary(points)};}
-        let value=C.displayValue(t,data?.summary,shunt,solar,snapshot);
+        let value=C.displayValue(t,data?.summary,shunt,solar,snapshot,this.chargeEstimate);
         value=C.convert(value,t.unit,t.metric);
         const reading=`<strong class="tile-number">${esc(C.format(value,t))}</strong><span class="tile-unit">${C.finite(value) && !m.status?esc(t.unit):!m.status?esc(t.unit):''}</span>`;
         const visual=el.querySelector('.tile-visual');
@@ -233,6 +241,7 @@
         else visual.innerHTML=`<div class="tile-reading">${reading}</div>`;
         let hint=window?`${aggregateNames[t.period.aggregate]} · ${this.periodLabel(t,window)}`:m.kind==='shunt'?'SmartShunt':'SmartSolar';
         if(!window && t.metric==='remaining' && !C.finite(value))hint=shunt?.current>.03?'Akku wird geladen':'Wert vom SmartShunt';
+        if(t.metric==='chargeTime')hint=C.chargeHint(this.chargeEstimate);
         if(!window && t.metric==='solar' && solar?.state!=null)hint=C.PHASES[solar.state] || 'Ladephase '+solar.state;
         if(!window && t.metric==='power' && C.finite(shunt?.power))hint=shunt.power>.4?'Akku wird geladen':shunt.power<-.4?'Akku wird entladen':'Bilanz ausgeglichen';
         if(m.energy&&!data?.error)hint=t.period.mode==='sunrise'?`${this.periodLabel(t,window)} · ${Math.floor((data?.summary?.coverage||0)*100)} %`:`Berechnet · ${this.periodLabel(t,window)} · ${Math.floor((data?.summary?.coverage||0)*100)} % erfasst`;

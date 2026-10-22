@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.3.10** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.10/Watt-n-Pit-v1.3.10.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.3.11** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.11/Watt-n-Pit-v1.3.11.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -70,6 +70,12 @@ Auf schmalen Bildschirmen stehen der schmale Ladezustand und die breitere Solarl
 ![Breite Ansicht mit Werkzeugen und Empfangszustand oben im kompakten Kopf](images/overview-landscape.png)
 
 Die Restlaufzeit kann über **+ Kachel → Akku → Restlaufzeit** ergänzt werden; Stunden sind weiterhin die voreingestellte Einheit.
+
+**+ Kachel → Akku → Restladezeit** ergänzt eine eigene Kachel für die geschätzte Ladezeit bis 100 %. Unter **Einstellungen** muss die tatsächliche Batteriekapazität in Ah eingetragen sein. Die Rechnung lautet: fehlende Ah geteilt durch den mittleren Netto-Ladestrom. Beispiel: Bei 70 % von 100 Ah und konstant 10 A in den Akku sind es ungefähr 3 Stunden. Verbraucher und sämtliche am Shunt erfassten Ladequellen sind im Netto-Strom bereits enthalten.
+
+Der Ladestrom wird zeitgewichtet über die letzten fünf Minuten gemittelt. Direkt nach dem Start verwendet die Schätzung den bisher empfangenen Abschnitt und zeigt „Mittelung läuft an“. Das **≈** kennzeichnet die Näherung; wechselnde Sonne, veränderter Verbrauch und das Absenken des Ladestroms gegen Ladeende können die tatsächliche Zeit verlängern. Bei Entladung oder ohne nennenswerten Ladestrom steht **„Wird nicht geladen“**; ist der Mittelwert noch negativ, erscheint **„Noch kein stabiler Ladestrom“**. Fehlende oder mehr als 45 Sekunden alte Livewerte ergeben **—**. Nach einer Empfangspause beginnt die Mittelung neu. Erst bei gemeldeten 100 % stehen 0 Stunden und **„100 % laut SmartShunt“**.
+
+Stunden sind voreingestellt; Minuten, Tage und Sekunden sowie Zahl und Rundinstrument sind wählbar. Die Großansicht zeigt denselben aktuellen Schätzwert mit Erklärung. Historische Zeiträume und Vergleichskurven werden für diese reine Live-Schätzung ausgeblendet. Die neue Kachel ist optional und verändert vorhandene Anordnungen nicht.
 
 Solarleistung und Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. Nach Sonnenuntergang endet ihre Zeitachse dort; der erreichte Wh-Ertrag bleibt sichtbar. Verwertbare Erzeugung davor oder danach erweitert das Fenster und wird mitgezählt. Die Aufzeichnung läuft weiter. Ohne gültigen Sonnenuntergang reicht das Solarfenster mit erkennbarem Hinweis bis jetzt. Verbrauch und Bilanz beziehen sich auf **heute ab Mitternacht** und enthalten damit auch die Nacht. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
 
