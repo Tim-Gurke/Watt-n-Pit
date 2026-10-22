@@ -223,8 +223,8 @@ public final class ArchiveService extends Service {
     private void runImports(){
         try {
             List<String> queue=new ArrayList<>();
-            if(automatic){JSONArray configs=repository.automaticArchiveDevices("RETRY".equals(mac));for(int i=0;i<configs.length();i++)queue.add(configs.getJSONObject(i).getString("mac"));}
-            else queue.add(mac);
+            JSONArray configs=repository.requestedArchiveDevices(mac);for(int i=0;i<configs.length();i++)queue.add(configs.getJSONObject(i).getString("mac"));
+            if(queue.isEmpty()&&!automatic){repository.archiveState(mac,false,"Keine Geräte zum Nachladen eingerichtet.",0,0);repository.message("Bitte zuerst ein Gerät einrichten.");}
             for(String next:queue){if(cancelled)break;mac=next;stage="Verbindung";changed=missing=unmapped=processed=total=unknown=blocks=skipped=0;negotiatedMtu=23;disconnectStatus=0;link=new ArchiveLink();synchronized(diagnostics){diagnostics.clear();}received.clear();messages.clear();stream=new ArchiveCodec.Stream();runImport();}
         }catch(Exception e){repository.archiveState(mac,false,"Import konnte nicht vorbereitet werden.",0,0);}
         finally{main.post(this::stopSelf);}

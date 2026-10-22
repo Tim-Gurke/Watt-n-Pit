@@ -43,7 +43,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
    await page.locator('#syncOpen').click();await page.locator('#syncBackground').scrollIntoViewIfNeeded();await page.locator('#syncBackground').click();assert.equal(await page.locator('#activityOverlay').isVisible(),false);
   }
  }
- await page.locator('#syncOpen').click();await page.locator('#syncCancel').click();assert.equal(await page.evaluate(()=>window.cancelCalls),1);assert.equal(await page.locator('#syncCancel').isDisabled(),true);
+ await page.locator('#syncOpen').click();await page.locator('#syncCancel').click();assert.equal(await page.evaluate(()=>window.cancelCalls),0);await page.locator('#syncCancelConfirm').click();assert.equal(await page.evaluate(()=>window.cancelCalls),1);assert.equal(await page.locator('#syncCancel').isDisabled(),true);
  await page.evaluate(()=>{Object.assign(window.run,{busy:false,background:false});window.saveRun();window.archive={active:false,text:'Abgebrochen. Gespeicherte Daten bleiben erhalten.'};window.finished=true;window.fixture.historyRevision++;poll();});
  assert.equal(await page.locator('#syncCompact').isVisible(),false);assert.equal(await page.locator('#activityOverlay').isVisible(),false);assert.equal(await page.locator('#capacitySetting').inputValue(),'125');
  await page.evaluate(()=>{Object.assign(window.run,{busy:true,background:false,runId:2,startedAt:Date.now()});window.saveRun();poll();});assert.equal(await page.locator('#syncWaiting').isVisible(),true,'next run reused background choice');

@@ -36,7 +36,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  await page.evaluate(()=>{window.archive={active:false,text:'Erstes Gerät fertig'};poll();});assert.equal(await page.locator('#syncWaiting').isVisible(),true,'overlay disappeared between devices');assert.equal(await page.locator('#syncWaitingProgress').getAttribute('value'),null);
  await page.evaluate(()=>{window.archive={active:true,device:'SmartShunt · Beispiel',text:'Verbindung',done:0,total:0};poll();});assert.match(await page.locator('#syncDevice').textContent(),/SmartShunt/);
  assert.equal(await page.evaluate(()=>window.heavyCalls),calls,'history was recomputed during import');
- await page.locator('#syncCancel').click();assert.equal(await page.evaluate(()=>window.cancelCalls),1);assert.equal(await page.locator('#syncCancel').isDisabled(),true);
+ await page.locator('#syncCancel').click();assert.equal(await page.evaluate(()=>window.cancelCalls),0);await page.locator('#syncCancelConfirm').click();assert.equal(await page.evaluate(()=>window.cancelCalls),1);assert.equal(await page.locator('#syncCancel').isDisabled(),true);
  await page.evaluate(()=>{window.busy=false;window.archive={active:false,text:'Import abgebrochen. Werte bleiben gespeichert.'};window.fixture.historyRevision++;poll();});
  assert.equal(await page.locator('#activityOverlay').isVisible(),false);assert.equal(await page.locator('#pendingEdit').inputValue(),'Unfertige Änderung');assert.equal(await page.locator('#modal').isVisible(),true);assert.equal(await page.evaluate(()=>document.body.style.overflow),'hidden');
  await page.locator('#closeModal').click();await page.locator('[data-page="settings"]').click();await page.locator('#capacitySetting').fill('125');

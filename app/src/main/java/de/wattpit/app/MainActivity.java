@@ -236,6 +236,12 @@ public final class MainActivity extends Activity {
     }
 
     private boolean repositoryArchiveActive(){return repository.archiveBusy;}
+    private void requestArchive(String target){
+        runOnUiThread(()->{
+            if(repositoryArchiveActive()||pendingArchive!=null){repository.message("Ein Archivimport läuft bereits oder wird vorbereitet.");return;}
+            pendingArchive=target;requestStart();
+        });
+    }
     final class Bridge {
         @JavascriptInterface public String appVersion(){return BuildConfig.VERSION_NAME;}
         @JavascriptInterface public String syncState(){return repository.syncState();}
@@ -254,6 +260,7 @@ public final class MainActivity extends Activity {
                             case "dashboardHistory":data=repository.db.dashboardData(from,to,args.getString(2));break;
                             case "energyHistoryWindow":data=repository.db.energyFlow(from,to,args.getLong(3),args.getLong(4),args.getString(2));break;
                             case "energyHistory":data=repository.db.energyFlow(from,to,args.getLong(3),args.getString(2));break;
+                            case "dailyEnergy":data=repository.db.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}")));break;
                             default:throw new IllegalArgumentException();
                         }
                         response.put("id",id).put("data",data);
@@ -297,12 +304,17 @@ public final class MainActivity extends Activity {
             try{return repository.db.energyFlow(from,to,solarFrom,solarTo,source).toString();}
             catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
         }
+        @JavascriptInterface public String dailyEnergy(long from,long to,long revision,long slot){
+            try{return repository.db.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}"))).toString();}
+            catch(Exception e){return "{\"days\":[],\"error\":\"Tagesverbrauch konnte nicht geladen werden.\"}";}
+        }
         @JavascriptInterface public void searchWeather(String query){files.execute(()->{try{call("onWeatherSearch",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onWeatherSearch",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte Verbindung prüfen und erneut suchen."));}catch(JSONException ignored){}}});}
         @JavascriptInterface public String weatherPlace(String json){try{WeatherClient.place(repository,new JSONObject(json));return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public void refreshWeather(){WeatherClient.refresh(repository,true);}
         @JavascriptInterface public String saveEquipment(String json){try{if(json.length()>20000)throw new IllegalArgumentException("Die Anlagenkonfiguration ist zu groß.");repository.saveEquipment(new JSONObject(json));return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public String copyArchiveDiagnostics(){try{String text=repository.diagnosticText();runOnUiThread(()->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Watt’n’Pit-Archivdiagnose",text)));return "";}catch(Exception e){return Repository.safeError(e);}}
-        @JavascriptInterface public void importArchive(String mac) {runOnUiThread(()->{if(repositoryArchiveActive()){repository.message("Ein Archivimport läuft bereits.");return;}pendingArchive=mac;requestStart();});}
+        @JavascriptInterface public void importArchive(String mac) {requestArchive(mac);}
+        @JavascriptInterface public void importMissingArchive(){requestArchive("MANUAL");}
         @JavascriptInterface public void cancelArchive(){runOnUiThread(()->startService(new Intent(MainActivity.this,ArchiveService.class).setAction("CANCEL")));}
         @JavascriptInterface public void start() { runOnUiThread(MainActivity.this::requestStart); }
         @JavascriptInterface public void stop() {

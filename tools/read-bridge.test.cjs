@@ -1,5 +1,12 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const Bridge=require('../app/src/main/assets/read-bridge.js');
+test('calendar-day consumption is asynchronous even without a running import and preserves unknown and zero',()=>{
+ const requests=[],ready=[];const b=new Bridge({dailyEnergy:()=>{throw Error('Synchronous daily query');},requestHistory:json=>requests.push(JSON.parse(json))},method=>ready.push(method));
+ assert.equal(JSON.parse(b.bridge.dailyEnergy(0,100000,1,10)).pending,true);assert.equal(requests.length,1);
+ const days=[{day:'2026-10-20',last:null,coverage:0},{day:'2026-10-21',last:0,coverage:1}];b.result({id:requests[0].id,data:{days}});
+ assert.deepEqual(JSON.parse(b.bridge.dailyEnergy(0,100000,1,10)).days,days);assert.equal(requests.length,1);assert.deepEqual(ready,['dailyEnergy']);
+ assert.equal(JSON.parse(b.bridge.dailyEnergy(0,100000,2,10)).pending,true);assert.equal(requests.length,2,'newly imported data must invalidate the old day summaries');
+});
 function setup(){const requests=[],calls=[];let notifications=0;const raw={history:(...args)=>{calls.push(args);return JSON.stringify({points:[{t:args[0],v:42}]});},energyHistoryWindow:()=>JSON.stringify({solar:{summary:{last:100}},consumption:{summary:{last:150}},balance:{summary:{last:-50}}}),requestHistory:json=>requests.push(JSON.parse(json)),settings:json=>json};const b=new Bridge(raw,()=>notifications++);return {b,requests,calls,notifications:()=>notifications};}
 test('ordinary reads and settings preserve the native interface',()=>{const {b,calls}=setup();assert.equal(JSON.parse(b.bridge.history(0,100000,'power','all')).points[0].v,42);assert.equal(calls.length,1);assert.equal(b.bridge.settings('ok'),'ok');});
 test('busy energy requests are asynchronous and never invent zero Wh',()=>{const {b,requests,calls}=setup();b.state({busy:true,runId:1});const result=JSON.parse(b.bridge.energyHistoryWindow(0,100000,'all',1000,90000));assert.equal(result.pending,true);for(const key of ['solar','consumption','balance']){assert.equal(result[key].summary.last,undefined);assert.equal(result[key].pending,true);}assert.equal(requests.length,1);assert.equal(calls.length,0);});

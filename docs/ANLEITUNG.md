@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.3.9** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.9/Watt-n-Pit-v1.3.9.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.3.10** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.10/Watt-n-Pit-v1.3.10.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -23,6 +23,12 @@ Die sechsstellige **Bluetooth-PIN** wird für die Android-Kopplung verwendet. Si
 Die Berechtigung für **Geräte in der Nähe** erlauben. Auf Android 8–11 sind für die Gerätesuche außerdem Standortberechtigung und eingeschalteter Standortdienst nötig. Watt’n’Pit zeichnet keinen Standort auf.
 
 ## 2. Gerätearchive automatisch ergänzen
+
+Auf der Übersicht stehen **Play/Pause** und **Daten nachladen** in derselben Zeile. Der kleine Playknopf steuert die laufende Aufzeichnung. **Daten nachladen** gleicht die Archive beider eingerichteten Geräte ab und ergänzt die fehlenden Messgrößen und Zeitabschnitte. Dieser ausdrücklich gestartete Abruf ist auch während der automatischen Wartezeit nach einem Abbruch möglich, sobald der vorige Lauf beendet ist. Unter **Geräte → Gerätearchiv ergänzen** lässt sich weiterhin ein einzelnes Gerät abrufen.
+
+![Play/Pause und Daten nachladen sind getrennte Knöpfe](images/reload-controls.png)
+
+**Synchronisation abbrechen** beendet den Abruf erst nach einem zweiten bewussten Schritt: **Abbruch bestätigen**. **Weiter synchronisieren** schließt die Rückfrage und lässt den Abruf weiterlaufen. Ein versehentlicher Tipp auf die neu eingeblendete Warteanzeige beendet damit nicht unmittelbar die Synchronisation.
 
 Ab 1.3.9 berücksichtigt der Abruf die gerundeten Gerätezeiten und die unterschiedlich alten Archivstufen. Gröbere Intervalle werden entsprechend dem Gerätearchiv verwendet; tatsächlich gelieferte Messungen behalten ihre Zeiten und Auflösungen. Eine normale Antwort am Ende einer Stufe führt nicht mehr zum wiederholten Neuplanen desselben Kanals. Beide Bluetooth-Datenkanäle erhalten die nötigen Empfangsfreigaben. Die Dauer des letzten Geräteabrufs steht in der kopierbaren Diagnose.
 
@@ -155,7 +161,11 @@ Unter **Verlauf** den Zeitraum und die Messgröße wählen. **Alle Daten**, **Au
 
 Mit **+ / −** die Zeitachse zoomen. Mit einem Finger die Zeitachse verschieben, mit zwei Fingern zoomen und durch Antippen einzelne Werte ansehen. Lange Zeiträume bündeln Messwerte; die Schattierung zeigt die ursprünglichen Minima und Maxima. **Zurücksetzen** stellt die Achsen zurück.
 
-Die kleine Verlaufskarte auf der Übersicht bietet ebenfalls **Seit Sonnenaufgang**, **Heute** oder **Letzte 6 Stunden**. Diese Auswahl ist unabhängig vom großen Verlauf und den einzelnen Kacheln.
+Die kleine Verlaufskarte auf der Übersicht bietet **Seit Sonnenaufgang**, **Heute**, **Gestern**, **Woche**, **Monat**, **Letzte 6 Stunden** und **Letzte 24 Stunden**. Diese Auswahl ist unabhängig vom großen Verlauf und den einzelnen Kacheln.
+
+Im **Solar-Tagesarchiv** unter dem Verlauf steht neben dem importierten Ertrag der **berechnete Verbrauch in Wh**. Er gilt für den lokalen Kalendertag einschließlich der Nacht und verwendet die vorhandenen Solar- und Shunt-Messungen. Die Prozentangabe zeigt die zeitliche Abdeckung; Lücken werden nicht hochgerechnet. „—“ bedeutet, dass keine verwertbaren Messabschnitte vorhanden sind, und ist von einem gemessenen Nullverbrauch zu unterscheiden. Der heutige Wert ist vorläufig. Der Regler-Tagesertrag und der berechnete Verbrauch können wegen unterschiedlicher Datenquellen und Abdeckung nicht unmittelbar zu einer Bilanz subtrahiert werden. Die weiteren Tabellenspalten bleiben seitlich erreichbar.
+
+![Solar-Tagesarchiv mit berechnetem Verbrauch und erfasster Zeit](images/solar-daily-consumption.png)
 
 ## 7. Wetter und Solaranlage einstellen
 
@@ -169,7 +179,7 @@ Die Wetterkachel liegt im selben Raster wie die Messkacheln. **Anordnen** macht 
 
 *Einstellungen → Deine Solaranlage → Bearbeiten: Modulgruppen beschreiben und ihre Messwertquelle zuordnen. Die gezeigten Angaben sind frei erfunden.*
 
-Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.3.9 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
+Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.3.10 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
 
 ## 8. Einstellungen und Messdaten sichern
 

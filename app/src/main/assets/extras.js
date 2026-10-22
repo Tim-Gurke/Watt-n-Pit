@@ -11,7 +11,7 @@ window.WattExtras=class {
     document.getElementById('weatherOff').onclick=()=>this.place({off:true});
     document.getElementById('weatherRefresh').onclick=()=>{if(a.native)a.native.refreshWeather();else a.toast('Wetter ist in der Android-App verfügbar.');};
     document.getElementById('copyArchiveDiagnostics').onclick=()=>{if(!a.native?.copyArchiveDiagnostics){a.toast('Diagnose kopieren ist in der Android-App verfügbar.');return;}const error=a.native.copyArchiveDiagnostics();a.toast(error||'Diagnose ohne private Gerätedaten kopiert.');};
-    document.getElementById('archiveCancel').onclick=()=>a.native?.cancelArchive();
+    document.getElementById('archiveCancel').onclick=()=>a.cancelArchive();
     document.getElementById('deviceCards').addEventListener('click',e=>{const b=e.target.closest('.archive-import');if(!b)return;if(a.isDemo()){a.toast('Demo liest keine Geräte aus.');return;}if(a.native)a.native.importArchive(b.dataset.mac);else a.toast('Gerätearchive werden in der Android-App gelesen.');});
     window.onWeatherSearch=result=>{
       const query=document.getElementById('weatherQuery').value.trim();if(result.query!==query)return;

@@ -109,7 +109,46 @@ public final class ArchiveStorageProof {
         System.setProperty("wattpit.test.database",args[0]);Class.forName("org.sqlite.JDBC");
         Repository repo=Repository.get(new TestContext(Path.of(args[0]+".prefs")));HistoryDb history=repo.db;SQLiteDatabase db=history.getWritableDatabase();
         long epoch=1700000000000L;ArchiveCodec.Clock c=clock(epoch);
-        if(args[1].startsWith("capture_")){
+        if(args[1].equals("manual_queue")){
+            repo.prefs.edit().putString("devices",new JSONArray().put(new JSONObject().put("mac","manual-solar").put("kind","solar")).put(new JSONObject().put("mac","manual-shunt").put("kind","shunt")).toString()).commit();
+            repo.pauseAutomaticArchives();
+            require(repo.requestedArchiveDevices("AUTO").length()==0&&repo.requestedArchiveDevices("RETRY").length()==0,"automatic requests respect an explicit cancellation pause");
+            require(repo.requestedArchiveDevices("MANUAL").length()==2,"manual reload selects both configured devices during the cancellation pause");
+            require(repo.requestedArchiveDevices("manual-solar").length()==1&&repo.requestedArchiveDevices("unknown").length()==0,"manual single-device requests remain scoped to configured devices");
+            history.archiveBlock("manual-solar","solar","solar",0xec8a,30,Arrays.asList(new long[]{epoch+30000,30}),Arrays.asList(60.0),Arrays.asList(new long[]{epoch+30000,epoch+60000}));
+            repo.archiveAttemptStarted("manual-solar");repo.archiveAttemptFinished("manual-solar",true,false);
+            require(repo.requestedArchiveDevices("MANUAL").length()==2,"manual reload can be requested again immediately after cancellation");
+            require(count(db,"readings","device='manual-solar'")==1&&count(db,"archive_coverage","device='manual-solar'")==1,"manual retry selection preserves committed measurements and NA acknowledgements");
+        }else if(args[1].equals("daily_energy")){
+            TimeZone.setDefault(TimeZone.getTimeZone("Europe/Berlin"));java.time.ZoneId zone=java.time.ZoneId.systemDefault();
+            java.time.LocalDate day=java.time.LocalDate.of(2026,3,29);
+            long start=day.atStartOfDay(zone).toInstant().toEpochMilli(),end=day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
+            for(long t=start;t<=end;t+=1800000){
+                Reading solar=new Reading();solar.timestamp=t;solar.device="daily-solar";solar.kind="solar";solar.origin="archive";solar.period=1800;solar.solar=6.0;history.insert(solar);
+                Reading shunt=new Reading();shunt.timestamp=t;shunt.device="daily-shunt";shunt.kind="shunt";shunt.origin="archive";shunt.period=1800;shunt.voltage=12.0;shunt.current=-0.5;history.insert(shunt);
+            }
+            long monthStart=day.withDayOfMonth(1).atStartOfDay(zone).toInstant().toEpochMilli(),monthEnd=day.withDayOfMonth(1).plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli();
+            JSONArray days=history.dailyEnergy(monthStart,monthEnd,new JSONObject()).getJSONArray("days");JSONObject result=null;
+            for(int i=0;i<days.length();i++)if(days.getJSONObject(i).getString("day").equals(day.toString()))result=days.getJSONObject(i);
+            require(days.length()==31&&result!=null&&result.getLong("to")-result.getLong("from")==23*3600000L,"daily summaries follow local calendar days across daylight saving time");
+            require(Math.abs(result.getDouble("last")-276)<1e-8&&result.getDouble("coverage")==1,"a complete 23-hour day retains the existing consumption formula and full coverage");
+            require(Math.abs(result.getDouble("last")-history.energyFlow(start,end,"all").getJSONObject("consumption").getJSONObject("summary").getDouble("last"))<1e-8,"daily consumption equals the existing full-day energy history");
+            require(days.getJSONObject(0).isNull("last")&&days.getJSONObject(0).getDouble("coverage")==0,"days without raw measurements remain unknown instead of zero");
+            long partial=day.plusDays(2).atStartOfDay(zone).toInstant().toEpochMilli()+12*3600000L;
+            for(int i=0;i<2;i++){
+                Reading solar=new Reading();solar.timestamp=partial+i*1800000;solar.device="daily-solar";solar.kind="solar";solar.origin="archive";solar.period=1800;solar.solar=0.0;history.insert(solar);
+                Reading shunt=new Reading();shunt.timestamp=solar.timestamp;shunt.device="daily-shunt";shunt.kind="shunt";shunt.origin="archive";shunt.period=1800;shunt.voltage=12.0;shunt.current=0.0;history.insert(shunt);
+            }
+            days=history.dailyEnergy(monthStart,monthEnd,new JSONObject()).getJSONArray("days");result=days.getJSONObject(30);
+            require(result.getDouble("last")==0&&result.getLong("coveredMillis")==1800000&&result.getDouble("coverage")<0.03,"measured zero is retained with partial coverage without filling the surrounding gap");
+            java.time.LocalDate nightDay=java.time.LocalDate.of(2026,3,28);long night=nightDay.atStartOfDay(zone).toInstant().toEpochMilli();
+            for(long t=night;t<=night+4*3600000L;t+=1800000){
+                Reading shunt=new Reading();shunt.timestamp=t;shunt.device="daily-shunt";shunt.kind="shunt";shunt.origin="archive";shunt.period=1800;shunt.voltage=12.0;shunt.current=-1.0;history.insert(shunt);
+            }
+            JSONObject weather=new JSONObject().put("days",new JSONArray().put(new JSONObject().put("day",nightDay.toString()).put("sunrise",night+7*3600000L).put("sunset",night+19*3600000L)));
+            days=history.dailyEnergy(monthStart,monthEnd,weather).getJSONArray("days");result=days.getJSONObject(27);
+            require(Math.abs(result.getDouble("last")-48)<1e-8&&result.getLong("coveredMillis")==4*3600000L,"known night-time consumption uses observed shunt data without inventing daylight solar measurements");
+        }else if(args[1].startsWith("capture_")){
             CapturedVictronDevice peer=new CapturedVictronDevice(Path.of(args[2]));
             if(args[1].equals("capture_write")){
                 captureIncoming(peer);int requests=captureImport(history,peer);require(requests>0&&requests<500,"actual HistoryDb import completes the captured 45-day archive in fewer than 500 block reads with zero replans");captureValues(db,peer);
@@ -167,13 +206,14 @@ public final class ArchiveStorageProof {
             JSONObject heights=new JSONObject(repo.prefs.getString("dashboard-v1","{}")).getJSONObject("historyHeight");
             require(repo.prefs.getString("miniRange","").equals("month")&&heights.getInt("compact")==460&&heights.getInt("wide")==640,"fresh JVM retains overview range and both history heights");
         }else if(args[1].equals("metadata_resume")){
-            JSONArray configs=repo.configs();long now=System.currentTimeMillis();
+            // Use the fixture's elapsed time; runner speed must not age past its live buffer.
+            JSONArray configs=repo.configs();long now=repo.prefs.getLong("proofFixtureTime",0)+120000;
             require(repo.archiveNeedsData(configs.getJSONObject(0),now),"cached device layout survives restart and finds the remaining gap");
             require(!repo.archiveNeedsData(configs.getJSONObject(1),now),"cached device layout survives restart without restarting a complete device");
         }else{
             long end=21*86400L,now=System.currentTimeMillis()/1000*1000,base=now-end*1000;c=clock(base);
             JSONObject solar=new JSONObject().put("mac","live-solar").put("kind","solar"),shunt=new JSONObject().put("mac","live-shunt").put("kind","shunt");
-            repo.prefs.edit().putString("devices",new JSONArray().put(solar).put(shunt).toString()).putInt("sampleSeconds",60).commit();
+            repo.prefs.edit().putString("devices",new JSONArray().put(solar).put(shunt).toString()).putInt("sampleSeconds",60).putLong("proofFixtureTime",now).commit();
             db.beginTransaction();try{
                 for(long t=0;t<=end+300;t+=60){
                     Reading s=new Reading();s.timestamp=base+t*1000;s.device="live-solar";s.kind="solar";s.period=60;s.solar=60.0;history.insert(s);

@@ -13,7 +13,8 @@ function repaintReads(){
   if(page==='history')loadHistory();
   dashboard?.detail?.refresh(false);
 }
-const reads=deviceNative&&window.WattReadBridge?new window.WattReadBridge(deviceNative,()=>{
+const reads=deviceNative&&window.WattReadBridge?new window.WattReadBridge(deviceNative,method=>{
+  if(method==='dailyEnergy'){if(page==='history')renderDaily();return;}
   readsDirty=true;clearTimeout(readRepaint);readRepaint=setTimeout(repaintReads,80);
 }):null;
 const native=reads?.bridge||deviceNative;
@@ -44,7 +45,7 @@ let snapshot = {running:false,status:'Aufzeichnung pausiert',devices:[],found:[]
 let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastMiniLoad = 0, miniPoints = [], miniWindow = null, miniKey = '', energyData = null;
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
-let currentImport = null, lastHistoryRevision=-1, historyPending=false;
+let currentImport = null, lastHistoryRevision=-1, historyPending=false, archiveRequestedUntil=0;
 let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null;
 const overviewLandscape = window.matchMedia('(orientation: landscape)');
 
@@ -121,6 +122,10 @@ function renderOverview() {
   $('overviewRecord').disabled = demo;
   $('recordIcon').innerHTML = icon(snapshot.running ? 'pause' : 'play');
   $('recordText').textContent = demo ? 'Demo · keine echten Messwerte' : snapshot.running ? 'Aufzeichnung pausieren' : 'Aufzeichnung starten';
+  $('overviewRecord').setAttribute('aria-label',$('recordText').textContent);$('overviewRecord').title=$('recordText').textContent;
+  const loading=!!snapshot.archiveBusy||!!snapshot.archive?.active||!!lifecycle?.busy;
+  $('reloadArchive').disabled=demo||!snapshot.devices.length||loading||Date.now()<archiveRequestedUntil;
+  $('reloadArchiveText').textContent=loading?'Nachladen läuft …':'Daten nachladen';
   dashboard?.update();
 }
 function renderDevices(force=false) {
@@ -169,6 +174,11 @@ function toggleRecord() {
   if (!native) { toast('Bluetooth-Empfang ist in der Android-App verfügbar.'); return; }
   if (snapshot.running) native.stop(); else native.start();
   setTimeout(poll,400);
+}
+function reloadMissingData(){
+  if(demo||!snapshot.devices.length||lifecycle?.busy||snapshot.archiveBusy)return;
+  if(!native?.importMissingArchive){toast('Daten nachladen ist in der Android-App verfügbar.');return;}
+  archiveRequestedUntil=Date.now()+1500;renderOverview();native.importMissingArchive();setTimeout(poll,250);
 }
 function openModal(title,content) {
   $('modalTitle').textContent = title; $('modalBody').innerHTML = content; $('modal').hidden = false;
@@ -380,7 +390,21 @@ $('historyChart').addEventListener('pointercancel',event=>{pointers.delete(event
 function renderDaily() {
  let el=$('solarDailyArchive'); if(!el){el=document.createElement('article');el.id='solarDailyArchive';el.className='card';$('historyStats').after(el);}
  const rows=snapshot.solarDaily||[];el.hidden=!rows.length;
- el.innerHTML='<h2>Solar-Tagesarchiv</h2><p class="muted">Importierte Tageswerte · keine Live-Messpunkte. Heute kann noch unvollständig sein.</p><div style="overflow-x:auto"><table><thead><tr><th>Tag</th><th>Ertrag Wh</th><th>Maximum W</th><th>Batterie min/max V</th></tr></thead><tbody>'+rows.map(r=>`<tr><td>${escapeHtml(r.day)}</td><td>${num(r['Yield(Wh)'])}</td><td>${num(r['Max. PV power(W)'])}</td><td>${num(r['Min. battery voltage(V)'],2)} / ${num(r['Max. battery voltage(V)'],2)}</td></tr>`).join('')+'</tbody></table></div>';
+ const months=new Map(),consumption=new Map(),waiting=new Set();
+ if(!demo&&native?.dailyEnergy)for(const row of rows){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(row.day))continue;const month=row.day.slice(0,7);if(months.has(month))continue;
+  const start=new Date(month+'-01T00:00:00'),end=new Date(start);end.setMonth(end.getMonth()+1);
+  if(start.getTime()>=dataTime())continue;
+  try{const data=JSON.parse(native.dailyEnergy(start.getTime(),end.getTime(),snapshot.historyRevision||0,Math.floor(dataTime()/30000)));
+   months.set(month,data);if(data.pending)waiting.add(month);for(const day of data.days||[])consumption.set(day.day,day);
+  }catch(_){months.set(month,{});}
+ }
+ el.innerHTML='<h2>Solar-Tagesarchiv</h2><p class="muted">Ertrag: Tageswerte des Solarladereglers. Verbrauch: aus Solar- und Shunt-Messungen berechnet, einschließlich der Nacht. Messlücken bleiben unberechnet; heute ist vorläufig.</p><div style="overflow-x:auto" tabindex="0" aria-label="Tagesarchiv, weitere Spalten seitlich erreichbar"><table><thead><tr><th>Tag</th><th>Ertrag Wh</th><th>Verbrauch Wh</th><th>Maximum W</th><th>Batterie min/max V</th></tr></thead><tbody>'+rows.map(r=>{
+  const day=consumption.get(r.day),known=day?.last!=null&&Number.isFinite(Number(day.last));
+  const amount=known?num(day.last,2):waiting.has(r.day.slice(0,7))?'…':'—';
+  const coverage=known?`${Math.floor(Math.max(0,Math.min(1,day.coverage||0))*100)} % erfasst`:waiting.has(r.day.slice(0,7))?'wird berechnet':'keine Messdaten';
+  return `<tr><td>${escapeHtml(r.day)}</td><td>${num(r['Yield(Wh)'])}</td><td>${amount}<span class="daily-coverage">${coverage}</span></td><td>${num(r['Max. PV power(W)'])}</td><td>${num(r['Min. battery voltage(V)'],2)} / ${num(r['Max. battery voltage(V)'],2)}</td></tr>`;
+ }).join('')+'</tbody></table></div>';
 }
 function chooseImport(){if(native)native.chooseImport();else toast('CSV-Dateien werden in der Android-App importiert.');}
 function chooseExport(){if(native)native.chooseExport();else toast('Der Export ist in der Android-App verfügbar.');}
@@ -423,6 +447,7 @@ $('themeToggle').onclick=()=>theme(snapshot.settings.theme==='dark'?'light':'dar
 $('setupFirst').onclick=()=>showPage('devices');$('demoFirst').onclick=()=>setDemo(true);$('exitDemo').onclick=()=>setDemo(false);
 $('settingsDemo').onclick=()=>{setDemo(!demo);showPage('overview');};
 $('openHistory').onclick=()=>showPage('history');$('overviewRecord').onclick=toggleRecord;$('scanButton').onclick=toggleRecord;
+$('reloadArchive').onclick=reloadMissingData;
 $('addDevice').onclick=()=>deviceForm();$('closeModal').onclick=closeModal;
 $('modal').onclick=event=>{if(event.target===$('modal'))closeModal();};
 document.addEventListener('keydown',event=>{if(event.key==='Escape')window.handleBack();if(event.key==='Tab'&&!$('modal').hidden){const items=[...$('modal').querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),summary')].filter(el=>el.offsetParent);if(!items.length)return;const first=items[0],last=items[items.length-1];if(event.shiftKey&&document.activeElement===first){last.focus();event.preventDefault();}else if(!event.shiftKey&&document.activeElement===last){first.focus();event.preventDefault();}}});
@@ -442,7 +467,7 @@ lifecycle=new window.WattLifecycle({native,toast,poll,stateChanged:state=>reads?
 lifecycle.poll();
 dashboard = new window.WattDashboard({native,resizeMini:drawMini,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
-extras = new window.WattExtras({native,getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
+extras = new window.WattExtras({native,getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,cancelArchive:()=>lifecycle.confirmCancellation(),repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
 configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,dashboard,equipment,openModal,closeModal,toast,applied:backup=>{
   settingsDirty=false;poll();
   dashboard.config=window.WattDashboardCore.normalize(backup.dashboard);dashboard.saved=JSON.parse(JSON.stringify(dashboard.config));dashboard.cache.clear();

@@ -226,6 +226,43 @@ final class HistoryDb extends SQLiteOpenHelper {
     JSONObject energyFlow(long from,long to,String source) throws Exception {
         return energyFlow(from,to,from,source);
     }
+    /** Calendar-day summaries of the existing energy flow, read once per month off the UI thread. */
+    JSONObject dailyEnergy(long from,long to,JSONObject weather)throws Exception{
+        if(from<0||to<=from||to-from>32L*86400000)throw new IllegalArgumentException("Ungültiger Tageszeitraum.");
+        long end=Math.min(to,System.currentTimeMillis());JSONArray days=new JSONArray();
+        if(end<=from)return new JSONObject().put("days",days);
+        List<SampleTimeline.Interval> solar=SampleTimeline.intervals(powerSamples(from,end,"solar","all"),from,end,false);
+        List<SampleTimeline.Interval> battery=batteryIntervals(from,end,"all",null);
+        java.time.ZoneId zone=java.time.ZoneId.systemDefault();
+        java.time.LocalDate day=java.time.Instant.ofEpochMilli(from).atZone(zone).toLocalDate();
+        JSONArray sunDays=weather.optJSONArray("days");
+        while(day.atStartOfDay(zone).toInstant().toEpochMilli()<end){
+            long start=Math.max(from,day.atStartOfDay(zone).toInstant().toEpochMilli());
+            long dayEnd=day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),next=Math.min(end,dayEnd);
+            long solarFrom=start,solarTo=next;
+            if(sunDays!=null)for(int i=0;i<sunDays.length();i++){
+                JSONObject sun=sunDays.getJSONObject(i);if(!day.toString().equals(sun.optString("day")))continue;
+                long rise=sun.optLong("sunrise"),set=sun.optLong("sunset");
+                if(rise>=start&&rise<dayEnd)solarFrom=Math.min(next,rise);
+                if(set>rise&&set<=dayEnd&&set>start)solarTo=Math.min(next,set);
+                break;
+            }
+            EnergyIntegral.Result result=EnergyIntegral.flowIntervals(clipIntervals(solar,start,next),clipIntervals(battery,start,next),start,next,solarFrom,solarTo).consumption;
+            days.put(new JSONObject().put("day",day.toString()).put("last",result.wh==null?JSONObject.NULL:result.wh)
+                    .put("coverage",result.coverage(start,next)).put("coveredMillis",result.coveredMillis).put("from",start).put("to",next));
+            day=day.plusDays(1);
+        }
+        return new JSONObject().put("days",days);
+    }
+    private static List<SampleTimeline.Interval> clipIntervals(List<SampleTimeline.Interval> intervals,long from,long to){
+        List<SampleTimeline.Interval> clipped=new ArrayList<>();
+        for(SampleTimeline.Interval x:intervals){
+            if(x.to<=from)continue;if(x.from>=to)break;
+            long start=Math.max(from,x.from),end=Math.min(to,x.to);
+            if(end>start)clipped.add(new SampleTimeline.Interval(start,end,x.value(start),x.value(end)));
+        }
+        return clipped;
+    }
     JSONObject energyFlow(long from,long to,long solarFrom,String source) throws Exception {
         return energyFlow(from,to,solarFrom,to,source);
     }

@@ -35,7 +35,7 @@
   </div>
   <div data-overview-block="record">
   <div class="info-note"><span class="info-symbol">i</span><p id="equipmentNote">Ohne eigenen Messwert ist die Leistung einzelner Solarkreise nicht separat sichtbar. Deine Solaranlage lässt sich in den Einstellungen anpassen.</p></div>
-  <button class="record-button" id="overviewRecord"><span id="recordIcon"></span><span id="recordText">Aufzeichnung starten</span></button>
+  <div class="record-actions"><button class="record-button" id="overviewRecord" aria-label="Aufzeichnung starten" title="Aufzeichnung starten"><span id="recordIcon"></span><span id="recordText" class="sr-only">Aufzeichnung starten</span></button><button class="secondary reload-button" id="reloadArchive"><span aria-hidden="true">↻</span><span id="reloadArchiveText">Daten nachladen</span></button></div>
   </div>
   </div>
   <div id="weatherDock" hidden><div id="weatherStrip" class="weather-strip" hidden><div class="weather-heading"><span id="weatherPlaceName" class="weather-name"></span><span class="weather-period">14 Tage · Sonne</span><button id="weatherRefresh" class="textbutton" aria-label="Wetter aktualisieren">↻</button></div><div id="weatherDays" class="weather-days" tabindex="0" aria-label="14 Tage Wetter und Sonnenstunden, seitlich wischbar"></div><p class="weather-credit"><span id="weatherNote"></span><span class="weather-attribution">Open-Meteo · CC BY 4.0</span></p></div></div>
@@ -90,9 +90,10 @@
     <p id="syncExplanation">Gerätedaten werden ergänzt. Du kannst warten oder die App während dieses Abrufs weiter benutzen.</p>
     <div role="status" aria-live="polite"><p id="syncDevice" class="activity-device"></p><p id="syncPhase" class="muted"></p></div>
     <progress id="syncWaitingProgress" aria-label="Fortschritt am aktuellen Gerät"></progress><p id="syncProgressLabel" class="muted"></p>
-    <p class="muted">Beim Abbrechen bleiben gespeicherte Daten erhalten. Beim nächsten Öffnen wird erneut ergänzt; manuell unter Geräte → Gerätearchiv ergänzen.</p>
+    <p class="muted">Beim Abbrechen bleiben gespeicherte Daten erhalten. Fehlende Daten kannst du auf der Übersicht über „Daten nachladen“ erneut ergänzen.</p>
     <p class="muted">„Im Hintergrund synchronisieren“ gibt die Bedienung für diesen Durchlauf frei. Die angezeigten Werte werden noch ergänzt. Beim nächsten Abruf entscheidest du erneut.</p><p id="syncChoiceError" class="form-error" role="alert" hidden></p><button id="syncBackground" class="primary" hidden>Im Hintergrund synchronisieren</button>
     <button id="syncCancel" class="secondary">Synchronisation abbrechen</button>
+    <div id="syncCancelChoice" hidden><p>Synchronisation wirklich abbrechen? Bereits gespeicherte Daten bleiben erhalten.</p><button id="syncContinue" class="primary">Weiter synchronisieren</button><button id="syncCancelConfirm" class="secondary">Abbruch bestätigen</button></div>
   </section>
 </div>
 <aside id="syncCompact" class="sync-compact" hidden><button id="syncOpen" aria-label="Synchronisationsfortschritt und Abbrechen öffnen"><span class="sync-compact-icon" aria-hidden="true">↻</span><span><strong id="syncCompactTitle"></strong><small id="syncCompactDetail"></small></span><span aria-hidden="true">›</span></button></aside>

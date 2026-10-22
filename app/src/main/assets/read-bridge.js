@@ -2,9 +2,9 @@
   const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.WattReadBridge=api;
 })(typeof globalThis==='object'?globalThis:this,function(){
   'use strict';
-  const methods=new Set(['history','dashboardHistory','energyHistory','energyHistoryWindow']);
+  const methods=new Set(['history','dashboardHistory','energyHistory','energyHistoryWindow','dailyEnergy']);
   const missing=()=>({points:[],summary:{},pending:true});
-  const pending=method=>method.startsWith('energy')?{solar:missing(),consumption:missing(),balance:missing(),pending:true}:missing();
+  const pending=method=>method==='dailyEnergy'?{days:[],pending:true}:method.startsWith('energy')?{solar:missing(),consumption:missing(),balance:missing(),pending:true}:missing();
   return class {
     constructor(raw,ready){
       this.raw=raw;this.ready=ready;this.cache=new Map();this.queue=new Map();this.nextId=0;this.generation=0;this.busy=false;
@@ -19,7 +19,7 @@
     key(method,args){return JSON.stringify([method,args.map((v,i)=>i<2?Math.floor(v/10000):v)]);}
     remember(key,value){if(this.cache.size>=128&&!this.cache.has(key))this.cache.delete(this.cache.keys().next().value);this.cache.set(key,value);}
     read(method,args){
-      if(!this.busy||!this.raw.requestHistory){const value=this.raw[method](...args);
+      if((!this.busy&&method!=='dailyEnergy')||!this.raw.requestHistory){const value=this.raw[method](...args);
         if(JSON.parse(value).syncing){try{this.state(JSON.parse(this.raw.syncState()));}catch(_){}return this.busy?this.read(method,args):JSON.stringify(pending(method));}
         this.remember(this.key(method,args),{method,args,value});return value;}
       const key=this.key(method,args),cached=this.cache.get(key);if(cached)return cached.value;
@@ -42,7 +42,7 @@
     result(response){
       const query=this.inflight;if(!query||query.id!==response.id)return;
       this.inflight=null;
-      if(query.generation===this.generation){this.remember(query.key,{method:query.method,args:query.args,value:JSON.stringify(response.data||{error:'Zeitraum konnte nicht geladen werden.'})});this.ready();}
+      if(query.generation===this.generation){this.remember(query.key,{method:query.method,args:query.args,value:JSON.stringify(response.data||{error:'Zeitraum konnte nicht geladen werden.'})});this.ready(query.method);}
       this.pump();
     }
   };

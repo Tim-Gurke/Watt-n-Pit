@@ -87,6 +87,13 @@ final class Repository {
         return text.toString();
     }
     synchronized JSONArray configs() throws JSONException { return new JSONArray(prefs.getString("devices", "[]")); }
+    /** Explicit manual requests bypass automatic cancellation/retry pauses. */
+    JSONArray requestedArchiveDevices(String target)throws JSONException{
+        if("AUTO".equals(target)||"RETRY".equals(target))return automaticArchiveDevices("RETRY".equals(target));
+        JSONArray all=configs();if("MANUAL".equals(target))return all;
+        JSONArray selected=new JSONArray();for(int i=0;i<all.length();i++)if(target.equals(all.getJSONObject(i).optString("mac")))selected.put(all.getJSONObject(i));
+        return selected;
+    }
     JSONArray automaticArchiveDevices()throws JSONException{
         return automaticArchiveDevices(false);
     }

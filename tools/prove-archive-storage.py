@@ -41,7 +41,7 @@ classpath = os.pathsep.join(map(str, [classes, args.android_jar.resolve(), args.
 database = Path(tempfile.mkdtemp(prefix='database-', dir=out)) / 'proof.db'
 log = []
 phases = {}
-for phase in ['atomic_write', 'atomic_resume', 'live_and_offline', 'metadata_resume', 'config_write', 'config_resume', 'capture_write', 'capture_resume', 'capture_gap']:
+for phase in ['atomic_write', 'atomic_resume', 'live_and_offline', 'metadata_resume', 'config_write', 'config_resume', 'capture_write', 'capture_resume', 'capture_gap', 'manual_queue', 'daily_energy']:
     run = subprocess.run(['java', '-cp', classpath, 'de.wattpit.app.ArchiveStorageProof', str(database), phase, str(root / 'app/src/test/resources/victron/smartshunt-trends.tsv')], capture_output=True, text=True)
     log.append(run.stdout + run.stderr)
     print(run.stdout + run.stderr, end='', flush=True)

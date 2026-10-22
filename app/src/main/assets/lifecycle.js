@@ -9,19 +9,21 @@ window.WattLifecycle=class {
       const error=a.native?.acknowledgeCockpit?.();if(error){const note=document.getElementById('cockpitNoticeError');note.textContent=error;note.hidden=false;return;}
       this.accepted=true;this.release();a.poll();
     };
-    document.getElementById('syncCancel').onclick=()=>{
-      if(this.cancelled)return;this.cancelled=true;this.a.native?.cancelArchive?.();this.paint(this.state);
+    document.getElementById('syncCancel').onclick=()=>this.confirmCancellation();
+    document.getElementById('syncContinue').onclick=()=>{this.confirmCancel=false;this.paint(this.state);document.getElementById('syncBackground').focus();};
+    document.getElementById('syncCancelConfirm').onclick=()=>{
+      if(this.cancelled||!this.confirmCancel)return;this.cancelled=true;this.confirmCancel=false;this.a.native?.cancelArchive?.();this.paint(this.state);
     };
     document.getElementById('syncBackground').onclick=()=>{
       const error=a.native?.backgroundArchive?.(this.runId);
       if(error){document.getElementById('syncChoiceError').textContent=error;document.getElementById('syncChoiceError').hidden=false;return;}
-      this.review=false;this.poll();a.poll();
+      this.review=false;this.confirmCancel=false;this.poll();a.poll();
     };
     document.getElementById('syncOpen').onclick=()=>{this.review=true;this.lock('sync');this.paint(this.state);};
     this.root.addEventListener('keydown',e=>{
       if(e.key==='Escape'){e.preventDefault();e.stopPropagation();this.back();return;}
       if(e.key==='Tab'){
-        e.stopPropagation();const buttons=[...this.root.querySelectorAll('section:not([hidden]) button')].filter(el=>!el.disabled&&!el.hidden);
+        e.stopPropagation();const buttons=[...this.root.querySelectorAll('section:not([hidden]) button')].filter(el=>!el.disabled&&!el.hidden&&el.getClientRects().length);
         const i=buttons.indexOf(document.activeElement),next=(i+(e.shiftKey?-1:1)+buttons.length)%buttons.length;buttons[next]?.focus();e.preventDefault();
       }
     });
@@ -41,7 +43,11 @@ window.WattLifecycle=class {
     this.siblings.forEach(([el,inert])=>{el.inert=inert;});document.body.style.overflow=this.overflow;
     if(this.focus?.isConnected)this.focus.focus({preventScroll:true});
   }
-  back(){if(this.blocked&&this.review&&this.state?.background){this.review=false;this.release();this.a.poll();return true;}return this.blocked;}
+  confirmCancellation(){
+    if(!this.busy||this.cancelled)return;
+    this.confirmCancel=true;this.review=true;this.lock('sync');this.paint(this.state);document.getElementById('syncContinue').focus();
+  }
+  back(){if(this.blocked&&this.confirmCancel){this.confirmCancel=false;this.paint(this.state);document.getElementById('syncCancel').focus();return true;}if(this.blocked&&this.review&&this.state?.background){this.review=false;this.release();this.a.poll();return true;}return this.blocked;}
   paint(state){
     if(!state)return;const archive=state.archive||{},active=archive.active,total=Number(archive.total)||0,done=Math.max(0,Math.min(total,Number(archive.done)||0));
     const device=active?archive.device||'Gerät wird verbunden':'Nächstes Gerät wird vorbereitet';
@@ -51,7 +57,8 @@ window.WattLifecycle=class {
     if(active&&total>0){progress.max=total;progress.value=done;}else progress.removeAttribute('value');
     document.getElementById('syncProgressLabel').textContent=active&&total>0?`${done} von ${total} · aktuelles Gerät`:'';
     document.getElementById('syncCancel').disabled=this.cancelled;document.getElementById('syncCancel').textContent=this.cancelled?'Wird abgebrochen …':'Synchronisation abbrechen';
-    document.getElementById('syncBackground').hidden=!this.a.native?.backgroundArchive;
+    document.getElementById('syncCancel').hidden=!!this.confirmCancel;document.getElementById('syncCancelChoice').hidden=!this.confirmCancel;
+    document.getElementById('syncBackground').hidden=!this.a.native?.backgroundArchive||!!this.confirmCancel;
     document.getElementById('syncBackground').textContent=state.background?'Weiter im Hintergrund':'Im Hintergrund synchronisieren';
     document.getElementById('syncCompactTitle').textContent=this.cancelled?'Synchronisation wird abgebrochen':'Synchronisation läuft · Werte vorläufig';
     document.getElementById('syncCompactDetail').textContent=device+(active&&total>0?` · ${done}/${total}`:' · Bitte warten');
@@ -64,7 +71,7 @@ window.WattLifecycle=class {
     if(state.cockpitNoticeAccepted===false&&!this.accepted){this.lock('notice');return true;}
     this.busy=!!state.busy;document.body.classList.toggle('sync-background',this.busy&&!!state.background);
     if(this.busy){
-      if(!this.wasBusy||this.runId!==state.runId){this.cancelled=false;this.review=false;document.getElementById('syncChoiceError').hidden=true;}
+      if(!this.wasBusy||this.runId!==state.runId){this.cancelled=false;this.confirmCancel=false;this.review=false;document.getElementById('syncChoiceError').hidden=true;}
       this.runId=state.runId;this.startedAt=state.startedAt||this.startedAt||Date.now();this.wasBusy=true;this.paint(state);
       document.getElementById('syncCompact').hidden=!state.background;
       if(state.background&&!this.review){this.release();return false;}
