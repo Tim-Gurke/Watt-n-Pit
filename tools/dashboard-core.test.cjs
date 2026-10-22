@@ -2,6 +2,69 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const C=require('../app/src/main/assets/dashboard-core.js');
 
+test('charge time uses configured Ah, state of charge and net Shunt current, independent of solar watts',()=>{
+  const estimate=new C.ChargeEstimator(),now=1000000,r={device:'shunt-a',t:now,soc:70,current:10},before=structuredClone(r);
+  const result=estimate.update(r,100,now);assert.equal(result.minutes,180);assert.equal(result.state,'charging');
+  assert.equal(estimate.update(r,200,now).minutes,360);
+  const tile=C.tile('chargeTime'),snapshot={settings:{capacity:100}};
+  assert.equal(C.displayValue(tile,null,r,{solar:0},snapshot,result),180);
+  assert.equal(C.displayValue(tile,null,r,{solar:999},snapshot,result),180);
+  assert.equal(C.convert(result.minutes,'h','chargeTime'),3);assert.equal(C.convert(result.minutes,'s','chargeTime'),10800);
+  assert.deepEqual(r,before);
+});
+test('charge smoothing weights elapsed time and repeated UI polls cannot overweight a reading',()=>{
+  const estimate=new C.ChargeEstimator(),t=1000000;
+  estimate.update({device:'a',t,soc:70,current:0},100,t);
+  const r={device:'a',t:t+30000,soc:70,current:10};estimate.update(r,100,t+30000);
+  for(let i=31;i<=60;i++)estimate.update(r,100,t+i*1000);
+  const result=estimate.update(r,100,t+60000);
+  // 30 seconds ramping from 0 to 10 A, then 30 seconds at 10 A: 7.5 A.
+  assert.equal(result.average,7.5);assert.equal(result.minutes,240);assert.equal(result.seconds,60);
+  assert.equal(estimate.samples.length,2);
+});
+test('the five-minute charge window clips its leading interval and discards old samples',()=>{
+  const estimate=new C.ChargeEstimator(),t=1000000;
+  estimate.update({device:'a',t,soc:70,current:10},100,t);
+  for(let i=1;i<=10;i++)estimate.update({device:'a',t:t+i*30000,soc:70,current:20},100,t+i*30000);
+  const result=estimate.update({device:'a',t:t+300000,soc:70,current:20},100,t+315000);
+  assert.equal(result.seconds,300);assert.equal(result.average,19.875);
+  for(let i=11;i<=40;i++)estimate.update({device:'a',t:t+i*30000,soc:70,current:10},100,t+i*30000);
+  assert.equal(estimate.update({device:'a',t:t+1200000,soc:70,current:10},100,t+1200000).minutes,180);
+  assert.ok(estimate.samples.length<=12);
+});
+test('discharge and zero current suppress charging estimates immediately and negative intervals remain in the average',()=>{
+  const e=new C.ChargeEstimator(),t=1000000;
+  let result=e.update({t,soc:70,current:-10},100,t);assert.equal(result.state,'inactive');assert.equal(result.minutes,null);
+  result=e.update({t:t+30000,soc:70,current:2},100,t+30000);assert.equal(result.state,'waiting');assert.equal(result.average,-4);assert.equal(result.minutes,null);
+  result=e.update({t:t+60000,soc:70,current:0},100,t+60000);assert.equal(result.state,'inactive');assert.equal(C.chargeHint(result),'Wird nicht geladen');
+  result=e.update({t:t+90000,soc:70,current:20},100,t+90000);assert.equal(result.state,'charging');assert.ok(result.average<20);
+  assert.equal(new C.ChargeEstimator().update({t,soc:100,current:0},100,t).minutes,0);
+});
+test('missing, stale, future or invalid charge inputs never become zero or a previous estimate',()=>{
+  const e=new C.ChargeEstimator(),t=1000000,good={t,soc:70,current:10};
+  for(const [reading,capacity,now] of [[null,100,t],[{...good,soc:null},100,t],[{...good,current:null},100,t],[{...good,soc:101},100,t],[{...good,soc:-1},100,t],[good,0,t],[good,null,t],[good,NaN,t],[good,100,t+45001],[good,100,t-1],[{...good,t:null},100,t]]){
+    e.update(good,100,t);const result=e.update(reading,capacity,now);
+    assert.equal(result.minutes,null);assert.equal(result.state,'unavailable');assert.equal(e.samples.length,0);
+  }
+});
+test('charge averaging starts fresh after receiver gaps, device changes, pauses or clock reversals',()=>{
+  const t=1000000;
+  for(const next of [{device:'b',t:t+10000,soc:70,current:5},{device:'a',t:t+46000,soc:70,current:5},{device:'a',t:t-1000,soc:70,current:5}]){
+    const e=new C.ChargeEstimator();e.update({device:'a',t,soc:70,current:20},100,t);
+    assert.equal(e.update(next,100,next.t).minutes,360);assert.equal(e.samples.length,1);
+  }
+  const e=new C.ChargeEstimator();e.update({t,soc:70,current:20},100,t);e.update(null,100,t+1);
+  assert.equal(e.update({t:t+2000,soc:70,current:5},100,t+2000).minutes,360);
+});
+test('the optional charge tile preserves units and layout and offers live number or gauge only',()=>{
+  const tile=C.tile('chargeTime');assert.equal(tile.unit,'h');assert.equal(tile.layouts.compact.h,4);
+  tile.unit='min';tile.type='chart';tile.period.mode='today';
+  const restored=C.normalize({energyFlowVersion:1,tiles:[tile]}).tiles[0];
+  assert.equal(restored.unit,'min');assert.equal(restored.type,'number');assert.equal(restored.period.mode,'live');assert.equal(C.windowFor(restored),null);
+  assert.equal(C.format(3,C.tile('chargeTime')),'≈ 3,0');assert.equal(C.format(0,C.tile('chargeTime')),'0,0');assert.equal(C.format(null,tile),'—');
+  assert.equal(C.defaults().tiles.some(t=>t.metric==='chargeTime'),false);
+});
+
 test('runtime can be displayed in seconds, hours and days without changing the Shunt value',()=>{
   assert.equal(C.convert(480,'h','remaining'),8);
   assert.equal(C.convert(480,'d','remaining'),1/3);

@@ -8,6 +8,7 @@
   const CATALOG = {
     soc:          {label:'Ladezustand', group:'Akku', kind:'shunt', field:'soc', units:['%'], min:0, max:100, digits:1, color:'#65cbb0'},
     remaining:    {label:'Restlaufzeit', group:'Akku', kind:'shunt', field:'ttg', backend:'ttg', units:['h','d','min','s'], min:0, max:1440, digits:1, color:'#81baf4', hint:'Restlaufzeit vom SmartShunt; beim Laden oft nicht verfügbar.'},
+    chargeTime:   {label:'Restladezeit', group:'Akku', kind:'shunt', units:['h','min','d','s'], min:0, max:1440, digits:1, color:'#65cbb0', liveOnly:true, hint:'Geschätzte Zeit bis 100 % aus Ladezustand, eingestellter Batteriekapazität und Netto-Ladestrom am SmartShunt. Zeitgewichteter Mittelwert über bis zu fünf Minuten; laufende Verbraucher sind berücksichtigt. Bei wechselnder Sonne und sinkendem Strom gegen Ladeende ungenauer. Kein gespeicherter Verlauf.'},
     remainingAh:  {label:'Kapazität im Akku', group:'Akku', kind:'shunt', field:'soc', backend:'soc', units:['Ah','mAh'], min:0, max:100, digits:1, color:'#65cbb0', calculated:'capacity', hint:'Rechnerisch: Ladezustand × eingestellte Batteriekapazität.'},
     remainingWh:  {label:'Energie im Akku', group:'Akku', kind:'shunt', backend:'storedEnergy', units:['Wh','kWh'], min:0, max:1400, digits:0, color:'#65cbb0', calculated:'energy', hint:'Näherung aus Kapazität, Ladezustand und momentaner Spannung; keine nutzbare Energieprognose.'},
     power:        {label:'Batteriebilanz', group:'Akku', kind:'shunt', field:'power', backend:'batteryPower', units:['W','kW'], min:-1000, max:1000, digits:0, color:'#65cbb0', hint:'+ Laden · − Entladen. Alle Quellen und Verbraucher am Shunt.'},
@@ -43,6 +44,41 @@
   const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
   const numeric = (x,fallback,a,b) => finite(x) ? clamp(Number(x),a,b) : fallback;
   const color = (x,fallback) => /^#[0-9a-f]{6}$/i.test(x || '') ? x : fallback;
+  // Only live Shunt readings enter this estimate. Repeated UI polls add no samples.
+  class ChargeEstimator {
+    constructor(){this.reset();}
+    reset(){this.samples=[];this.device=null;this.updated=null;}
+    update(reading,capacity,now=Date.now()){
+      const unavailable=()=>({minutes:null,state:'unavailable',average:null,seconds:0});
+      if(!reading||!finite(reading.t)||!finite(reading.current)||!finite(reading.soc)||!finite(capacity)||Number(capacity)<=0||Number(reading.soc)<0||Number(reading.soc)>100||!finite(now)||now<Number(reading.t)||now-Number(reading.t)>45000){this.reset();return unavailable();}
+      const t=Number(reading.t),current=Number(reading.current),device=reading.device||reading.kind||'shunt',last=this.samples.at(-1);
+      if(device!==this.device||this.updated!==null&&now<this.updated||last&&(t<last.t||t-last.t>45000))this.reset();
+      this.device=device;this.updated=now;
+      if(!this.samples.length||t>this.samples.at(-1).t)this.samples.push({t,current});
+      const cutoff=now-300000;
+      while(this.samples.length>1&&this.samples[1].t<=cutoff)this.samples.shift();
+      let area=0,duration=0;
+      for(let i=0;i<this.samples.length;i++){
+        const a=this.samples[i],b=this.samples[i+1],start=Math.max(cutoff,a.t),end=b?b.t:now;
+        if(end<=start)continue;
+        const startCurrent=b?a.current+(b.current-a.current)*(start-a.t)/(b.t-a.t):a.current;
+        area+=(startCurrent+(b?b.current:a.current))/2*(end-start);duration+=end-start;
+      }
+      const average=duration?area/duration:current,base={average,seconds:duration/1000};
+      if(Number(reading.soc)===100)return {...base,minutes:0,state:'full'};
+      if(current<=.03)return {...base,minutes:null,state:'inactive'};
+      if(average<=.03)return {...base,minutes:null,state:'waiting'};
+      const minutes=(100-Number(reading.soc))/100*Number(capacity)/average*60;
+      return {...base,minutes:Number.isFinite(minutes)?minutes:null,state:Number.isFinite(minutes)?'charging':'unavailable'};
+    }
+  }
+  function chargeHint(estimate){
+    if(estimate?.state==='full')return '100 % laut SmartShunt';
+    if(estimate?.state==='inactive')return 'Wird nicht geladen';
+    if(estimate?.state==='waiting')return 'Noch kein stabiler Ladestrom';
+    if(estimate?.state==='charging')return estimate.seconds<60?'Bis 100 % · Mittelung läuft an':'Bis 100 % · Ø bis 5 min';
+    return 'Kein aktueller Shuntwert oder Kapazität fehlt';
+  }
   function readableColor(foreground,background,page,opacity=100,target=7) {
     const rgb=hex=>{hex=hex.trim();if(/^#[0-9a-f]{3}$/i.test(hex))hex='#'+[...hex.slice(1)].map(c=>c+c).join('');return [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));};
     const luminance=channels=>channels.map(c=>c/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4).reduce((n,c,i)=>n+c*[.2126,.7152,.0722][i],0);
@@ -94,7 +130,7 @@
     const m=CATALOG[metric] || CATALOG.soc;
     return {id:id || 'tile-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),metric:CATALOG[metric]?metric:'soc',title:'',unit:m.units[0],type:m.widget?'weather':m.energy?'chart':metric==='soc'?'gauge':'number',
       digits:m.digits,fontSize:32,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,reverseSign:metric==='dischargeEnergy',min:m.min,max:m.max,scaleMode:m.energy?'auto':'fixed',valueMode:'history',background:'auto',opacity:100,
-      period:{mode:m.energy?'today':'live',amount:6,unit:'h',aggregate:m.energy?'last':'avg',resetAt:Date.now(),from:0,to:0},layouts:{compact:position(m.widget?{w:12,h:4}:{h:m.energy?6:3}),wide:position(m.widget?{w:12,h:4}:{h:m.energy?6:3},true)}};
+      period:{mode:m.energy?'today':'live',amount:6,unit:'h',aggregate:m.energy?'last':'avg',resetAt:Date.now(),from:0,to:0},layouts:{compact:position(m.widget?{w:12,h:4}:{h:m.energy?6:metric==='chargeTime'?4:3}),wide:position(m.widget?{w:12,h:4}:{h:m.energy?6:metric==='chargeTime'?4:3},true)}};
   }
   function normalizeTile(input,seen) {
     if (!input || !CATALOG[input.metric]) return null;
@@ -103,7 +139,7 @@
     result.title=typeof input.title==='string'?input.title.slice(0,60):'';
     if(input.metric==='energyBalance'&&/^(?:Ertrag\s*[−–-]\s*Entnahme|Akkubilanz)$/i.test(result.title.trim()))result.title='';
     result.unit=m.units.includes(input.unit)?input.unit:m.units[0];
-    result.type=!m.status && ['number','gauge','chart'].includes(input.type)?input.type:'number';
+    result.type=!m.status && (m.liveOnly?['number','gauge']:['number','gauge','chart']).includes(input.type)?input.type:'number';
     result.digits=Math.round(numeric(input.digits,m.digits,0,3));result.fontSize=numeric(input.fontSize,32,18,64);
     for (const k of ['color','colorMid','colorEnd']) result[k]=color(input[k],fallback[k]);
     result.multicolor=!!input.multicolor;result.invert=!!input.invert;result.adaptiveColor=input.adaptiveColor!==false;
@@ -166,7 +202,7 @@
     return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,historyHeight:historyHeight(input.historyHeight),blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles};
   }
   function windowFor(t,now=Date.now(),weather={}) {
-    if(CATALOG[t.metric].widget)return null;
+    if(CATALOG[t.metric].widget||CATALOG[t.metric].liveOnly)return null;
     const p=t.period;
     if(p.mode==='live' && t.type!=='chart') return null;
     if(p.mode==='sunrise')return miniWindow('sunrise',weather,now);
@@ -177,7 +213,7 @@
     else from=now-(p.mode==='live'?6*3600000:p.amount*({min:60000,h:3600000,d:86400000}[p.unit]));
     return finite(from) && finite(to) && from>=0 && to>from ? {from,to} : {from:now,to:now};
   }
-  function liveValue(metric,shunt,solar,snapshot,now=Date.now()) {
+  function liveValue(metric,shunt,solar,snapshot,now=Date.now(),chargeEstimate=null) {
     const m=CATALOG[metric],r=m.kind==='shunt'?shunt:solar;
     if(/Age$|Rssi$/.test(metric)) {
       const config=snapshot.devices.find(d=>d.kind===m.kind);
@@ -186,6 +222,7 @@
       return r && finite(config.rssi)?config.rssi:null;
     }
     if(!r)return null;
+    if(metric==='chargeTime')return chargeEstimate?.minutes??null;
     const capacity=snapshot.settings.capacity || 100;
     if(metric==='remainingAh')return finite(r.soc)?r.soc/100*capacity:null;
     if(metric==='remainingWh')return finite(r.soc)&&finite(r.voltage)?r.soc/100*capacity*r.voltage:null;
@@ -202,15 +239,15 @@
     const min=convert(t.min,t.unit,t.metric),max=convert(t.max,t.unit,t.metric);
     return CATALOG[t.metric].energy&&t.reverseSign?{min:signedValue(t,max),max:signedValue(t,min)}:{min,max};
   }
-  function displayValue(t,summary,shunt,solar,snapshot) {
-    return signedValue(t,usesLiveValue(t)?liveValue(t.metric,shunt,solar,snapshot):historicalValue(t.metric,summary?.[t.period.aggregate],snapshot.settings.capacity));
+  function displayValue(t,summary,shunt,solar,snapshot,chargeEstimate=null) {
+    return signedValue(t,usesLiveValue(t)?liveValue(t.metric,shunt,solar,snapshot,Date.now(),chargeEstimate):historicalValue(t.metric,summary?.[t.period.aggregate],snapshot.settings.capacity));
   }
   function format(value,t) {
     if(!finite(value))return '—';
     if(t.metric==='state')return PHASES[value] || 'Code '+value;
     if(t.metric==='error')return Number(value)===0?'Kein Fehler':String(value);
     if(t.metric==='alarm')return Number(value)===0?'Kein Alarm':'0x'+Number(value).toString(16).toUpperCase();
-    return Number(value).toLocaleString('de-DE',{minimumFractionDigits:t.digits,maximumFractionDigits:t.digits});
+    return (t.metric==='chargeTime'&&Number(value)>0?'≈ ':'')+Number(value).toLocaleString('de-DE',{minimumFractionDigits:t.digits,maximumFractionDigits:t.digits});
   }
   /** Uses actual extrema, including peaks hidden by chart buckets; manual bounds remain stored. */
   function chartRange(t,points=[],capacity=100,summary={}) {
@@ -277,5 +314,5 @@
     }
     return {...window,from:Math.max(window.dayFrom??window.from,from),to:Math.min(window.dayTo??window.to,to)};
   }
-  return {seriesGap,CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow,solarQueryWindow,solarPlotWindow};
+  return {seriesGap,CATALOG,PHASES,BLOCK_ORDER,finite,clamp,color,ChargeEstimator,chargeHint,readableColor,convert,unconvert,position,tile,defaults,normalize,windowFor,liveValue,historicalValue,usesLiveValue,signedValue,fixedRange,displayValue,format,chartRange,axisLabel,miniWindow,solarQueryWindow,solarPlotWindow};
 });
