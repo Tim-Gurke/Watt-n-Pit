@@ -46,6 +46,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  }
  await resized({width:390,height:844});await tile.scrollIntoViewIfNeeded();
  const output=process.env.WATTPIT_SCREENSHOT_DIR;if(output){fs.mkdirSync(output,{recursive:true});await page.locator('#toast').evaluate(el=>el.hidden=true);await tile.screenshot({path:path.join(output,'charge-time.png')});}
- await page.reload();assert.equal(await page.locator(`[data-tile="${id}"] .tile-number`).textContent(),'≈ 3,0');
+ // Reopening restores the tile; a newly received live packet starts a fresh estimate.
+ await page.reload();await page.evaluate(()=>{window.fixture.readings[0].t=Date.now();poll();});
+ assert.equal(await page.locator(`[data-tile="${id}"] .tile-number`).textContent(),'≈ 3,0');
  assert.deepEqual(errors,[]);await browser.close();console.log('Restladezeit: picker, net current/capacity, missing and stale readings, charging/full states, live-only detail, units/gauge, saved layout and both themes/orientations passed.');
 })().catch(e=>{console.error(e);process.exit(1);});
