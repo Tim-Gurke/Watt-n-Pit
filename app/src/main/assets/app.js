@@ -80,6 +80,7 @@ function showPage(next) {
   document.querySelectorAll('.bottom-nav button').forEach(el => el.classList.toggle('active',el.dataset.page===page));
   window.scrollTo(0,0);
   if (page === 'history') loadHistory();
+  dashboard?.updateChargeEstimate();
   extras?.render();equipment?.render();
   if (page === 'overview') loadMini(true);
   if (page === 'devices') renderDevices(true);

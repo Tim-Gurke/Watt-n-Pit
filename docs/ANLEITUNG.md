@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.3.11** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.11/Watt-n-Pit-v1.3.11.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.3.12** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.12/Watt-n-Pit-v1.3.12.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -63,21 +63,29 @@ Falls nichts ankommt: Bluetooth und Reichweite prüfen, VictronConnect vom Gerä
 |---|---|
 | ![Übersicht mit Messkacheln, berechnetem Verbrauch und Wetterkachel, dunkel](images/overview-dark.png) | ![Dieselbe Übersicht im hellen Design](images/overview-light.png) |
 
-*Sieben Messkacheln und die kompakte Wetterkachel bilden den Standard. Werte, Farben, Größe und Position lassen sich anpassen.*
+*Beispiele einer frei angepassten Übersicht. Die neue Standardvorlage umfasst zehn Kacheln; Werte, Farben, Größen und Positionen sind frei einstellbar.*
 
-Auf schmalen Bildschirmen stehen der schmale Ladezustand und die breitere Solarleistung oben. Darunter folgen „Bilanz“ und Solarertrag nebeneinander. Batteriespannung und die mit „Aktuell“ beschriftete Batteriebilanz stehen links übereinander; rechts liegt der größere berechnete Verbrauch. Das Wetter liegt flach über die gesamte Breite. Anschließend folgen Verlauf und Start/Pause. Im Hochformat bleibt diese Anordnung erhalten. Im Querformat wechseln **+ Kachel**, **Anordnen**, Empfangszustand und Ansichtsart zusammen mit „Energie im Blick“ in den kompakten Appkopf. Ab 760 Pixel Breite stehen sie gemeinsam in einer Zeile.
+Die neue Hochkant-Vorlage ist dreispaltig: links Ladezustand, automatische Restlade-/Restlaufzeit, Batteriespannung und die mit „Aktuell“ beschriftete Batteriebilanz. In der Mitte stehen Solarleistung und Verbrauch; rechts Solarertrag und Bilanz. Darunter liegen die flache Wetterkachel und die Ladephase. Der Verlauf ist standardmäßig 465 Pixel hoch. Vorhandene eigene Anordnungen werden beim Update erhalten. Neue Installationen und **Einstellungen → Standardübersicht wiederherstellen** erhalten die neue Vorlage.
+
+Die breite Ansicht speichert ihre Anordnung weiterhin separat. Die bisherigen acht Kacheln behalten in der breiten Standardvorlage ihre Positionen; Ladephase und automatische Akkuzeit werden darunter ergänzt. Im Querformat wechseln **+ Kachel**, **Anordnen**, Empfangszustand und Ansichtsart zusammen mit „Energie im Blick“ in den kompakten Appkopf. Ab 760 Pixel Breite stehen sie gemeinsam in einer Zeile.
 
 ![Breite Ansicht mit Werkzeugen und Empfangszustand oben im kompakten Kopf](images/overview-landscape.png)
 
 Die Restlaufzeit kann über **+ Kachel → Akku → Restlaufzeit** ergänzt werden; Stunden sind weiterhin die voreingestellte Einheit.
 
-**+ Kachel → Akku → Restladezeit** ergänzt eine eigene Kachel für die geschätzte Ladezeit bis 100 %. Unter **Einstellungen** muss die tatsächliche Batteriekapazität in Ah eingetragen sein. Die Rechnung lautet: fehlende Ah geteilt durch den mittleren Netto-Ladestrom. Beispiel: Bei 70 % von 100 Ah und konstant 10 A in den Akku sind es ungefähr 3 Stunden. Verbraucher und sämtliche am Shunt erfassten Ladequellen sind im Netto-Strom bereits enthalten.
+**+ Kachel → Akku → Restladezeit / Restlaufzeit** ergänzt eine automatisch wechselnde Kachel. Bereits vorhandene Restladezeit-Kacheln bekommen diese Funktion direkt durch das Update. Ihre Kennung, Position, Größe und Einstellungen bleiben erhalten. Eine eigene Beschriftung bleibt bestehen; ohne eigene Beschriftung wechselt der Titel mit dem Trend.
 
-Der Ladestrom wird zeitgewichtet über die letzten fünf Minuten gemittelt. Direkt nach dem Start verwendet die Schätzung den bisher empfangenen Abschnitt und zeigt „Mittelung läuft an“. Das **≈** kennzeichnet die Näherung; wechselnde Sonne, veränderter Verbrauch und das Absenken des Ladestroms gegen Ladeende können die tatsächliche Zeit verlängern. Bei Entladung oder ohne nennenswerten Ladestrom steht **„Wird nicht geladen“**; ist der Mittelwert noch negativ, erscheint **„Noch kein stabiler Ladestrom“**. Fehlende oder mehr als 45 Sekunden alte Livewerte ergeben **—**. Nach einer Empfangspause beginnt die Mittelung neu. Erst bei gemeldeten 100 % stehen 0 Stunden und **„100 % laut SmartShunt“**.
+- **Ladetrend:** „Restladezeit“ zeigt die geschätzte Zeit bis 100 %. Die Rechnung verwendet die fehlenden Ah und den mittleren Netto-Ladestrom. Unter **Einstellungen** die tatsächliche Batteriekapazität in Ah eintragen. Bei 70 % von 100 Ah und konstant 10 A in den Akku sind es ungefähr 3 Stunden. Verbraucher und alle am Shunt erfassten Ladequellen sind enthalten.
+- **Entladetrend:** „Restlaufzeit“ übernimmt den vorhandenen Wert des SmartShunt. Fehlt dieser, erscheint **—**; es wird keine Ersatzlaufzeit aus der Kapazität berechnet.
+- **Nahezu ausgeglichene Bilanz:** „Akkuzeit“ zeigt **—** mit dem Hinweis **„Zeit derzeit nicht bestimmbar“**.
 
-Stunden sind voreingestellt; Minuten, Tage und Sekunden sowie Zahl und Rundinstrument sind wählbar. Die Großansicht zeigt denselben aktuellen Schätzwert mit Erklärung. Historische Zeiträume und Vergleichskurven werden für diese reine Live-Schätzung ausgeblendet. Die neue Kachel ist optional und verändert vorhandene Anordnungen nicht.
+Für die Richtung werden bis zu eine Minute Netto-Batteriestrom zeitgewichtet gemittelt. Ein Richtungswechsel braucht anschließend 30 Sekunden Bestätigung mit frischen Messwerten. Kurze Gegenbewegungen wechseln die Beschriftung daher nicht sofort. Während der Prüfung steht **—** und **„Trendwechsel wird geprüft“**. Beim ersten frischen Empfang wird die beobachtete Richtung direkt gewählt. Nach Empfangspausen und Gerätewechseln beginnt die Mittelung neu. Reine Wiederholungen desselben alten Messpakets bestätigen keinen Wechsel.
 
-![Restladezeit mit drei Stunden als frei erfundenem Beispiel](images/charge-time.png)
+Die Ladezeit verwendet einen Mittelwert über bis zu fünf Minuten der aktuellen Ladephase. Direkt nach dem Start steht **„Mittelung läuft an“**. Das **≈** kennzeichnet die Näherung; wechselnde Sonne, Verbraucher und der sinkende Ladestrom gegen Ladeende können die tatsächliche Zeit verändern. Bei 100 % während einer Ladephase stehen 0 und **„100 % laut SmartShunt“**. Fehlende oder mehr als 45 Sekunden alte Livewerte ergeben **—**. Die Zeitmittelung läuft auch auf den anderen Vordergrundseiten weiter.
+
+Stunden sind voreingestellt; Minuten, Tage und Sekunden sowie Zahl und Rundinstrument sind wählbar. Die Großansicht verwendet dieselbe Automatik und zeigt die Erklärung. Historische Zeiträume und Vergleichskurven sind für diese Live-Kachel ausgeblendet. Die separate Kachel **Restlaufzeit** bleibt weiterhin verfügbar.
+
+![Restladezeit als frei erfundenes Beispiel](images/charge-time.png)
 
 Solarleistung und Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. Nach Sonnenuntergang endet ihre Zeitachse dort; der erreichte Wh-Ertrag bleibt sichtbar. Verwertbare Erzeugung davor oder danach erweitert das Fenster und wird mitgezählt. Die Aufzeichnung läuft weiter. Ohne gültigen Sonnenuntergang reicht das Solarfenster mit erkennbarem Hinweis bis jetzt. Verbrauch und Bilanz beziehen sich auf **heute ab Mitternacht** und enthalten damit auch die Nacht. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
 

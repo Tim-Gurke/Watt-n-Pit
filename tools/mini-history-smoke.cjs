@@ -37,20 +37,20 @@ const path=require('node:path');
  };
  await page.locator('#editDashboard').click();assert.equal(await handle.isVisible(),true);
  const before=await page.evaluate(()=>({tiles:dashboard.config.tiles,calls:window.miniCalls.length,height:dashboard.config.historyHeight.compact}));
- await drag(110);assert.equal(await card.evaluate(el=>el.offsetHeight),before.height+110);assert.equal(await page.evaluate(()=>dashboard.config.historyHeight.compact),430);
+ await drag(110);assert.equal(await card.evaluate(el=>el.offsetHeight),before.height+110);assert.equal(await page.evaluate(()=>dashboard.config.historyHeight.compact),before.height+110);
  assert.equal(await page.evaluate(()=>window.miniCalls.length),before.calls,'height adjustment must redraw without requesting history');
  assert.deepEqual(await page.evaluate(()=>dashboard.config.tiles),before.tiles,'history resizing must not move measurement tiles');await verifyCurves();
  assert.equal(await page.locator('#miniChart').evaluate(el=>el.height),await page.locator('#miniChart').evaluate(el=>Math.round(el.getBoundingClientRect().height*devicePixelRatio)),'canvas must match its resized pixels');
  // An interrupted touch restores the previous height and does not save a partial drag.
  await card.evaluate(el=>el.scrollIntoView({block:'center'}));let box=await handle.boundingBox();const cdp=await page.context().newCDPSession(page),touch={x:Math.round(box.x+22),y:Math.round(box.y+22),id:1};
- const saves=await page.evaluate(()=>window.saves);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[touch]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...touch,y:touch.y-50}]});assert.equal(await card.evaluate(el=>el.offsetHeight),380);
- await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});assert.equal(await card.evaluate(el=>el.offsetHeight),430);assert.equal(await page.evaluate(()=>window.saves),saves);
+ const saves=await page.evaluate(()=>window.saves);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[touch]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...touch,y:touch.y-50}]});assert.equal(await card.evaluate(el=>el.offsetHeight),before.height+60);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});assert.equal(await card.evaluate(el=>el.offsetHeight),before.height+110);assert.equal(await page.evaluate(()=>window.saves),saves);
  await page.setViewportSize({width:1100,height:900});await page.locator('#layoutProfile').filter({hasText:'Breite Ansicht'}).waitFor();assert.equal(await card.evaluate(el=>el.offsetHeight),380);
  await drag(90);assert.equal(await card.evaluate(el=>el.offsetHeight),470);await handle.focus();await page.keyboard.press('ArrowDown');assert.equal(await card.evaluate(el=>el.offsetHeight),490);
  await page.keyboard.press('Home');assert.equal(await card.evaluate(el=>el.offsetHeight),300);await page.keyboard.press('End');assert.equal(await card.evaluate(el=>el.offsetHeight),1000);
  await page.evaluate(()=>window.failSave=true);await page.keyboard.press('ArrowUp');assert.equal(await card.evaluate(el=>el.offsetHeight),1000,'failed storage must restore the saved height');await page.evaluate(()=>window.failSave=false);
  await page.locator('#editDashboard').click();assert.equal(await handle.isVisible(),false);
- await page.reload();assert.equal(await card.evaluate(el=>el.offsetHeight),1000);await page.setViewportSize({width:390,height:844});await page.locator('#layoutProfile').filter({hasText:'Schmale Ansicht'}).waitFor();assert.equal(await card.evaluate(el=>el.offsetHeight),430);
+ await page.reload();assert.equal(await card.evaluate(el=>el.offsetHeight),1000);await page.setViewportSize({width:390,height:844});await page.locator('#layoutProfile').filter({hasText:'Schmale Ansicht'}).waitFor();assert.equal(await card.evaluate(el=>el.offsetHeight),before.height+110);
  const layoutBounds=()=>page.evaluate(()=>{
   const bounds=document.getElementById('miniChart').getBoundingClientRect(),outer=document.getElementById('miniHistory').getBoundingClientRect();
   return {width:innerWidth,scrollWidth:document.body.scrollWidth,profile:dashboard.profile,boardWidth:dashboard.board.clientWidth,chart:{top:bounds.top,bottom:bounds.bottom,height:bounds.height},card:{top:outer.top,bottom:outer.bottom,height:outer.height}};
