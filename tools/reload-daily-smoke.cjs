@@ -24,18 +24,18 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  assert.equal(await page.locator('#syncCancelChoice').isVisible(),true);assert.equal(await page.evaluate(()=>document.activeElement.id),'syncContinue');
  await page.locator('#syncContinue').click();assert.equal(await page.locator('#syncCancelChoice').isVisible(),false);assert.equal(await page.evaluate(()=>window.cancels),0);
  await page.locator('#syncCancel').click();await page.locator('#syncCancelConfirm').click();assert.equal(await page.evaluate(()=>window.cancels),1);
- await page.evaluate(()=>window.finish());await page.waitForFunction(()=>!document.getElementById('reloadArchive').disabled);
+ await page.clock.setFixedTime(new Date('2026-10-22T06:22:02Z'));await page.evaluate(()=>window.finish());await page.locator('#reloadArchive:enabled').waitFor({state:'visible'});
  await page.locator('#reloadArchive').click();await page.locator('#syncWaiting').waitFor({state:'visible'});assert.equal(await page.evaluate(()=>window.reloads),2,'manual reload must remain available immediately after a cancelled run');
  await page.locator('#syncBackground').click();assert.equal(await page.locator('#reloadArchive').isDisabled(),true);
  await page.locator('[data-page="devices"]').click();await page.locator('#archiveCancel').click();assert.equal(await page.locator('#syncCancelChoice').isVisible(),true);assert.equal(await page.evaluate(()=>window.cancels),1,'the device-page cancellation must also ask for confirmation');
- await page.keyboard.press('Escape');await page.keyboard.press('Escape');await page.evaluate(()=>window.finish());
- await page.locator('[data-page="history"]').click();await page.waitForFunction(()=>document.getElementById('solarDailyArchive')?.textContent.includes('29,68'));
+ await page.keyboard.press('Escape');await page.keyboard.press('Escape');await page.clock.setFixedTime(new Date('2026-10-22T06:22:04Z'));await page.evaluate(()=>window.finish());
+ await page.locator('[data-page="history"]').click();await page.locator('#solarDailyArchive td').filter({hasText:'29,68'}).waitFor({state:'visible'});
  const row=day=>page.locator('#solarDailyArchive tr').filter({has:page.locator('td').filter({hasText:day})});
  assert.match(await row('2026-10-22').locator('td').nth(2).textContent(),/29,68.*99 % erfasst/);
  assert.match(await row('2026-10-21').locator('td').nth(2).textContent(),/—.*keine Messdaten/);
  assert.match(await row('2026-10-20').locator('td').nth(2).textContent(),/0,00.*100 % erfasst/);
  assert.equal(await page.evaluate(()=>window.dayQueries),1,'all days in one calendar month must share one asynchronous read');
- await page.evaluate(()=>{window.dayAmount=31.25;window.fixture.historyRevision++;poll();});await page.waitForFunction(()=>document.getElementById('solarDailyArchive').textContent.includes('31,25'));
+ await page.evaluate(()=>{window.dayAmount=31.25;window.fixture.historyRevision++;poll();});await page.locator('#solarDailyArchive td').filter({hasText:'31,25'}).waitFor({state:'visible'});
  assert.equal(await page.evaluate(()=>window.dayQueries),2,'completion must refresh the calculated day totals');
  const output=process.env.WATTPIT_SCREENSHOT_DIR;if(output){fs.mkdirSync(output,{recursive:true});await page.locator('#solarDailyArchive').screenshot({path:path.join(output,'solar-daily-consumption.png')});}
  for(const viewport of [{width:320,height:800},{width:390,height:844},{width:844,height:390}]){
