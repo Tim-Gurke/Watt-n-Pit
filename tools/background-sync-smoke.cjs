@@ -1,8 +1,9 @@
 /* Fictional native service: survives Activity reload; never uses a synchronous DB read during import. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path');
 (async()=>{
- const browser=await chromium.launch({headless:true,executablePath:process.env.WATTPIT_CHROMIUM,args:['--no-sandbox','--single-process','--no-zygote','--disable-gpu']});
+ const browser=await chromium.launch({headless:true,executablePath:process.env.WATTPIT_CHROMIUM,args:['--no-sandbox','--disable-gpu']});
  const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',hasTouch:true});page.setDefaultTimeout(10000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const until=async predicate=>{const deadline=Date.now()+10000;while(!await page.evaluate(predicate)){if(Date.now()>deadline)throw Error('Expected asynchronous UI state was not reached');await page.waitForTimeout(40);}};
  await page.clock.setFixedTime(new Date('2026-10-19T11:00:00Z'));
  await page.addInitScript(()=>{
   const now=Date.now();window.run=JSON.parse(sessionStorage.getItem('native-run')||'null')||{busy:false,background:false,runId:0,startedAt:now};
@@ -25,7 +26,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  await page.locator('#closeModal').click();
  const calls=await page.evaluate(()=>window.syncCalls);
  await page.locator('[data-page="history"]').click();await page.locator('[data-range="week"]').click();await page.locator('[data-metric="energy"]').click();
- await page.waitForFunction(()=>!historyPending&&energyData?.solar?.summary?.last===100);
+ await until(()=>!historyPending&&energyData?.solar?.summary?.last===100);
  assert.equal(await page.evaluate(()=>window.syncCalls),calls);assert.ok(await page.evaluate(()=>window.asyncCalls.length)>0,'new periods did not load asynchronously');
  assert.match(await page.locator('#syncCompactTitle').textContent(),/vorläufig/);
  await page.evaluate(()=>{window.archive={active:false,text:'Erstes Gerät fertig'};poll();});assert.equal(await page.locator('#activityOverlay').isVisible(),false);assert.equal(await page.locator('#syncCompact').isVisible(),true);
@@ -33,7 +34,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  await page.locator('#syncOpen').click();assert.equal(await page.locator('#syncWaiting').isVisible(),true);assert.equal(await page.locator('#syncWaitingProgress').getAttribute('value'),null);
  await page.evaluate(()=>poll());assert.equal(await page.locator('#syncWaiting').isVisible(),true,'review closed on next poll');
  await page.keyboard.press('Escape');assert.equal(await page.locator('#syncWaiting').isVisible(),false);
- await page.locator('[data-metric="voltage"]').click();await page.locator('#syncOpen').click();await page.waitForTimeout(400);await page.keyboard.press('Escape');await page.waitForFunction(()=>!historyPending);assert.ok(await page.evaluate(()=>points.length)>0,'a result arriving behind the progress dialog remained stuck loading');
+ await page.locator('[data-metric="voltage"]').click();await page.locator('#syncOpen').click();await page.waitForTimeout(400);await page.keyboard.press('Escape');await until(()=>!historyPending);assert.ok(await page.evaluate(()=>points.length)>0,'a result arriving behind the progress dialog remained stuck loading');
  await page.reload();await page.locator('#syncCompact').waitFor({state:'visible'});assert.equal(await page.locator('#activityOverlay').isVisible(),false,'Activity reload lost the native per-run choice');assert.equal(await page.locator('#syncCompact').isVisible(),true);
  await page.locator('[data-page="settings"]').click();await page.locator('#capacitySetting').fill('125');
  for(const viewport of [{width:320,height:800},{width:740,height:360},{width:390,height:844}]){

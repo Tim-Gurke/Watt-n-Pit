@@ -37,7 +37,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  assert.equal(await page.evaluate(()=>window.dayQueries),1,'all days in one calendar month must share one asynchronous read');
  await page.evaluate(()=>{window.dayAmount=31.25;window.fixture.historyRevision++;poll();});await page.locator('#solarDailyArchive td').filter({hasText:'31,25'}).waitFor({state:'visible'});
  assert.equal(await page.evaluate(()=>window.dayQueries),2,'completion must refresh the calculated day totals');
- const output=process.env.WATTPIT_SCREENSHOT_DIR;if(output){fs.mkdirSync(output,{recursive:true});await page.locator('#solarDailyArchive').screenshot({path:path.join(output,'solar-daily-consumption.png')});}
+ const output=process.env.WATTPIT_SCREENSHOT_DIR;if(output){fs.mkdirSync(output,{recursive:true});await page.locator('#toast').evaluate(el=>el.hidden=true);await page.locator('#solarDailyArchive').screenshot({path:path.join(output,'solar-daily-consumption.png')});}
  for(const viewport of [{width:320,height:800},{width:390,height:844},{width:844,height:390}]){
   await page.setViewportSize(viewport);await page.locator('[data-page="overview"]').click();
   for(const mode of ['light','dark']){
@@ -48,7 +48,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   }
  }
  await page.setViewportSize({width:390,height:844});await page.locator('#reloadArchive').scrollIntoViewIfNeeded();
- if(output)await page.locator('.record-actions').screenshot({path:path.join(output,'reload-controls.png')});
+ if(output){await page.locator('#toast').evaluate(el=>el.hidden=true);await page.locator('.record-actions').screenshot({path:path.join(output,'reload-controls.png')});}
  // A gesture already started on Play must not become a destructive dialog action.
  const play=await page.locator('#overviewRecord').boundingBox();await page.mouse.move(play.x+play.width/2,play.y+play.height/2);await page.mouse.down();
  await page.evaluate(()=>{window.begin();poll();});await page.mouse.up();assert.equal(await page.evaluate(()=>window.cancels),1);
