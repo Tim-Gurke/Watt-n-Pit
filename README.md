@@ -28,6 +28,8 @@ Im Hochformat bleibt die bewährte Anordnung erhalten. Im Querformat stehen Appn
 
 - **Restladezeit:** Unter **+ Kachel → Akku → Restladezeit** eine zusätzliche Zahl oder ein Rundinstrument bis 100 % anzeigen. Die Schätzung verwendet Ladezustand, eingestellte Ah-Kapazität und den Netto-Ladestrom des SmartShunt, zeitgewichtet über bis zu fünf Minuten. Stunden, Minuten, Tage und Sekunden sind wählbar. Bei Entladung steht „Wird nicht geladen“, ohne aktuelle Daten „—“. Sonne, Verbraucher und der abnehmende Ladestrom gegen Ladeende beeinflussen die verbleibende Zeit; das Zeichen ≈ kennzeichnet die Näherung. Bestehende Übersichten bleiben erhalten.
 
+![Restladezeit bis 100 Prozent mit frei erfundenen Beispieldaten](docs/images/charge-time.png)
+
 - **Daten nachladen:** Neben dem kompakten Play-/Pauseknopf steht auf der Übersicht ein eigener Nachladeknopf. Er prüft beide eingerichteten Geräte und ergänzt fehlende Archivwerte auch direkt nach einem abgebrochenen Abruf. Bereits gespeicherte Werte bleiben erhalten.
 - **Abbruch bestätigen:** Ein Tipp auf „Synchronisation abbrechen“ öffnet zuerst eine Bestätigung. „Weiter synchronisieren“ ist die sichere Vorauswahl; erst „Abbruch bestätigen“ beendet den Abruf.
 - **Verbrauch im Tagesarchiv:** Neben dem Solar-Tagesertrag erscheint der aus Solar- und Shunt-Messungen berechnete Verbrauch in Wh samt zeitlicher Abdeckung. Fehlende Messdaten erscheinen als „—“, gemessener Nullverbrauch als 0,00. Die Berechnung läuft im Hintergrund und verwendet dieselbe Energieformel wie der Verlauf.

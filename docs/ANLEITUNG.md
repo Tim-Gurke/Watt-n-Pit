@@ -77,6 +77,8 @@ Der Ladestrom wird zeitgewichtet über die letzten fünf Minuten gemittelt. Dire
 
 Stunden sind voreingestellt; Minuten, Tage und Sekunden sowie Zahl und Rundinstrument sind wählbar. Die Großansicht zeigt denselben aktuellen Schätzwert mit Erklärung. Historische Zeiträume und Vergleichskurven werden für diese reine Live-Schätzung ausgeblendet. Die neue Kachel ist optional und verändert vorhandene Anordnungen nicht.
 
+![Restladezeit mit drei Stunden als frei erfundenem Beispiel](images/charge-time.png)
+
 Solarleistung und Solarertrag zeigen im Standard die Zeit **seit Sonnenaufgang**. Nach Sonnenuntergang endet ihre Zeitachse dort; der erreichte Wh-Ertrag bleibt sichtbar. Verwertbare Erzeugung davor oder danach erweitert das Fenster und wird mitgezählt. Die Aufzeichnung läuft weiter. Ohne gültigen Sonnenuntergang reicht das Solarfenster mit erkennbarem Hinweis bis jetzt. Verbrauch und Bilanz beziehen sich auf **heute ab Mitternacht** und enthalten damit auch die Nacht. Die vier Verlaufskacheln passen ihre Skalen automatisch an die vorhandenen Werte an. Die breite Ansicht besitzt eine eigene gespeicherte Anordnung.
 
 **+ Kachel** öffnet die Auswahl. Neue Kacheln erscheinen am Ende des Rasters. Eine Messkachel antippen und **Kachel-Einstellungen** wählen, um Beschriftung, Einheit, Darstellung und Zeitraum dauerhaft zu ändern. **Großansicht öffnen** zeigt dieselbe Messgröße zum Untersuchen in groß. Als Darstellung stehen je nach Messgröße Zahl, Rundinstrument oder Verlauf zur Wahl.
