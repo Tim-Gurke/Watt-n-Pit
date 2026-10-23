@@ -114,7 +114,9 @@ final class SolarPlanning extends SQLiteOpenHelper {
             }db.delete("observations","end<?",new String[]{""+(now-400L*86400000)});db.delete("contexts","at<?",new String[]{""+(now-410L*86400000)});db.setTransactionSuccessful();}finally{db.endTransaction();}
             JSONArray samples=new JSONArray(),forecasts=new JSONArray();
             try(Cursor c=db.rawQuery("SELECT payload FROM observations WHERE source=? ORDER BY start DESC LIMIT 1300",new String[]{source})){while(c.moveToNext())samples.put(new JSONObject(c.getString(0)));}
-            try(Cursor c=db.rawQuery("SELECT payload FROM forecasts ORDER BY issued DESC LIMIT 5000",null)){while(c.moveToNext())forecasts.put(new JSONObject(c.getString(0)));}
+            // One original eligible prediction per interval keeps the bridge payload small.
+            // SQLite's single MIN aggregate selects payload from that same earliest row.
+            try(Cursor c=db.rawQuery("SELECT payload,MIN(issued) FROM forecasts WHERE key=? AND issued<=start-43200000 AND issued>=start-259200000 GROUP BY start,end ORDER BY start DESC LIMIT 200",new String[]{currentKey})){while(c.moveToNext())forecasts.put(new JSONObject(c.getString(0)));}
             result.put("source",source).put("observations",samples).put("forecasts",forecasts).put("updated",now);
         }catch(Exception e){try{result.put("error","Lerndaten gerade nicht verfügbar. Die Solarvorschau bleibt nutzbar.");}catch(JSONException ignored){}}
         finally{busy.set(false);if(!closed&&result.length()>0)callback.accept(result);}});
