@@ -19,7 +19,7 @@ test_dir = root / 'app/src/test/java/de/wattpit/app/core'
 subprocess.run(['java', 'com.sun.tools.javac.Main', '-cp', classpath, '-d', str(out),
                 *map(str, source_dir.glob('*.java')), *map(str, test_dir.glob('*.java'))], check=True)
 classes = ['de.wattpit.app.core.' + p.stem for p in sorted(test_dir.glob('*Test.java'))]
-run = subprocess.run(['java', '-cp', os.pathsep.join([str(out), classpath]), 'org.junit.runner.JUnitCore', *classes], capture_output=True, text=True)
+run = subprocess.run(['java', '-cp', os.pathsep.join([str(out), str(root/'app/src/test/resources'), classpath]), 'org.junit.runner.JUnitCore', *classes], capture_output=True, text=True)
 (out / 'results.log').write_text(run.stdout + run.stderr)
 print(run.stdout + run.stderr, end='')
 raise SystemExit(run.returncode)

@@ -254,6 +254,38 @@ final class HistoryDb extends SQLiteOpenHelper {
         }
         return new JSONObject().put("days",days);
     }
+    /** Complete local time bins for planning; never extrapolates an incomplete measurement day. */
+    JSONArray planningObservations(long from,long to,JSONObject weather,String solarDevice,String shuntDevice)throws Exception{
+        java.time.ZoneId zone;try{zone=java.time.ZoneId.of(weather.optString("timezone",java.time.ZoneId.systemDefault().getId()));}catch(Exception e){zone=java.time.ZoneId.systemDefault();}
+        java.time.LocalDate day=java.time.Instant.ofEpochMilli(from).atZone(zone).toLocalDate();
+        List<EnergyIntegral.Sample> solarSamples=planningSamples(from,to,"solar",solarDevice);
+        List<SampleTimeline.Interval> solar=SampleTimeline.intervals(solarSamples,from,to,false);
+        List<SampleTimeline.Interval> battery=EnergyIntegral.powerIntervals(planningSamples(from,to,"batteryPower",shuntDevice),planningSamples(from,to,"batteryVoltage",shuntDevice),planningSamples(from,to,"batteryCurrent",shuntDevice),from,to);
+        List<SampleTimeline.Interval> states=SampleTimeline.intervals(planningSamples(from,to,"state",solarDevice),from,to,false);
+        JSONArray days=weather.optJSONArray("days"),rows=new JSONArray();
+        while(day.atStartOfDay(zone).toInstant().toEpochMilli()<to){
+            long start=day.atStartOfDay(zone).toInstant().toEpochMilli(),end=day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),rise=start,set=end;
+            if(days!=null)for(int i=0;i<days.length();i++){JSONObject d=days.getJSONObject(i);if(day.toString().equals(d.optString("day"))){long r=d.optLong("sunrise"),s=d.optLong("sunset");if(r>=start&&s>r&&s<=end){rise=r;set=s;}break;}}
+            long[] bounds={start,day.atTime(11,0).atZone(zone).toInstant().toEpochMilli(),day.atTime(16,0).atZone(zone).toInstant().toEpochMilli(),end};
+            for(int slot=0;slot<3;slot++){
+                long a=bounds[slot],b=bounds[slot+1];if(a<from||b>to)continue;
+                long sunFrom=Math.max(a,Math.min(b,rise)),sunTo=Math.max(sunFrom,Math.min(b,set));
+                EnergyIntegral.Flow flow=EnergyIntegral.flowIntervals(clipIntervals(solar,a,b),clipIntervals(battery,a,b),a,b,sunFrom,sunTo);
+                long lightFrom=flow.solarFrom,lightTo=flow.solarTo,bulk=0;for(SampleTimeline.Interval x:clipIntervals(states,lightFrom,lightTo))if(x.a==3&&x.b==3)bulk+=x.to-x.from;
+                boolean extraCharging=false;EnergyIntegral.Point previous=null;for(EnergyIntegral.Point point:flow.consumption.points){if(previous!=null&&!point.gap&&point.wh<previous.wh-2)extraCharging=true;previous=point;}
+                rows.put(new JSONObject().put("day",day.toString()).put("slot",slot).put("from",a).put("to",b)
+                    .put("consumption",flow.consumption.wh==null?JSONObject.NULL:flow.consumption.wh).put("solar",flow.solar.wh==null?JSONObject.NULL:flow.solar.wh)
+                    .put("coverage",flow.consumption.coverage(a,b)).put("solarCoverage",lightTo>lightFrom?flow.solar.coverage(lightFrom,lightTo):1).put("extraCharging",extraCharging)
+                    .put("actualSolarCoverage",planningCoverage(solar,a,b))
+                    .put("bulkCoverage",lightTo>lightFrom?Math.min(1,bulk/(double)(lightTo-lightFrom)):1));
+            }day=day.plusDays(1);
+        }return rows;
+    }
+    private List<EnergyIntegral.Sample> planningSamples(long from,long to,String field,String device){
+        if(device==null||device.isEmpty())return new ArrayList<>();
+        List<EnergyIntegral.Sample> samples=fieldSamples(from,to,field,"all",device);samples.removeIf(s->s.origin.equals("csv"));return samples;
+    }
+    private static double planningCoverage(List<SampleTimeline.Interval> intervals,long from,long to){long covered=0;for(SampleTimeline.Interval x:clipIntervals(intervals,from,to))covered+=x.to-x.from;return to>from?Math.min(1,covered/(double)(to-from)):0;}
     private static List<SampleTimeline.Interval> clipIntervals(List<SampleTimeline.Interval> intervals,long from,long to){
         List<SampleTimeline.Interval> clipped=new ArrayList<>();
         for(SampleTimeline.Interval x:intervals){

@@ -15,6 +15,7 @@ public final class SQLiteDatabase implements AutoCloseable {
     SQLiteDatabase(String path){try{connection=DriverManager.getConnection("jdbc:sqlite:"+path);}catch(SQLException e){throw new IllegalStateException(e);}}
     public void beginTransaction(){try{if(!connection.getAutoCommit())throw new IllegalStateException("Nested test transaction");connection.setAutoCommit(false);successful=false;}catch(SQLException e){throw new IllegalStateException(e);}}
     public void setTransactionSuccessful(){successful=true;}
+    public boolean inTransaction(){try{return !connection.getAutoCommit();}catch(SQLException e){throw new IllegalStateException(e);}}
     public void endTransaction(){try{if(successful)connection.commit();else connection.rollback();connection.setAutoCommit(true);}catch(SQLException e){throw new IllegalStateException(e);}}
     private PreparedStatement statement(String sql,Object[] args)throws SQLException{
         PreparedStatement q=connection.prepareStatement(sql);if(args!=null)for(int i=0;i<args.length;i++)q.setObject(i+1,args[i]);return q;

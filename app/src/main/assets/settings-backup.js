@@ -1,8 +1,8 @@
 (function(root,factory){
-  const api=factory(typeof module==='object'&&module.exports?require('./dashboard-core.js'):root.WattDashboardCore,typeof module==='object'&&module.exports?require('./equipment.js'):root.WattEquipmentCore);
+  const api=factory(typeof module==='object'&&module.exports?require('./dashboard-core.js'):root.WattDashboardCore,typeof module==='object'&&module.exports?require('./equipment.js'):root.WattEquipmentCore,typeof module==='object'&&module.exports?require('./solar-core.js'):root.WattSolarCore);
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.WattSettingsCore=api;
-})(typeof globalThis==='object'?globalThis:this,function(D,E){
+})(typeof globalThis==='object'?globalThis:this,function(D,E,S){
   'use strict';
   const fail=message=>{throw new Error(message||'Keine gültige Watt’n’Pit-Einstellungsdatei.');};
   function normalize(input){
@@ -23,12 +23,14 @@
       weatherPlace={name:p.name.trim(),latitude:p.latitude,longitude:p.longitude};
     }
     const result={format:'wattnpit-settings',version:1,settings:{theme:s.theme,palette:s.palette,capacity:s.capacity,sampleSeconds:s.sampleSeconds,miniRange:s.miniRange},dashboard:D.normalize(board),equipment:E.normalize(input.equipment),weatherPlace};
+    result.solarSetup=S.normalize(input.solarSetup||{},result.equipment);
+    for(const g of result.equipment.groups)if(g.placement==='mobile')result.solarSetup.groups[g.id].active=false;
     if(typeof input.createdAt==='string'&&input.createdAt.length<=40&&Number.isFinite(Date.parse(input.createdAt)))result.createdAt=input.createdAt;
     return result;
   }
   function create(snapshot,dashboard,equipment){
     const s=snapshot.settings||{};
-    return normalize({format:'wattnpit-settings',version:1,createdAt:new Date().toISOString(),settings:{theme:s.theme||'dark',palette:s.palette||'classic',capacity:s.capacity??100,sampleSeconds:s.sampleSeconds??10,miniRange:s.miniRange||'sunrise'},dashboard,equipment,weatherPlace:s.weatherPlace||{}});
+    return normalize({format:'wattnpit-settings',version:1,createdAt:new Date().toISOString(),settings:{theme:s.theme||'dark',palette:s.palette||'classic',capacity:s.capacity??100,sampleSeconds:s.sampleSeconds??10,miniRange:s.miniRange||'sunrise'},dashboard,equipment,weatherPlace:s.weatherPlace||{},solarSetup:s.solarSetup||{}});
   }
   return {normalize,create};
 });

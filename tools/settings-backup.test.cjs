@@ -57,3 +57,12 @@ test('all overview periods and independent history heights survive portable back
   }
   const backup=sample();backup.settings.miniRange='unknown';assert.throws(()=>C.normalize(backup));
 });
+
+test('solar geometry, directions, shade and voluntary seasons transfer without activating a mobile module or copying learning',()=>{
+ const backup=sample();backup.equipment.groups[0].tilt=45;backup.equipment.groups.push({...backup.equipment.groups[0],id:'case',placement:'mobile',measurement:'shunt'});
+ backup.solarSetup={version:1,usageMode:'manual',manual:[100,null,200,300],groups:{'test-group':{active:true,azimuth:157.5,shade:[0,1,2]},case:{active:true,azimuth:180,shade:[0,0,0]}},observations:['PRIVATE_SENTINEL'],forecasts:['PRIVATE_SENTINEL']};
+ const clean=C.normalize(backup);assert.equal(clean.equipment.groups[0].tilt,45);assert.equal(clean.solarSetup.groups['test-group'].azimuth,157.5);assert.deepEqual(clean.solarSetup.manual,[100,null,200,300]);assert.equal(clean.solarSetup.groups.case.active,false);assert.ok(!JSON.stringify(clean).includes('PRIVATE_SENTINEL'));assert.deepEqual(C.normalize(clean),clean);
+});
+test('old backups upgrade to an unknown current setup without inventing mounting angles or consumption',()=>{
+ const backup=sample();delete backup.solarSetup;delete backup.equipment.groups[0].tilt;const clean=C.normalize(backup);assert.equal(clean.equipment.groups[0].tilt,null);assert.equal(clean.solarSetup.groups['test-group'].azimuth,null);assert.deepEqual(clean.solarSetup.manual,[null,null,null,null]);
+});

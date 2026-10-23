@@ -7,11 +7,13 @@ import android.database.Cursor;
 public abstract class SQLiteOpenHelper implements AutoCloseable {
     private SQLiteDatabase db;
     private final int version;
-    public SQLiteOpenHelper(Context context,String name,SQLiteDatabase.CursorFactory factory,int version){this.version=version;}
+    private final String name;
+    public SQLiteOpenHelper(Context context,String name,SQLiteDatabase.CursorFactory factory,int version){this.version=version;this.name=name;}
     public void setWriteAheadLoggingEnabled(boolean enabled){ }
     public synchronized SQLiteDatabase getWritableDatabase(){
         if(db==null){
-            db=new SQLiteDatabase(System.getProperty("wattpit.test.database"));int previous;
+            String path=System.getProperty("wattpit.test.database");if(Boolean.getBoolean("wattpit.test.namedDatabases"))path=java.nio.file.Path.of(path).getParent().resolve(name).toString();
+            db=new SQLiteDatabase(path);int previous;
             try(Cursor c=db.rawQuery("PRAGMA user_version",null)){c.moveToFirst();previous=c.getInt(0);}
             if(previous==0)onCreate(db);else if(previous<version)onUpgrade(db,previous,version);
             db.execSQL("PRAGMA user_version="+version);

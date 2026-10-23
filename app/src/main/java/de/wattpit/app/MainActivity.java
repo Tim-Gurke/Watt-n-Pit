@@ -23,6 +23,10 @@ import java.util.concurrent.*;
 public final class MainActivity extends Activity {
     private WebView web;
     private Repository repository;
+    private SolarPlanning solarPlanning;
+    private SiteSensors siteSensors;
+    private boolean pendingSiteLocation;
+    private static final int SITE_PERMISSION=24;
     private final ExecutorService files = Executors.newSingleThreadExecutor();
     private final ExecutorService historyReads = Executors.newSingleThreadExecutor();
     private CsvCodec.Table pendingImport;
@@ -40,6 +44,8 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         if(savedInstanceState!=null)pendingSettingsExport=savedInstanceState.getString("pendingSettingsExport");
         repository = Repository.get(this);
+        solarPlanning=new SolarPlanning(this,repository,value->call("onSolarPlanData",value));
+        siteSensors=new SiteSensors(this,repository,this::call);
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(13,18,27));
         web.setFitsSystemWindows(true);
@@ -89,7 +95,7 @@ public final class MainActivity extends Activity {
             },800);
         }
     }
-    @Override protected void onStop(){foreground=false;web.removeCallbacks(retryIncompleteArchive);stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
+    @Override protected void onStop(){pendingSiteLocation=false;siteSensors.stop();foreground=false;web.removeCallbacks(retryIncompleteArchive);stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
     private final Runnable retryIncompleteArchive=new Runnable(){@Override public void run(){startAutomaticImport(true);web.postDelayed(this,15000);}};
     private void startAutomaticImport(){
         startAutomaticImport(false);
@@ -167,6 +173,7 @@ public final class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode,permissions,results);
         if (requestCode == PERMISSIONS && pendingStart) startAfterPermissions();
+        if(requestCode==SITE_PERMISSION&&pendingSiteLocation){pendingSiteLocation=false;siteSensors.locate();}
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -311,7 +318,21 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void searchWeather(String query){files.execute(()->{try{call("onWeatherSearch",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onWeatherSearch",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte Verbindung prüfen und erneut suchen."));}catch(JSONException ignored){}}});}
         @JavascriptInterface public String weatherPlace(String json){try{WeatherClient.place(repository,new JSONObject(json));return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public void refreshWeather(){WeatherClient.refresh(repository,true);}
-        @JavascriptInterface public String saveEquipment(String json){try{if(json.length()>20000)throw new IllegalArgumentException("Die Anlagenkonfiguration ist zu groß.");repository.saveEquipment(new JSONObject(json));return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public String solarSetup(){try{return solarPlanning.setup().toString();}catch(Exception e){return "{}";}}
+        @JavascriptInterface public String saveSolarSetup(String json,boolean newSite){try{solarPlanning.save(json,newSite);return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public String saveSolarSite(String json,String place){try{solarPlanning.saveSite(json,place);return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public void searchSolarPlaces(String query){files.execute(()->{try{call("onSolarPlaces",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onSolarPlaces",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte erneut versuchen."));}catch(JSONException ignored){}}});}
+        @JavascriptInterface public void rememberSolarContext(String key){solarPlanning.context(key);}
+        @JavascriptInterface public void rememberSolarForecasts(String json){solarPlanning.remember(json);}
+        @JavascriptInterface public void requestSolarData(){solarPlanning.request();}
+        @JavascriptInterface public void startSolarCompass(String place){runOnUiThread(()->{try{siteSensors.startCompass(new JSONObject(place));}catch(Exception e){siteSensors.startCompass(new JSONObject());}});}
+        @JavascriptInterface public void stopSolarCompass(){runOnUiThread(()->siteSensors.stopCompass());}
+        @JavascriptInterface public void cancelSolarLocation(){runOnUiThread(()->{pendingSiteLocation=false;siteSensors.cancelLocation();});}
+        @JavascriptInterface public void locateSolarSite(){runOnUiThread(()->{
+            if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED||checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED)siteSensors.locate();
+            else {pendingSiteLocation=true;requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},SITE_PERMISSION);}
+        });}
+        @JavascriptInterface public String saveEquipment(String json){try{if(json.length()>20000)throw new IllegalArgumentException("Die Anlagenkonfiguration ist zu groß.");repository.saveEquipment(new JSONObject(json));WeatherClient.refresh(repository,true);return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public String copyArchiveDiagnostics(){try{String text=repository.diagnosticText();runOnUiThread(()->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Watt’n’Pit-Archivdiagnose",text)));return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public void importArchive(String mac) {requestArchive(mac);}
         @JavascriptInterface public void importMissingArchive(){requestArchive("MANUAL");}
@@ -371,5 +392,5 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         web.evaluateJavascript("window.handleBack ? window.handleBack() : false",value -> { if (!"true".equals(value)) finish(); });
     }
-    @Override protected void onDestroy() { historyReads.shutdownNow();files.shutdown(); if (web != null) { web.removeJavascriptInterface("WattPit"); web.destroy(); web = null; } super.onDestroy(); }
+    @Override protected void onDestroy() { if(siteSensors!=null)siteSensors.stop();if(solarPlanning!=null)solarPlanning.shutdown();historyReads.shutdownNow();files.shutdown(); if (web != null) { web.removeJavascriptInterface("WattPit"); web.destroy(); web = null; } super.onDestroy(); }
 }

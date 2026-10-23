@@ -6,14 +6,18 @@ import java.util.*;
 public final class SolarEquipment {
     public static final class Group {
         public final String id,label,controller,placement,measurement;
-        public final int count;public final double watts;
+        public final int count;public final double watts;public final Double tilt;public final boolean defaultActive;
         public Group(String id,String label,int count,double watts,String placement,String controller,String measurement){
+            this(id,label,count,watts,placement,controller,measurement,null,!"mobile".equals(placement));
+        }
+        public Group(String id,String label,int count,double watts,String placement,String controller,String measurement,Double tilt,boolean defaultActive){
             if(id==null||!id.matches("[a-zA-Z0-9_-]{1,48}"))throw new IllegalArgumentException("Ungültige Solargruppe.");
             if(label==null||label.trim().isEmpty()||label.trim().length()>60||controller==null||controller.trim().length()>80)
                 throw new IllegalArgumentException("Bitte kurze Bezeichnungen für Solargruppe und Regler eingeben.");
             if(count<1||count>99||!Double.isFinite(watts)||watts<1||watts>5000)throw new IllegalArgumentException("Bitte 1–99 Module mit jeweils 1–5.000 Wp angeben.");
             if(!Arrays.asList("fixed","mobile","other").contains(placement)||!Arrays.asList("solar","shunt","none").contains(measurement))throw new IllegalArgumentException("Bitte Montage und Messwertquelle wählen.");
-            this.id=id;this.label=label.trim();this.count=count;this.watts=watts;this.placement=placement;this.controller=controller.trim();this.measurement=measurement;
+            if(tilt!=null&&(!Double.isFinite(tilt)||tilt<0||tilt>90))throw new IllegalArgumentException("Der Montagewinkel muss zwischen 0° und 90° liegen.");
+            this.id=id;this.label=label.trim();this.count=count;this.watts=watts;this.placement=placement;this.controller=controller.trim();this.measurement=measurement;this.tilt=tilt;this.defaultActive=!placement.equals("mobile")&&defaultActive;
         }
         public double ratedWatts(){return count*watts;}
     }

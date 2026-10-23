@@ -44,7 +44,7 @@ final class Repository {
     private JSONObject settingsSnapshot()throws JSONException{
         return new JSONObject().put("theme",prefs.getString("theme","dark")).put("palette",prefs.getString("palette","classic"))
             .put("miniRange",prefs.getString("miniRange","sunrise")).put("weatherPlace",new JSONObject(prefs.getString("weatherPlace","{}")))
-            .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10));
+            .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10)).put("solarSetup",new JSONObject(prefs.getString("solar-setup-v1","{}")));
     }
     /** Frozen history/statistics plus current app settings, without database or monitor waits. */
     String backgroundSnapshot(){
@@ -214,10 +214,10 @@ final class Repository {
         if(rows.length()>32)throw new IllegalArgumentException("Bis zu 32 Solargruppen sind möglich.");
         for(int i=0;i<rows.length();i++){
             JSONObject r=rows.getJSONObject(i);double count=r.getDouble("count");if(count!=Math.rint(count))throw new IllegalArgumentException("Die Modulanzahl muss ganzzahlig sein.");
-            groups.add(new SolarEquipment.Group(r.getString("id"),r.getString("label"),(int)count,r.getDouble("watts"),r.getString("placement"),r.optString("controller",""),r.getString("measurement")));
+            groups.add(new SolarEquipment.Group(r.getString("id"),r.getString("label"),(int)count,r.getDouble("watts"),r.getString("placement"),r.optString("controller",""),r.getString("measurement"),r.isNull("tilt")?null:r.getDouble("tilt"),r.optBoolean("defaultActive",!r.getString("placement").equals("mobile"))));
         }
         SolarEquipment setup=new SolarEquipment(groups);JSONArray clean=new JSONArray();
-        for(SolarEquipment.Group g:setup.groups)clean.put(new JSONObject().put("id",g.id).put("label",g.label).put("count",g.count).put("watts",g.watts).put("placement",g.placement).put("controller",g.controller).put("measurement",g.measurement));
+        for(SolarEquipment.Group g:setup.groups)clean.put(new JSONObject().put("id",g.id).put("label",g.label).put("count",g.count).put("watts",g.watts).put("placement",g.placement).put("controller",g.controller).put("measurement",g.measurement).put("tilt",g.tilt==null?JSONObject.NULL:g.tilt).put("defaultActive",g.defaultActive));
         return new JSONObject().put("version",1).put("groups",clean).put("ratedWatts",setup.ratedWatts());
     }
     synchronized void removeDevice(String mac) throws Exception {
@@ -311,10 +311,11 @@ final class Repository {
     synchronized boolean importConfiguration(String json)throws Exception{
         JSONObject backup=ConfigurationBackup.normalize(json),place=backup.getJSONObject("weatherPlace");
         String weather=place.length()==0?"":place.toString();
-        boolean changed=!weather.equals(prefs.getString("weatherPlace",""));
+        boolean changed=!weather.equals(prefs.getString("weatherPlace",""))||!backup.getJSONObject("equipment").toString().equals(prefs.getString("equipment-v1",""))||!backup.getJSONObject("solarSetup").toString().equals(prefs.getString("solar-setup-v1",""));
         SharedPreferences.Editor edit=settingsEditor(backup.getJSONObject("settings"))
             .putString("dashboard-v1",backup.getJSONObject("dashboard").toString())
-            .putString("equipment-v1",backup.getJSONObject("equipment").toString());
+            .putString("equipment-v1",backup.getJSONObject("equipment").toString())
+            .putString("solar-setup-v1",backup.getJSONObject("solarSetup").toString());
         if(weather.isEmpty())edit.remove("weatherPlace");else edit.putString("weatherPlace",weather);
         if(changed)edit.remove("weatherCache").remove("weatherError");
         if(!edit.commit())throw new java.io.IOException();
