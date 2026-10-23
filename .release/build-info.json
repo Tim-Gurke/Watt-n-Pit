@@ -1,0 +1,13 @@
+{
+  "version": "1.4.0",
+  "versionCode": 34,
+  "ci_commit": "d67e2fd27356b84f2dda7717c2b6799c2f7c067c",
+  "ci_run": "https://github.com/Tim-Gurke/Watt-n-Pit/actions/runs/39995157952",
+  "artifact_id": 12519875993,
+  "unsigned_sha256": "841119cc0fc743ccf5f0b3d469b1c0163b48ef308e7203b39e01e4b5d8b71b84",
+  "signed_sha256": "833017043abff2fdc9391679c70d5c1eb8024084b27a9139d3e10f46908bf129",
+  "certificate_sha256": "0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2",
+  "size": 223465,
+  "source_commit": "e0c7cb9c39d6bbb73d4a6a16c1dd203c493de284",
+  "source_tree": "b433bc8801d1749339f3a12b6ce056a88a474c0e"
+}
