@@ -185,19 +185,35 @@ Im **Solar-Tagesarchiv** unter dem Verlauf steht neben dem importierten Ertrag d
 
 ![Solar-Tagesarchiv mit berechnetem Verbrauch und erfasster Zeit](images/solar-daily-consumption.png)
 
-## 7. Wetter und Solaranlage einstellen
+## 7. Solarvorschau und Solaranlage einstellen
 
-**Einstellungen → Sonne voraus.** öffnet die manuelle Ortssuche. GPS wird dafür nicht benötigt. Nach der Ortswahl zeigt die flache Wetterkachel **14 Tage mit je einem Symbol und den erwarteten Sonnenstunden**. Seitlich wischen, um die weiteren Tage zu sehen; **↻** aktualisiert die Vorschau von Hand.
+**Einstellungen → Sonne voraus. → Aufstellung ändern** führt durch Standort, Himmelsrichtung und geschätzten Schatten. Die Ortssuche funktioniert ohne GPS-Berechtigung. Alternativ übernimmt **GPS-Standort übernehmen** nach deiner Zustimmung einen aktuellen Standort. Das ist ein einzelner Abruf; es gibt keine laufende Standortverfolgung. Ohne Standort bleibt die Vorschau ausgeschaltet.
 
-**Ab 1.2.2 wird die Vorhersage beim Öffnen der App und bei der Rückkehr aus dem Hintergrund automatisch frisch geladen**, sofern ein Wetterort eingestellt ist. Der Abruf läuft im Hintergrund. Währenddessen und ohne Internet bleibt die gespeicherte Vorschau sichtbar; bei einem Fehler erscheint ein entsprechender Hinweis. Ohne aktivierten Wetterort erfolgt kein Wetterabruf. **Wetter ausschalten** deaktiviert die Wetterfunktion wieder.
+### Solarkreise einmalig beschreiben
 
-Die Wetterkachel liegt im selben Raster wie die Messkacheln. **Anordnen** macht sie verschiebbar. Den Ortskopf antippen oder **···** wählen, um Beschriftung, Breite, Höhe und Deckkraft anzupassen. Nach dem Entfernen ist sie über **+ Kachel → Wetter** wieder verfügbar. Ohne Wetterort wird sie außerhalb des Anordnungsmodus ausgeblendet.
+Unter **Deine Solaranlage → Bearbeiten** hinterlegst du je Kreis Modulanzahl, Wp pro Modul, Regler, Messwertquelle und **Montagewinkel**: 0° bedeutet waagerecht, 90° senkrecht. Der Winkel bleibt Teil der Anlage und muss am neuen Standplatz nicht erneut eingegeben werden. Ein bisher unbekannter Winkel bleibt unbekannt. Feste Kreise lassen sich standardmäßig einbeziehen; mobile Kreise werden erst vor Ort zugeschaltet.
 
-![Editor für beispielhafte Solarkreise mit Nennleistung und Messwertquelle](images/equipment-editor.png)
+### Aufstellung am Standplatz
 
-*Einstellungen → Deine Solaranlage → Bearbeiten: Modulgruppen beschreiben und ihre Messwertquelle zuordnen. Die gezeigten Angaben sind frei erfunden.*
+Der Standort gilt für alle Kreise. Pro Kreis wählst du **eine von 16 Himmelsrichtungen** und Schatten für den ganzen Tag oder getrennt für morgens, mittags und abends. Die Richtung beschreibt die Vorderseite des Moduls, nicht die Fahrzeugfront. **Neuer Standplatz** setzt Richtung und Schatten zurück und schaltet mobile Kreise aus. Die gleiche Rücksetzung erfolgt bei Auswahl eines anderen Orts. Feste Montagewinkel bleiben erhalten. Alles wird mit **Aufstellung speichern** übernommen.
 
-Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und Regler eintragen. Als Messwertquelle stehen Bluetooth-Solarladeregler, Batteriebilanz des Shunts oder kein eigener Messwert zur Wahl. Die Nennleistung beschreibt deine Hardware; sie ersetzt keine Messung und ändert keine Geräteparameter. In 1.3.10 kann je ein SmartSolar und ein SmartShunt eingerichtet werden.
+**Mit Handy bestimmen** öffnet den Kompassassistenten. Das Handy waagerecht halten. **Draußen** frontal vor der Modulvorderseite stehen und die Handyoberkante auf das Modul richten: Die App nimmt die Gegenrichtung als Modulrichtung. **Drinnen** die Handyoberkante zur Montagewand richten, an deren Außenseite das Modul sitzt. Die Übernahme wird erst bei ruhigen und ausreichend guten Sensorwerten freigegeben. Metall und Magnete können auch ruhige Werte verfälschen; eine Kontrollmessung außerhalb des Fahrzeugs ist sinnvoll. Ohne geeigneten Sensor bleibt die manuelle Auswahl verfügbar. Beim Schließen oder Verlassen der App werden die Sensoren gestoppt.
+
+### Solar statt vollständigem Wetterbericht
+
+Die vorhandene Wetterkachel behält Position und Größe und zeigt **14 Tage Solarvorschau**. Das Symbol beschreibt den Sonnenanteil der Tageslichtstunden, statt den ungünstigsten Wetterzustand des Tages. Sonnenstunden und ein Balken aus erwarteter Strahlung helfen auch ohne vollständige Anlagenangaben. Bei bekanntem Winkel, Richtung und aktiven Kreisen kommt ein geschätzter Wh-Wert hinzu; in der Tagesansicht steht die Spanne. In sehr flachen Kacheln bleibt der Wh-Wert in der Tagesansicht zugänglich.
+
+Einen Tag antippen: **morgens bis 11 Uhr**, **mittags 11–16 Uhr**, **abends ab 16 Uhr**, feste Erzeugung, mobile Entlastung und Vergleich zum üblichen Verbrauch. Die Tageswerte gelten für dieselbe Aufstellung über den ganzen Tag; sie sind kein gemessener Ertrag. Weiter entfernte Tage sind grobe Tendenzen. Fehlende Anlagendaten oder Vorhersagewerte ergeben **—**, keinen erfundenen Nullertrag. Eine bewusst ausgeschaltete Anlage hat dagegen 0 Wh erwarteten Beitrag.
+
+**Mobil an/aus** meldet ein aufgestelltes bzw. abgebautes Modul. Bei mehreren mobilen Kreisen öffnet sich die gemeinsame Aufstellung. Ein ungemessener PWM-Kreis zählt in der Planung als geschätzte Verbrauchsentlastung. Sein tatsächlicher Beitrag ist bereits im gemessenen Shunt-Nettofluss enthalten; die bestehende Verbrauchsformel wird deshalb nicht zusätzlich korrigiert.
+
+Die Vorschau wird bei aktivierter Funktion beim Öffnen und Zurückkehren aktualisiert; **↻** lädt von Hand. Während des Abrufs und ohne Internet bleibt die gespeicherte Vorschau sichtbar. **Wetter ausschalten** beendet die Wetterabrufe. Die Kachel liegt weiter im gemeinsamen Raster; sie lässt sich über **Anordnen** verschieben, vergrößern, entfernen und über **+ Kachel → Wetter** wieder hinzufügen.
+
+### Automatisches Lernen ohne Vorabeingaben
+
+**Verbrauch für die Planung → Automatisch lernen** ist der Standard. Vollständig beobachtete Tage ohne gemeldete mobile oder ungemessene Zusatzladung bilden die Grundlage. Die App berücksichtigt Jahreszeit und Tagesabschnitte mit fließenden Übergängen. Neuere Daten und passende Jahreszeiten haben mehr Gewicht. Noch unbekannte Jahreszeiten bleiben ausdrücklich vorläufig. Ohne geeignete Daten steht **Wird ermittelt**; die Solarvorschau funktioniert trotzdem. Freiwillig kannst du eigene Wh pro Tag für Frühling, Sommer, Herbst und Winter hinterlegen. Leere Felder verlangen keine Eingabe.
+
+Originale Vorhersagen werden mit Zeitpunkt und Aufstellung lokal gespeichert und mit späteren geeigneten Messungen verglichen. Erst ab drei vergleichbaren Tagen wird je Tagesabschnitt vorsichtig korrigiert, bis zu zehn Tage schrittweise stärker. Kreise an derselben Messquelle werden gemeinsam gelernt. Messlücken, Wechsel während eines Abschnitts, gemeldete Zusatzladung, erkennbare zusätzliche Einspeisung und Absorptions-/Floatphasen scheiden als Lernbeispiele aus. Eine volle Batterie ist kein Beweis für geringen möglichen Solarertrag. Unbekannte Schattenlagen erweitern die Schätzspanne. Wetterfehler und nicht gemeldete Veränderungen können weiterhin zu Abweichungen führen.
 
 ## 8. Einstellungen und Messdaten sichern
 
@@ -205,14 +221,20 @@ Pro Solarkreis lassen sich Bezeichnung, Modulanzahl, Wp pro Modul, Montage und R
 
 *Einstellungen → Einstellungen sichern: die persönliche Gestaltung und Anlagenkonfiguration als Datei sichern.*
 
-**Einstellungen exportieren** erstellt eine JSON-Datei mit Kacheln, beiden Anordnungen, Farben, Zeiträumen, Akku-/Speicherparametern, Solaranlage und Wetterort. **Einstellungen importieren** zeigt vor der Übernahme eine geprüfte Vorschau. Ältere Sicherungen mit separatem Wetterblock werden übernommen.
+**Einstellungen exportieren** erstellt eine JSON-Datei mit Kacheln, beiden Anordnungen, Farben, Zeiträumen, Akku-/Speicherparametern, Solaranlage, Aufstellung, freiwilligen saisonalen Verbrauchswerten und Wetterort. **Einstellungen importieren** zeigt vor der Übernahme eine geprüfte Vorschau. Ältere Sicherungen mit separatem Wetterblock werden übernommen.
 
-Die Einstellungssicherung enthält **keine Geräteadressen, PINs, Verbindungsschlüssel oder Messdaten**. Auf dem Zieltelefon eingerichtete Geräte und vorhandene Messdaten bleiben erhalten. Auf einem neuen Telefon die Geräte separat einrichten. Der enthaltene Wetterort gehört zu deiner Konfiguration; eine Sicherung deshalb bewusst weitergeben.
+Die Einstellungssicherung enthält **keine Geräteadressen, PINs, Verbindungsschlüssel oder Messdaten**. Auf dem Zieltelefon eingerichtete Geräte und vorhandene Messdaten bleiben erhalten. Auf einem neuen Telefon die Geräte separat einrichten. Der enthaltene Standort gehört zu deiner Konfiguration; eine Sicherung deshalb bewusst weitergeben. Mobile Kreise sind nach dem Import aus. Lerndaten werden nicht exportiert.
 
 Messdaten werden getrennt über **Verlauf → Verlauf exportieren** als CSV gesichert und über **CSV importieren** wieder eingelesen. Näheres zur Spaltenzuordnung: [CSV-Import und Datenexport](CSV-IMPORT.md).
 
 ## 9. Lokal, mit optionalem Wetterabruf
 
-Watt’n’Pit benötigt kein Konto und überträgt keine Energiedaten oder Geräteschlüssel an einen Cloud-Dienst. Schlüssel liegen mit dem Android Keystore geschützt auf dem Telefon. Die optionale Wetterfunktion benötigt Internet: Suchtext bzw. gewählte Ortskoordinaten gehen an Open-Meteo. Wetterdaten: Open-Meteo, CC BY 4.0; Ortsdaten: GeoNames.
+Watt’n’Pit benötigt kein Konto und überträgt keine Energiedaten oder Geräteschlüssel an einen Cloud-Dienst. Schlüssel liegen mit dem Android Keystore geschützt auf dem Telefon. Die optionale Wetterfunktion benötigt Internet: Suchtext bzw. gewählte Ortskoordinaten, Montagewinkel und Ausrichtung gehen an Open-Meteo. Wetterdaten: Open-Meteo, CC BY 4.0; Ortsdaten: GeoNames.
 
 Ladezustand und Restlaufzeit stammen vom SmartShunt. Temperatur und Zusatzspannung benötigen einen entsprechend eingerichteten Eingang. Weitere Victron-Geräte sind nicht pauschal als kompatibel bestätigt. [Technische Grundlage und Grenzen](ARCHITECTURE.md).
+
+## 10. Mehrere Handys
+
+Die App kann auf mehreren Handys eingerichtet werden. Geräte und Sofortanzeigeschlüssel werden auf jedem Handy separat hinterlegt. Einstellungen lassen sich per JSON, Messdaten per CSV übertragen. Messungen, aktuelle Aufstellung und Lernstand werden nicht automatisch zwischen Handys abgeglichen; importierte CSV-Daten bilden keine verlässlichen neuen Lernbeispiele.
+
+Die Sofortanzeige empfängt ausgesendete Livewerte ohne feste Bluetooth-Verbindung. Der Gerätearchivabruf benötigt eine Verbindung: Laut Victron kann nur ein Handy zugleich mit demselben Gerät verbunden sein. Archive deshalb nacheinander ergänzen; eine offene VictronConnect-Verbindung kann den Abruf ebenfalls belegen. [Victron-Verbindungshinweise](https://www.victronenergy.com/media/pg/VictronConnect_app/en/troubleshooting.html).

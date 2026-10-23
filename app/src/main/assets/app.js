@@ -46,7 +46,7 @@ let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastM
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let currentImport = null, lastHistoryRevision=-1, historyPending=false, archiveRequestedUntil=0;
-let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null;
+let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null, solar = null;
 const overviewLandscape = window.matchMedia('(orientation: landscape)');
 
 function syncOverviewHeader() {
@@ -182,6 +182,7 @@ function reloadMissingData(){
   archiveRequestedUntil=Date.now()+1500;renderOverview();native.importMissingArchive();setTimeout(poll,250);
 }
 function openModal(title,content) {
+  document.dispatchEvent(new Event('watt-modal-close'));
   $('modalTitle').textContent = title; $('modalBody').innerHTML = content; $('modal').hidden = false;
   document.body.style.overflow = 'hidden';
   $('closeModal').focus();
@@ -189,6 +190,7 @@ function openModal(title,content) {
 function closeModal() {
   if (currentImport?.busy) return;
   if (currentImport && native) native.cancelImport();
+  document.dispatchEvent(new Event('watt-modal-close'));
   currentImport = null; $('modal').hidden = true; $('modalBody').innerHTML = ''; document.body.style.overflow = '';
 }
 window.handleBack = () => {
@@ -468,7 +470,8 @@ lifecycle=new window.WattLifecycle({native,toast,poll,stateChanged:state=>reads?
 lifecycle.poll();
 dashboard = new window.WattDashboard({native,resizeMini:drawMini,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
-extras = new window.WattExtras({native,getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,cancelArchive:()=>lifecycle.confirmCancellation(),repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
+extras = new window.WattExtras({native,renderSolar:()=>solar?.render(),getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,cancelArchive:()=>lifecycle.confirmCancellation(),repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
+solar = new window.WattSolarPlan({native:deviceNative,equipment,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,symbol:code=>extras.symbol(code)});
 configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,dashboard,equipment,openModal,closeModal,toast,applied:backup=>{
   settingsDirty=false;poll();
   dashboard.config=window.WattDashboardCore.normalize(backup.dashboard);dashboard.saved=JSON.parse(JSON.stringify(dashboard.config));dashboard.cache.clear();

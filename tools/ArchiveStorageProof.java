@@ -109,7 +109,9 @@ public final class ArchiveStorageProof {
         System.setProperty("wattpit.test.database",args[0]);Class.forName("org.sqlite.JDBC");
         Repository repo=Repository.get(new TestContext(Path.of(args[0]+".prefs")));HistoryDb history=repo.db;SQLiteDatabase db=history.getWritableDatabase();
         long epoch=1700000000000L;ArchiveCodec.Clock c=clock(epoch);
-        if(args[1].equals("manual_queue")){
+        if(args[1].equals("solar_planning")){
+            SolarPlanningProof.run(repo,new TestContext(Path.of(args[0]+".prefs")));
+        }else if(args[1].equals("manual_queue")){
             repo.prefs.edit().putString("devices",new JSONArray().put(new JSONObject().put("mac","manual-solar").put("kind","solar")).put(new JSONObject().put("mac","manual-shunt").put("kind","shunt")).toString()).commit();
             repo.pauseAutomaticArchives();
             require(repo.requestedArchiveDevices("AUTO").length()==0&&repo.requestedArchiveDevices("RETRY").length()==0,"automatic requests respect an explicit cancellation pause");

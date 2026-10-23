@@ -50,6 +50,9 @@ final class ConfigurationBackup {
         JSONObject place=input.optJSONObject("weatherPlace");if(place==null)place=new JSONObject();
         if(place.length()>0)place=WeatherClient.checkedPlace(place);
         JSONObject result=new JSONObject().put("format","wattnpit-settings").put("version",1).put("settings",settings).put("dashboard",dashboard).put("equipment",Repository.checkedEquipment(input.getJSONObject("equipment"))).put("weatherPlace",place);
+        JSONObject solar=SolarPlanning.checked(input.optJSONObject("solarSetup")==null?new JSONObject():input.getJSONObject("solarSetup"),result.getJSONObject("equipment"));
+        JSONArray circles=result.getJSONObject("equipment").getJSONArray("groups");for(int i=0;i<circles.length();i++){JSONObject g=circles.getJSONObject(i);if(g.optString("placement").equals("mobile"))solar.getJSONObject("groups").getJSONObject(g.getString("id")).put("active",false);}
+        result.put("solarSetup",solar);
         if(input.has("createdAt"))result.put("createdAt",input.optString("createdAt").substring(0,Math.min(40,input.optString("createdAt").length())));
         return result;
     }

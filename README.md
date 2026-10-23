@@ -4,7 +4,7 @@
 
 **Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht.** Sie zeigt Messwerte, Verläufe und Energieauswertungen. Einstellungen an Solarregler und SmartShunt müssen weiterhin über die Victron-Software **VictronConnect** vorgenommen werden. Die Einstellungen in Watt’n’Pit betreffen nur die App und ändern keine Geräteparameter.
 
-**[Android-APK 1.3.12 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.12/Watt-n-Pit-v1.3.12.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.4.0 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.0/Watt-n-Pit-v1.4.0.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
 
@@ -71,13 +71,13 @@ Die Hochkant-Vorlage enthält zehn Kacheln und eine Verlaufshöhe von 465 Pixeln
 
 Beim ersten Öffnen den Cockpit-Hinweis lesen und **Verstanden** wählen. Er erscheint auch bei bestehenden Installationen einmal nach diesem Update. Die Bestätigung bleibt nur auf diesem Gerät und wird nicht mit Einstellungen exportiert.
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.12/Watt-n-Pit-v1.3.12.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.0/Watt-n-Pit-v1.4.0.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.
 5. Die aktive Verbindung in VictronConnect trennen, die Aufzeichnung starten und in Reichweite bleiben. Gerätearchive werden automatisch ergänzt. Auf der Übersicht startet **Daten nachladen** einen manuellen Abgleich beider Geräte; unter **Geräte** bleibt der Abruf einzelner Geräte verfügbar.
 
-Die sechsstellige Bluetooth-PIN für die Android-Kopplung ist **ein anderer Code** als der Schlüssel der Sofortanzeige. Bestehende Kopplungen brauchen keine neue PIN-Abfrage. Auf Android 8–11 benötigt die BLE-Suche Standortberechtigung und eingeschalteten Standortdienst; Watt’n’Pit zeichnet keinen Standort auf.
+Die sechsstellige Bluetooth-PIN für die Android-Kopplung ist **ein anderer Code** als der Schlüssel der Sofortanzeige. Bestehende Kopplungen brauchen keine neue PIN-Abfrage. Auf Android 8–11 benötigt die BLE-Suche Standortberechtigung und eingeschalteten Standortdienst; Die optionale Solarplanung übernimmt einen Standort nur auf ausdrücklichen Wunsch.
 
 **[Die vollständige Anleitung](docs/ANLEITUNG.md)** erklärt Einrichtung, Import, Anordnung, Sonnenaufgang, Skalen, Wetter, Solaranlage und Einstellungssicherung mit Screenshots.
 
@@ -101,11 +101,23 @@ Messlücken werden ausgelassen, nicht mit Tageswerten aufgefüllt. Die Prozentan
 
 Verbrauch und Bilanz verwenden einen gemeinsamen Zeitraum. Bei „Heute“ darf der Solarertrag seit Sonnenaufgang zählen; bei anderen Zeiträumen wechseln die drei Energiewerte gemeinsam. Einstellungen einer Großansicht verändern die Übersicht weiterhin nicht. Die Zusatzkacheln **Batterieentnahme berechnet** und **Akkubilanz** lassen sich unabhängig einstellen.
 
+## Solarvorschau und Energieplanung ab 1.4.0
+
+Die vorhandene Wetterkachel zeigt jetzt eine **Solarvorschau für 14 Tage** mit Sonnenstunden, einem sonnenbezogenen Symbol und Strahlungsbalken. Mit hinterlegten Solarkreisen, Montagewinkeln und aktueller Ausrichtung kommt eine geschätzte Wh-Spanne dazu. Ein Tag öffnet die Aufteilung in morgens, mittags und abends sowie den Vergleich zum üblichen Verbrauch. Weiter entfernte Tage sind eine grobe Tendenz.
+
+**Einstellungen → Deine Solaranlage** speichert den Montagewinkel je Kreis. **Aufstellung ändern** übernimmt den gemeinsamen Standort über Ortssuche oder einen freiwilligen einmaligen GPS-Abruf; je Kreis wählst du eine von 16 Richtungen und geschätzten Schatten. Der Handykompass unterstützt die Bestimmung draußen vor dem Modul oder drinnen zur Montagewand. Die Richtung wird erst nach ausdrücklichem Übernehmen und Speichern verwendet.
+
+Mobile Module sind standardmäßig aus. Der Schalter **Mobil an/aus** meldet die tatsächliche Aufstellung; nach einem Standortwechsel sind sie wieder aus. Ein ungemessener PWM-Kreis zählt ausschließlich als **geschätzte Verbrauchsentlastung**. Die bisherige Messformel bleibt erhalten, der PWM-Beitrag wird darin nicht ein zweites Mal abgezogen.
+
+Der Verbrauch lernt ohne vorherige Eingaben aus vollständig erfassten Tagen. Jahreszeit und Tagesabschnitte gehen mit gleitenden Übergängen ein; eigene saisonale Wh-Werte sind freiwillig. Ohne ausreichende Daten erscheint **Wird ermittelt** oder eine vorläufige Schätzung. Gespeicherte ursprüngliche Vorhersagen werden erst nach mehreren vergleichbaren Tagen vorsichtig an passende Messwerte angepasst. Messlücken, gemeldete Zusatzladung und erkennbare Abregelung sind keine gültigen Lernbeispiele. Lernstände bleiben auf diesem Telefon; mehrere Handys gleichen sie nicht automatisch ab.
+
+[Bedienung und Grenzen](docs/ANLEITUNG.md#7-solarvorschau-und-solaranlage-einstellen) · [Version 1.4.0](docs/releases/1.4.0.md)
+
 ## Lokal und mit optionalem Wetter
 
 Aufzeichnung, Gerätearchive und CSV-Daten werden lokal zusammengeführt. Geräteschlüssel werden mit dem Android Keystore verschlüsselt gespeichert. Die Einstellungssicherung enthält **keine Geräteadressen, PINs, Schlüssel oder Messdaten**; ihr Wetterort ist Bestandteil der Konfiguration.
 
-Nur die optionale Ortssuche und Wettervorschau nutzen Internet: Suchtext bzw. Ortskoordinaten gehen per HTTPS an Open-Meteo. Wetterdaten: Open-Meteo, CC BY 4.0; Ortsdaten: GeoNames. Es werden keine Energiedaten oder Geräteschlüssel übertragen.
+Nur die optionale Ortssuche und Wettervorschau nutzen Internet: Suchtext bzw. Ortskoordinaten sowie Montagewinkel und Ausrichtung gehen per HTTPS an Open-Meteo. Wetterdaten: Open-Meteo, CC BY 4.0; Ortsdaten: GeoNames. Es werden keine Energiedaten oder Geräteschlüssel übertragen.
 
 ## Kompatibilität und Stand
 
@@ -115,7 +127,7 @@ Es bleiben immer die **drei neuesten Releases mit APK-Downloads** verfügbar.
 
 Die App ändert keine Ladeparameter und löscht keine Gerätetrends. Temperatur und Zusatzspannung benötigen einen entsprechend eingerichteten Geräteeingang. Eine lang laufende Aufzeichnung kann durch Android-Energiespareinstellungen begrenzt werden.
 
-Automatisierte Prüfung: **176 JVM-Tests und 65 Node-Tests**, zusätzliche SQLite-/Speicher-/Neustartprüfungen mit aufgezeichneten Victron-Antworten sowie 12 Vordergrundprüfungen, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen, Energiekurven und Farbdesigns. Die Energieberechnung prüft zusätzlich direkten Solarverbrauch, Laden/Entladen, nicht gemessenen PWM-Ertrag, Nachtverbrauch trotz Sonnenaufgangsfenster, gemeinsame Messabdeckung, Messlücken und Quellenüberlappung. Browserprüfungen decken die Umstellung bestehender Kacheln, Zeitraumwahl, Einheiten und Einstellungsexport/-import ab. Die bisherigen Browserprüfungen testen zusätzlich asynchrone Abfragen während des Imports, die Wahl pro Abruf, Wiederöffnen, Gerätewechsel sowie die verschiebbare Kurvenmarkierung, sichtbare Warteanzeige, Abbruch und Erhalt offener Eingaben. Die neuen Synchronisationstests prüfen außerdem ältere Lücken, teilweise vorhandene Pakete, Livewerte, Auflösungen, unabhängige App-Installationen und Geräte, Wiederaufnahme und Neustart-Zeitanker. Die tatsächliche Dauer des Bluetooth-Abrufs und die Android-Dateiauswahl sind zusätzlich am Telefon zu bestätigen. [Versionshinweise](docs/releases/1.3.9.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
+Automatisierte Prüfung: **178 JVM-Tests und 99 Node-Tests**, zusätzliche SQLite-/Speicher-/Neustartprüfungen mit aufgezeichneten Victron-Antworten sowie 12 Vordergrundprüfungen, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen, Energiekurven und Farbdesigns. Die Energieberechnung prüft zusätzlich direkten Solarverbrauch, Laden/Entladen, nicht gemessenen PWM-Ertrag, Nachtverbrauch trotz Sonnenaufgangsfenster, gemeinsame Messabdeckung, Messlücken und Quellenüberlappung. Browserprüfungen decken die Umstellung bestehender Kacheln, Zeitraumwahl, Einheiten und Einstellungsexport/-import ab. Die bisherigen Browserprüfungen testen zusätzlich asynchrone Abfragen während des Imports, die Wahl pro Abruf, Wiederöffnen, Gerätewechsel sowie die verschiebbare Kurvenmarkierung, sichtbare Warteanzeige, Abbruch und Erhalt offener Eingaben. Die neuen Synchronisationstests prüfen außerdem ältere Lücken, teilweise vorhandene Pakete, Livewerte, Auflösungen, unabhängige App-Installationen und Geräte, Wiederaufnahme und Neustart-Zeitanker. Die tatsächliche Dauer des Bluetooth-Abrufs und die Android-Dateiauswahl sind zusätzlich am Telefon zu bestätigen. [Versionshinweise](docs/releases/1.4.0.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
 ## Entwicklung
 
@@ -123,7 +135,7 @@ Java 17 und Android SDK 35:
 
 ```sh
 ./gradlew testDebugUnitTest lintDebug assembleDebug
-node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs tools/settings-backup.test.cjs tools/tile-detail.test.cjs
+node --test tools/dashboard-core.test.cjs tools/equipment-core.test.cjs tools/settings-backup.test.cjs tools/tile-detail.test.cjs tools/read-bridge.test.cjs tools/solar-core.test.cjs
 ```
 
 Die Debug-APK liegt unter `app/build/outputs/apk/debug/app-debug.apk`. Öffentliche APKs werden mit einem dauerhaften privaten Schlüssel signiert, damit spätere Updates kompatibel bleiben. Die App verwendet keine npm-Abhängigkeiten.
