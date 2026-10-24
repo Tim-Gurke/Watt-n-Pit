@@ -70,7 +70,8 @@ public final class VictronDecoder {
             if (auxType == 2 && rawAux != 0xffff) r.temperature = rawAux * 0.01 - 273.15;
             else if (auxType == 0 && rawAux != 0x7fff) r.aux = signed(rawAux, 16) * 0.01;
             else if (auxType == 1 && rawAux != 0xffff) r.aux = rawAux * 0.01;
-            r.current = signedValue(payload, 66, 22, 0x3fffff, 0.001);
+            // Signed 22-bit NA is the maximum positive value. All ones means -1 mA.
+            r.current = signedValue(payload, 66, 22, 0x1fffff, 0.001);
             r.consumed = value(payload, 88, 20, 0xfffff, -0.1);
             r.soc = value(payload, 108, 10, 0x3ff, 0.1);
             if (r.soc != null && r.soc > 100.0) throw new IllegalArgumentException("Unplausible Daten. Schlüssel prüfen.");

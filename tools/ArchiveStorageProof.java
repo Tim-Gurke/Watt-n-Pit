@@ -105,11 +105,48 @@ public final class ArchiveStorageProof {
         }
         require(decoded==peer.pairs.size()&&h.link.received()==parts&&!h.cancelled,"actual incoming method merges both characteristics and replenishes all 956 captured fragments");
     }
+    private static void unavailableCurrentRepair(String path)throws Exception{
+        String previous=System.getProperty("wattpit.test.database");System.setProperty("wattpit.test.database",path);
+        long start=1700000000000L,end=start+90000;
+        try{
+            HistoryDb history=new HistoryDb(null);SQLiteDatabase db=history.getWritableDatabase();
+            for(long t=start;t<=end;t+=30000){
+                Reading solar=new Reading();solar.timestamp=t;solar.device="na-solar";solar.kind="solar";solar.origin="archive";solar.period=30;solar.solar=20.0;history.insert(solar);
+                Reading shunt=new Reading();shunt.timestamp=t;shunt.device="na-shunt";shunt.kind="shunt";shunt.origin="archive";shunt.period=30;shunt.voltage=13.4;shunt.current=0.75;history.insert(shunt);
+            }
+            for(long offset:new long[]{0,15000,30000,75000,90000}){
+                Reading r=new Reading();r.timestamp=start+offset;r.device="na-shunt";r.kind="shunt";r.period=10;r.voltage=13.4;r.current=0.75;r.soc=100.0;r.calculatePower();history.insert(r);
+            }
+            // Bypass insertion safeguards to recreate a database written by the old decoder.
+            db.execSQL("INSERT INTO readings(ts,device,kind,origin,period,current,alarm) VALUES(?,'na-shunt','shunt','live',10,2097.151,0)",new Object[]{start+45000});
+            db.execSQL("INSERT INTO readings(ts,device,kind,origin,period,voltage,current,power,soc,alarm) VALUES(?,'na-shunt','shunt','live',10,13.4,2097.151,28101.8234,100,0)",new Object[]{start+60000});
+            db.execSQL("INSERT INTO archive_coverage VALUES('na-shunt',1,30,?,?)",new Object[]{start,end});
+            db.execSQL("INSERT INTO device_settings VALUES('na-shunt',?,?,?)",new Object[]{start,end,"{\"values\":{\"test\":1}}"});
+            double before=history.energyFlow(start,end,"all").getJSONObject("consumption").getJSONObject("summary").getDouble("last");
+            require(before < -100,"legacy unavailable-current records reproduce a false consumption drop through actual HistoryDb");
+            db.execSQL("PRAGMA user_version=6");history.close();
+            history=new HistoryDb(null);db=history.getWritableDatabase();
+            try(Cursor c=db.rawQuery("PRAGMA user_version",null)){c.moveToFirst();require(c.getInt(0)==7,"opening a version-6 database automatically runs the current repair");}
+            require(count(db,"readings","1=1")==15&&count(db,"readings","current=2097.151")==0,"repair keeps every sample and removes both unavailable currents");
+            require(count(db,"readings","device='na-shunt' AND origin='live' AND current IS NULL AND power IS NULL AND alarm=0")==2,"repair clears unavailable current and derived power while retaining alarm data");
+            require(count(db,"readings","ts="+(start+60000)+" AND voltage=13.4 AND soc=100 AND period=10")==1,"repair retains voltage, SOC and sample resolution from the affected row");
+            require(count(db,"readings","origin='archive' AND current=0.75")==4&&count(db,"archive_coverage","1=1")==1&&count(db,"device_settings","1=1")==1,"archive measurements, confirmations and device settings survive the upgrade");
+            double after=history.energyFlow(start,end,"all").getJSONObject("consumption").getJSONObject("summary").getDouble("last");
+            require(Math.abs(after-0.24875)<1e-8,"the unchanged energy formula uses valid archive data after repair instead of the false charging spike");
+            Reading old=new Reading();old.timestamp=end+10000;old.device="na-shunt";old.kind="shunt";old.current=2097.151;old.power=28101.8234;old.soc=50.0;history.insert(old);
+            require(count(db,"readings","soc=50 AND current IS NULL AND power IS NULL")==1,"storage rejects unavailable current even when a caller supplies old derived power");
+            history.close();history=new HistoryDb(null);db=history.getWritableDatabase();
+            require(count(db,"readings","1=1")==16&&count(db,"readings","current=2097.151")==0,"a second start preserves the repaired history without repeating or deleting samples");
+            history.close();
+        }finally{System.setProperty("wattpit.test.database",previous);}
+    }
     public static void main(String[] args)throws Exception{
         System.setProperty("wattpit.test.database",args[0]);Class.forName("org.sqlite.JDBC");
         Repository repo=Repository.get(new TestContext(Path.of(args[0]+".prefs")));HistoryDb history=repo.db;SQLiteDatabase db=history.getWritableDatabase();
         long epoch=1700000000000L;ArchiveCodec.Clock c=clock(epoch);
-        if(args[1].equals("weather_contract")){
+        if(args[1].equals("unavailable_current")){
+            unavailableCurrentRepair(args[0]+".unavailable");
+        }else if(args[1].equals("weather_contract")){
             WeatherContractProof.run(Path.of(args[2]).getParent().getParent().resolve("weather"),Path.of(args[3]));
         }else if(args[1].equals("solar_planning")){
             SolarPlanningProof.run(repo,new TestContext(Path.of(args[0]+".prefs")));

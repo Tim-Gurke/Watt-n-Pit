@@ -29,4 +29,27 @@ public class HistorySchemaTest {
             assertEquals(1,db.createStatement().executeUpdate(sql));assertEquals(0,db.createStatement().executeUpdate(sql));
         }
     }
+    @Test public void unavailableCurrentRepairPreservesHistoryAndOnlyClearsTheLiveShuntSentinel()throws Exception{
+        try(Connection db=DriverManager.getConnection("jdbc:sqlite::memory:")){
+            db.createStatement().execute(HistorySchema.CREATE);
+            db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,period,voltage,current,power,soc,alarm) VALUES"
+                +"(1000,'shunt','shunt','live',10,NULL,2097.151,NULL,NULL,0),"
+                +"(2000,'shunt','shunt','live',10,13.4,2097.151,28101.8234,100,0),"
+                +"(3000,'shunt','shunt','live',10,13.4,-0.001,-0.0134,100,0),"
+                +"(4000,'shunt','shunt','live',10,13.4,2097.15,28101.81,100,0),"
+                +"(5000,'shunt','shunt','archive',30,13.4,2097.151,28101.8234,100,0),"
+                +"(6000,'shunt','shunt','csv',0,13.4,2097.151,28101.8234,100,0),"
+                +"(7000,'solar','solar','live',10,13.4,2097.151,28101.8234,NULL,0)");
+            assertEquals(2,db.createStatement().executeUpdate(HistorySchema.REPAIR_UNAVAILABLE_SHUNT_CURRENT));
+            assertEquals(0,db.createStatement().executeUpdate(HistorySchema.REPAIR_UNAVAILABLE_SHUNT_CURRENT));
+            try(ResultSet r=db.createStatement().executeQuery("SELECT ts,device,origin,period,voltage,current,power,soc,alarm FROM readings ORDER BY ts")){
+                assertTrue(r.next());assertEquals(1000,r.getLong(1));assertNull(r.getObject(5));assertNull(r.getObject(6));assertNull(r.getObject(7));assertNull(r.getObject(8));assertEquals(0,r.getInt(9));
+                assertTrue(r.next());assertEquals(2000,r.getLong(1));assertEquals("shunt",r.getString(2));assertEquals("live",r.getString(3));assertEquals(10,r.getInt(4));assertEquals(13.4,r.getDouble(5),0);assertNull(r.getObject(6));assertNull(r.getObject(7));assertEquals(100,r.getDouble(8),0);assertEquals(0,r.getInt(9));
+                assertTrue(r.next());assertEquals(-0.001,r.getDouble(6),0);assertEquals(-0.0134,r.getDouble(7),0);
+                assertTrue(r.next());assertEquals(2097.15,r.getDouble(6),0);assertEquals(28101.81,r.getDouble(7),0);
+                for(int i=0;i<3;i++){assertTrue(r.next());assertEquals(2097.151,r.getDouble(6),0);assertEquals(28101.8234,r.getDouble(7),0);}
+                assertFalse(r.next());
+            }
+        }
+    }
 }

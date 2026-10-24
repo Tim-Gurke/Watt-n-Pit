@@ -30,8 +30,20 @@ public class VictronDecoderTest {
         Reading r=VictronDecoder.decodePayload(1,hex("ffff ff7f ff7f ffff ffff ffff ffff".replace(" ","")));
         assertNull(r.state);assertNull(r.error);assertNull(r.voltage);assertNull(r.current);
         assertNull(r.yieldWh);assertNull(r.solar);assertNull(r.load);assertNull(r.power);
-        Reading shunt=VictronDecoder.decodePayload(2,hex("ffff ff7f ffff ffff ffff ffff ffff ffff".replace(" ","")));
+        Reading shunt=VictronDecoder.decodePayload(2,hex("ffffff7fffffffffffff7fffffffffff"));
         assertNull(shunt.ttg);assertNull(shunt.current);assertNull(shunt.soc);assertNull(shunt.consumed);
+    }
+    @Test public void unavailableShuntCurrentCannotCreateChargingPower() {
+        // Independently packed fields: 13.4 V, raw current 0x1fffff, SOC 100%.
+        Reading r=VictronDecoder.decodePayload(2,hex("58023c050000ff7fffff7f0000803e"));
+        assertEquals(13.4,r.voltage,1e-8);assertEquals(100,r.soc,1e-8);
+        assertNull(r.current);assertNull(r.power);
+    }
+    @Test public void signedShuntCurrentRetainsSmallDischargeAndValidExtremes() {
+        Reading tiny=VictronDecoder.decodePayload(2,hex("58023c050000ff7fffffff0000803e"));
+        assertEquals(-0.001,tiny.current,1e-12);assertEquals(-0.0134,tiny.power,1e-12);
+        assertEquals(-2097.152,VictronDecoder.decodePayload(2,hex("58023c050000ff7f0300800000803e")).current,1e-9);
+        assertEquals(2097.150,VictronDecoder.decodePayload(2,hex("58023c050000ff7ffbff7f0000803e")).current,1e-9);
     }
     @Test(expected=IllegalArgumentException.class) public void rejectsChangedKey() throws Exception {
         VictronDecoder.decode(hex("1001a0a00134120139f8aef0449c08662c8cda58"),KEY);
