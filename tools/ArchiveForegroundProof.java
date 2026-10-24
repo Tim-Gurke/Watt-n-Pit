@@ -81,6 +81,11 @@ public final class ArchiveForegroundProof {
                 if(!transfer.accept(block))throw new AssertionError("simulated valid block was rejected");
             }
         }
+        try{
+            // The simulated successful session also completes its optional settings read.
+            Method settings=Repository.class.getDeclaredMethod("saveDeviceSettings",String.class,String.class,JSONObject.class,int.class,long.class);
+            settings.setAccessible(true);settings.invoke(repository,"solar-test","solar",new JSONObject(),0,now);
+        }catch(NoSuchMethodException baseline){/* Older production did not read settings. */}
         repository.archiveAttemptFinished("solar-test",false,true);
     }
     static void live()throws Exception{
