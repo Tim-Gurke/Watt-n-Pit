@@ -1,0 +1,18 @@
+{
+  "version": "1.4.3",
+  "versionCode": 37,
+  "build_source_commit": "fa23e7a8ec521637d32996a56adfc9af558df5cc",
+  "build_source_tree": "a40c8161d8b37a6358539c1d63119f97ad0f88dc",
+  "build_run": 40088118845,
+  "unsigned_artifact": 12557613894,
+  "unsigned_sha256": "c0acea0054344bde9dccfe1498e5c75c76d4e0180aa77ee0af32a2739bdcd374",
+  "apk": "Watt-n-Pit-v1.4.3.apk",
+  "apk_bytes": 227561,
+  "apk_sha256": "474488260c707b3cd4d99e8a84d4a414d60b770c8db6fd2d23b8f0e4fe977a29",
+  "signer_certificate_sha256": "0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2",
+  "jvm_tests": 182,
+  "javascript_tests": 109,
+  "all_checks_passed": true,
+  "apk_git_blob_sha1": "738801b214853d100902764b914e92661ead1116",
+  "release_source_commit": "872adf7482f1ed009b1128fca45b5734d6dd9089"
+}
