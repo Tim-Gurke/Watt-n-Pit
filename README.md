@@ -4,9 +4,19 @@
 
 **Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht.** Sie zeigt Messwerte, Verläufe und Energieauswertungen. Einstellungen an Solarregler und SmartShunt müssen weiterhin über die Victron-Software **VictronConnect** vorgenommen werden. Die Einstellungen in Watt’n’Pit betreffen nur die App und ändern keine Geräteparameter.
 
-**[Android-APK 1.4.5 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.5/Watt-n-Pit-v1.4.5.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+Auch Firmware-Updates deiner Victron-Geräte führst du weiterhin über die offiziellen Victron-Apps durch, bei SmartShunt und SmartSolar über VictronConnect. Watt’n’Pit kann keine Geräteupdates durchführen.
+
+**[Android-APK 1.4.6 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.6/Watt-n-Pit-v1.4.6.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
+
+## Neu in 1.4.6
+
+Die Solarvorschau bezeichnet die obere Wh-Spanne ausdrücklich als **Gesamtpotenzial aller aktiven Kreise**. Feste Kreise und mobile Entlastung stehen getrennt darunter. Die gemessene Solarertrag-Kachel enthält weiterhin nur die Solarregler. Die Energie- und Prognoseformeln bleiben unverändert; die angegebene Spanne ist kein garantierter Mindestertrag.
+
+Nach Sonnenuntergang bleibt der heutige Akkubalken mit einem passenden gespeicherten SmartShunt-Wert sichtbar. Die Tagesansicht nennt seine Messzeit und Quelle. Es wird ausschließlich ein Originalwert mit höchstens 15 Minuten Abstand verwendet; ohne passenden Wert erklärt die App die fehlende Grundlage. Die Reserve am nächsten Sonnenaufgang bleibt eine Prognose.
+
+**Einstellungen → Akku & Aufzeichnung → Betriebsbenachrichtigung einstellen** öffnet die Android-Einstellung für „Watt’n’Pit-Aufzeichnung“. Dort lässt sich die dauerhafte Anzeige ausblenden, während Empfang und Aufzeichnung weiterlaufen. Der Archivkanal ist getrennt. Sonnen hinter Wolken werden in beiden Designs sauber verdeckt; Firmware- und Projekthinweise sind ergänzt.
 
 ## Neu in 1.4.5
 
@@ -91,7 +101,7 @@ Die Hochkant-Vorlage enthält zehn Kacheln und eine Verlaufshöhe von 465 Pixeln
 
 Beim ersten Öffnen den Cockpit-Hinweis lesen und **Verstanden** wählen. Er erscheint auch bei bestehenden Installationen einmal nach diesem Update. Die Bestätigung bleibt nur auf diesem Gerät und wird nicht mit Einstellungen exportiert.
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.5/Watt-n-Pit-v1.4.5.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.6/Watt-n-Pit-v1.4.6.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.
@@ -165,3 +175,7 @@ Die Debug-APK liegt unter `app/build/outputs/apk/debug/app-debug.apk`. Öffentli
 Dokumentationsbilder lassen sich mit Playwright über `node tools/docs-screenshots.cjs` reproduzieren. Dabei werden ausschließlich erfundene Beispieldaten verwendet. Weitere Browserprüfungen stehen unter `tools/`.
 
 MIT-Lizenz.
+
+© 2026 Tim Weißbach und Mitwirkende · Watt’n’Pit
+
+Die bestehende [MIT-Lizenz](LICENSE) und die zugehörigen Copyright- und Drittanbieterhinweise bleiben erhalten.
