@@ -143,9 +143,14 @@ public final class CsvCodec {
         r.alarm = integer(table, row, map, "alarm");
         r.pvVoltage=number(table,row,map,"pvVoltage");r.auxRaw=number(table,row,map,"auxRaw");
         Integer period=integer(table,row,map,"period");r.period=period==null?0:Math.max(0,Math.min(86400,period));
-        r.calculatePower();
+        boolean unavailableCurrent = r.discardUnavailableCurrent();
+        if (!unavailableCurrent) r.calculatePower();
         if (r.soc != null && (r.soc < 0 || r.soc > 100)) throw new IllegalArgumentException("SOC muss zwischen 0 und 100 liegen.");
-        if (r.voltage == null && r.current == null && r.power == null && r.soc == null && r.solar == null && r.yieldWh == null && r.temperature == null && r.pvVoltage==null && r.auxRaw==null && r.aux==null && r.load==null)
+        if (!unavailableCurrent && r.voltage == null && r.current == null && r.power == null
+                && r.soc == null && r.solar == null && r.yieldWh == null && r.ttg == null
+                && r.consumed == null && r.temperature == null && r.pvVoltage == null
+                && r.auxRaw == null && r.aux == null && r.load == null && r.state == null
+                && r.error == null && r.alarm == null)
             throw new IllegalArgumentException("Kein zugeordneter Messwert in dieser Zeile.");
         return r;
     }

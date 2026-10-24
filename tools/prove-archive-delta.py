@@ -19,7 +19,7 @@ out.mkdir(parents=True, exist_ok=True)
 classes = out / 'classes'
 classes.mkdir(exist_ok=True)
 names = ['ArchiveCodec', 'VictronSettings', 'ArchiveMerge', 'ArchiveSyncPlan', 'ArchiveTransferPlan',
-         'ArchiveSchedule', 'HistorySchema', 'SampleTimeline', 'EnergyIntegral']
+         'ArchiveSchedule', 'HistorySchema', 'Reading', 'SampleTimeline', 'EnergyIntegral']
 sources = [root / 'app/src/main/java/de/wattpit/app/core' / (name + '.java') for name in names]
 subprocess.run(['java', 'com.sun.tools.javac.Main', '-d', str(classes),
                 *map(str, sources), str(root / 'tools/ArchiveDeltaProof.java')], check=True)

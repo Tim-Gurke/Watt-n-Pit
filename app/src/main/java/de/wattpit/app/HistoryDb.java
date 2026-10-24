@@ -22,7 +22,7 @@ import java.util.*;
 
 final class HistoryDb extends SQLiteOpenHelper {
     private static final String[] NUMBERS = {"voltage","current","power","soc","solar","yieldWh","ttg","consumed","temperature","aux","load","state","error","alarm","pvVoltage","auxRaw"};
-    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 6); setWriteAheadLoggingEnabled(true); }
+    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 7); setWriteAheadLoggingEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL(HistorySchema.CREATE);
         db.execSQL("CREATE INDEX history_window ON readings(ts,kind,origin)");
@@ -37,6 +37,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         else if(oldVersion<4)db.execSQL("ALTER TABLE device_daily ADD COLUMN finalized INTEGER NOT NULL DEFAULT 0");
         if(oldVersion<5)for(String sql:HistorySchema.MIGRATE)db.execSQL(sql);
         if(oldVersion<6)createDeviceSettings(db);
+        if(oldVersion<7)db.execSQL(HistorySchema.REPAIR_UNAVAILABLE_SHUNT_CURRENT);
     }
 
     private static void createDeviceSettings(SQLiteDatabase db){db.execSQL("CREATE TABLE device_settings(device TEXT NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(device,start))");}
@@ -154,6 +155,7 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
 
     boolean insert(Reading r) {
+        r.discardUnavailableCurrent();
         ContentValues v = new ContentValues();
         v.put("ts", r.timestamp); v.put("device", r.device); v.put("kind", r.kind); v.put("origin", r.origin);v.put("period",r.period);
         Object[] values = values(r);
