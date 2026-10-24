@@ -35,14 +35,14 @@ incoming=service[start:end]
 (generated/'IncomingHarness.java').write_text('package de.wattpit.app;\nimport java.util.*;import java.util.concurrent.*;import de.wattpit.app.core.*;\nfinal class IncomingHarness {\n static UUID uuid(int n){return UUID.fromString(String.format(Locale.ROOT,"306b%04x-b081-4037-83dc-e59fcc3cdfd0",n));}\n static final UUID CONTROL=uuid(2),DATA=uuid(3),BULK=uuid(4);\n final ArchiveLink link=new ArchiveLink();final Queue<byte[]> received=new LinkedBlockingQueue<>(512);boolean cancelled;\n static final class BluetoothGattCharacteristic {final UUID id;BluetoothGattCharacteristic(UUID id){this.id=id;}UUID getUuid(){return id;}}\n void feed(int channel,byte[] bytes){incoming(new BluetoothGattCharacteristic(uuid(channel)),bytes);}\n'+incoming+'\n}')
 classes = out / 'classes'
 classes.mkdir(exist_ok=True)
-sources = list((root / 'app/src/main/java').rglob('*.java')) + list((root / 'tools/testing').rglob('*.java')) + list(generated.glob('*.java')) + [root / 'tools/ArchiveStorageProof.java', root / 'tools/SolarPlanningProof.java', root / 'app/src/test/java/de/wattpit/app/core/CapturedVictronDevice.java']
+sources = list((root / 'app/src/main/java').rglob('*.java')) + list((root / 'tools/testing').rglob('*.java')) + list(generated.glob('*.java')) + [root / 'tools/ArchiveStorageProof.java', root / 'tools/SolarPlanningProof.java', root / 'tools/WeatherContractProof.java', root / 'app/src/test/java/de/wattpit/app/core/CapturedVictronDevice.java']
 subprocess.run(['java', 'com.sun.tools.javac.Main', '-cp', str(args.android_jar.resolve()), '-d', str(classes), *map(str, sources)], check=True)
 classpath = os.pathsep.join(map(str, [classes, args.android_jar.resolve(), args.sqlite_jar.resolve(), args.slf4j_jar.resolve()]))
 database = Path(tempfile.mkdtemp(prefix='database-', dir=out)) / 'proof.db'
 log = []
 phases = {}
-for phase in ['atomic_write', 'atomic_resume', 'live_and_offline', 'metadata_resume', 'config_write', 'config_resume', 'capture_write', 'capture_resume', 'capture_gap', 'manual_queue', 'daily_energy', 'solar_planning']:
-    run = subprocess.run(['java', '-cp', classpath, 'de.wattpit.app.ArchiveStorageProof', str(database), phase, str(root / 'app/src/test/resources/victron/smartshunt-trends.tsv')], capture_output=True, text=True)
+for phase in ['atomic_write', 'atomic_resume', 'live_and_offline', 'metadata_resume', 'config_write', 'config_resume', 'capture_write', 'capture_resume', 'capture_gap', 'manual_queue', 'daily_energy', 'solar_planning', 'weather_contract']:
+    run = subprocess.run(['java', '-cp', classpath, 'de.wattpit.app.ArchiveStorageProof', str(database), phase, str(root / 'app/src/test/resources/victron/smartshunt-trends.tsv'), str(out/'weather-contract-fixture.json')], capture_output=True, text=True)
     log.append(run.stdout + run.stderr)
     print(run.stdout + run.stderr, end='', flush=True)
     (out / 'results.log').write_text(''.join(log))

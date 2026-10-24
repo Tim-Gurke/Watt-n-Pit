@@ -41,6 +41,7 @@ jobs:
           WATTPIT_CHROMIUM: /usr/bin/google-chrome
           WATTPIT_COVERAGE_FIXTURE: ${{ runner.temp }}/coverage-fixture.json
           WATTPIT_SCREENSHOT_DIR: app/build/reports/sync-coverage
+          WATTPIT_WEATHER_FIXTURE: app/build/reports/archive-storage-proof/weather-contract-fixture.json
         run: |
           npm install --no-save --prefix "$RUNNER_TEMP/wattpit-ui" playwright@1.51.1
           mkdir -p "$RUNNER_TEMP/wattpit-java"
@@ -73,6 +74,7 @@ jobs:
             app/build/reports/archive-delta-proof/*.requests.tsv
             app/build/reports/archive-storage-proof/report.json
             app/build/reports/archive-storage-proof/results.log
+            app/build/reports/archive-storage-proof/weather-contract-fixture.json
             app/build/reports/archive-foreground-proof/
 
   release:

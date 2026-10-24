@@ -5,7 +5,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import de.wattpit.app.core.SunriseTime;
+import de.wattpit.app.core.ForecastTime;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -61,40 +61,47 @@ final class WeatherClient {
         NETWORK.execute(()->{
             try {
                 JSONObject cached=new JSONObject(repository.prefs.getString("weatherCache","{}"));
-                if(!force&&cached.optInt("version")==4&&signature.equals(cached.optString("signature"))&&System.currentTimeMillis()-cached.optLong("updated")<6*3600000L)return;
+                if(!force&&cached.optInt("version")==5&&signature.equals(cached.optString("signature"))&&System.currentTimeMillis()-cached.optLong("updated")<6*3600000L)return;
                 JSONObject p=new JSONObject(place);long updated=System.currentTimeMillis();
                 String base="https://api.open-meteo.com/v1/forecast?latitude="+p.getDouble("latitude")+"&longitude="+p.getDouble("longitude")+"&forecast_days=15&past_days=7&timeformat=unixtime&timezone=auto";
                 JSONObject result=get(base+"&daily=weather_code,sunshine_duration,sunrise,sunset,shortwave_radiation_sum&hourly=shortwave_radiation,sunshine_duration");
-                JSONObject daily=result.getJSONObject("daily"),hourly=result.getJSONObject("hourly");
-                java.time.ZoneId zone=java.time.ZoneId.of(result.getString("timezone"));
-                JSONArray dates=daily.getJSONArray("time"),codes=daily.getJSONArray("weather_code"),sun=daily.getJSONArray("sunshine_duration"),days=new JSONArray(),windows=new JSONArray(),hours=new JSONArray(),series=new JSONArray();
-                for(int i=0;i<dates.length();i++){
-                    LocalDate date=java.time.Instant.ofEpochSecond(dates.getLong(i)).atZone(zone).toLocalDate();
-                    Object sunshine=finiteAt(sun,i,3600),radiation=finiteAt(daily.optJSONArray("shortwave_radiation_sum"),i,.0036);
-                    long rise=daily.getJSONArray("sunrise").optLong(i)*1000L,set=daily.getJSONArray("sunset").optLong(i)*1000L;
-                    days.put(new JSONObject().put("day",date.toString()).put("code",codes.isNull(i)?JSONObject.NULL:codes.getInt(i)).put("hours",sunshine).put("radiation",radiation).put("sunrise",rise>0?rise:JSONObject.NULL).put("sunset",set>rise?set:JSONObject.NULL));
-                    long[] bounds={date.atStartOfDay(zone).toInstant().toEpochMilli(),date.atTime(11,0).atZone(zone).toInstant().toEpochMilli(),date.atTime(16,0).atZone(zone).toInstant().toEpochMilli(),date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()};
-                    for(int slot=0;slot<3;slot++)windows.put(new JSONObject().put("day",date.toString()).put("slot",slot).put("from",bounds[slot]).put("to",bounds[slot+1]));
-                }
-                JSONArray times=hourly.getJSONArray("time");for(int i=0;i<times.length();i++)hours.put(new JSONObject().put("t",times.getLong(i)*1000L).put("ghi",finiteAt(hourly.optJSONArray("shortwave_radiation"),i,1)).put("sun",finiteAt(hourly.optJSONArray("sunshine_duration"),i,1)));
+                JSONObject cache=timeline(result);JSONArray series=new JSONArray();
                 JSONObject eq=new JSONObject(equipment),plan=SolarPlanning.checked(new JSONObject(setup),eq);JSONArray groups=eq.getJSONArray("groups");java.util.Set<String> requested=new java.util.LinkedHashSet<>();boolean partial=false;
                 for(int i=0;i<groups.length();i++){
                     JSONObject g=groups.getJSONObject(i),setting=plan.getJSONObject("groups").getJSONObject(g.getString("id"));
                     if(!setting.optBoolean("active"))continue;String geometry=SolarPlanning.geometry(g,setting);if(geometry==null||!requested.add(geometry))continue;
                     if(!place.equals(repository.prefs.getString("weatherPlace",""))||!setup.equals(repository.prefs.getString("solar-setup-v1","{}")))break;
                     try{
-                        String[] angles=geometry.split(":");JSONObject tilted=get(base+"&hourly=global_tilted_irradiance&tilt="+angles[0]+"&azimuth="+angles[1]).getJSONObject("hourly");
-                        JSONArray t=tilted.getJSONArray("time"),v=tilted.getJSONArray("global_tilted_irradiance"),values=new JSONArray();
-                        for(int j=0;j<t.length();j++)values.put(new JSONObject().put("t",t.getLong(j)*1000L).put("v",finiteAt(v,j,1)));
-                        series.put(new JSONObject().put("geometry",geometry).put("values",values));
+                        String[] angles=geometry.split(":");series.put(irradiance(geometry,get(base+"&hourly=global_tilted_irradiance&tilt="+angles[0]+"&azimuth="+angles[1])));
                     }catch(Exception e){partial=true;}
                 }
-                if(days.length()==0)throw new IOException();
-                JSONObject cache=new JSONObject().put("version",4).put("signature",signature).put("place",p).put("updated",updated).put("days",days).put("windows",windows).put("hours",hours).put("solar",series).put("partial",partial).put("timezone",zone.getId());
+                cache.put("signature",signature).put("place",p).put("updated",updated).put("solar",series).put("partial",partial);
                 if(place.equals(repository.prefs.getString("weatherPlace",""))&&equipment.equals(repository.prefs.getString("equipment-v1","{\"version\":1,\"groups\":[]}"))&&setup.equals(repository.prefs.getString("solar-setup-v1","{}")))repository.prefs.edit().putString("weatherCache",cache.toString()).remove("weatherError").apply();
             }catch(Exception e){if(place.equals(repository.prefs.getString("weatherPlace","")))repository.prefs.edit().putString("weatherError","Solarvorschau gerade nicht erreichbar. Gespeicherte Daten bleiben verfügbar.").apply();}
             finally {BUSY.set(false);if(!place.equals(repository.prefs.getString("weatherPlace",""))||!equipment.equals(repository.prefs.getString("equipment-v1","{\"version\":1,\"groups\":[]}"))||!setup.equals(repository.prefs.getString("solar-setup-v1","{}")))refresh(repository,false);}
         });
+    }
+    static JSONObject irradiance(String geometry,JSONObject result)throws Exception{
+        JSONObject tilted=result.getJSONObject("hourly");JSONArray t=tilted.getJSONArray("time"),v=tilted.getJSONArray("global_tilted_irradiance"),values=new JSONArray();
+        for(int j=0;j<t.length();j++)values.put(new JSONObject().put("t",t.getLong(j)*1000L).put("v",finiteAt(v,j,1)));
+        return new JSONObject().put("geometry",geometry).put("values",values);
+    }
+    /** Same parser for live responses and recorded public API contract checks. */
+    static JSONObject timeline(JSONObject result)throws Exception{
+        JSONObject daily=result.getJSONObject("daily"),hourly=result.getJSONObject("hourly");
+        java.time.ZoneId zone=java.time.ZoneId.of(result.getString("timezone"));int offset=result.getInt("utc_offset_seconds");
+        JSONArray dates=daily.getJSONArray("time"),codes=daily.getJSONArray("weather_code"),sun=daily.getJSONArray("sunshine_duration"),days=new JSONArray(),windows=new JSONArray(),hours=new JSONArray();
+        LocalDate previous=null;
+        for(int i=0;i<dates.length();i++){
+            LocalDate date=ForecastTime.providerDate(dates.getLong(i),offset);
+            if(previous!=null&&!date.equals(previous.plusDays(1)))throw new IOException("Wettertage sind nicht aufeinanderfolgend.");previous=date;
+            long rise=daily.getJSONArray("sunrise").optLong(i)*1000L,set=daily.getJSONArray("sunset").optLong(i)*1000L;
+            days.put(new JSONObject().put("day",date.toString()).put("code",codes.isNull(i)?JSONObject.NULL:codes.getInt(i)).put("hours",finiteAt(sun,i,3600)).put("radiation",finiteAt(daily.optJSONArray("shortwave_radiation_sum"),i,.0036)).put("sunrise",rise>0?rise:JSONObject.NULL).put("sunset",set>rise?set:JSONObject.NULL));
+            long[] bounds=ForecastTime.boundaries(date,zone);for(int slot=0;slot<3;slot++)windows.put(new JSONObject().put("day",date.toString()).put("slot",slot).put("from",bounds[slot]).put("to",bounds[slot+1]));
+        }
+        if(days.length()==0)throw new IOException();
+        JSONArray times=hourly.getJSONArray("time");for(int i=0;i<times.length();i++)hours.put(new JSONObject().put("t",times.getLong(i)*1000L).put("ghi",finiteAt(hourly.optJSONArray("shortwave_radiation"),i,1)).put("sun",finiteAt(hourly.optJSONArray("sunshine_duration"),i,1)));
+        return new JSONObject().put("version",5).put("timezone",zone.getId()).put("utcOffsetSeconds",offset).put("days",days).put("windows",windows).put("hours",hours);
     }
     private static Object finiteAt(JSONArray values,int index,double divisor){
         if(values==null||values.isNull(index))return JSONObject.NULL;double value=values.optDouble(index,Double.NaN);return Double.isFinite(value)&&value>=0?value/divisor:JSONObject.NULL;

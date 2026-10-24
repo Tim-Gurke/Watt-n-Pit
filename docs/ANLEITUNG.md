@@ -207,6 +207,8 @@ Einen Tag antippen: **morgens bis 11 Uhr**, **mittags 11–16 Uhr**, **abends ab
 
 **Mobil an/aus** meldet ein aufgestelltes bzw. abgebautes Modul. Bei mehreren mobilen Kreisen öffnet sich die gemeinsame Aufstellung. Ein ungemessener PWM-Kreis zählt in der Planung als geschätzte Verbrauchsentlastung. Sein tatsächlicher Beitrag ist bereits im gemessenen Shunt-Nettofluss enthalten; die bestehende Verbrauchsformel wird deshalb nicht zusätzlich korrigiert.
 
+Ab 1.4.1 bleiben die Wettertage auch über die Zeitumstellung eindeutig. Die Tagesabschnitte berücksichtigen 23- und 25-Stunden-Tage. Fehlt eine Grundlage für die Wh-Schätzung, nennt die Tagesansicht konkret den fehlenden Montagewinkel, die fehlende Himmelsrichtung oder unvollständige Wetterdaten. Bei einem Wetterdatenproblem bietet sie **Vorschau aktualisieren** an. Eine Solarvorhersage benötigt keine vorherige Lernphase.
+
 Die Vorschau wird bei aktivierter Funktion beim Öffnen und Zurückkehren aktualisiert; **↻** lädt von Hand. Während des Abrufs und ohne Internet bleibt die gespeicherte Vorschau sichtbar. **Wetter ausschalten** beendet die Wetterabrufe. Die Kachel liegt weiter im gemeinsamen Raster; sie lässt sich über **Anordnen** verschieben, vergrößern, entfernen und über **+ Kachel → Wetter** wieder hinzufügen.
 
 ### Automatisches Lernen ohne Vorabeingaben

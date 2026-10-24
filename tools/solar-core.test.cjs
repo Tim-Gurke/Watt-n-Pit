@@ -25,3 +25,14 @@ test('optional seasonal inputs interpolate smoothly and missing manual seasons f
 test('seasonal learning uses prior winter evidence with continuous transitions and marks unseen seasons provisional',()=>{const p=plan(equipment()),rows=[];for(let i=1;i<=8;i++){rows.push(...observations(`2026-01-${String(i).padStart(2,'0')}`,1200),...observations(`2026-07-${String(i).padStart(2,'0')}`,300));}const winter=C.consumption(p,rows,'2026-12-15',now),summer=C.consumption(p,rows,'2026-07-15',now);assert.ok(winter.wh>summer.wh*2);const a=C.consumption(p,rows,'2026-10-01',now),b=C.consumption(p,rows,'2026-10-02',now);assert.ok(Math.abs(a.wh-b.wh)<15);assert.equal(C.consumption(p,observations('2026-07-01',300),'2026-12-15',now).provisional,true);});
 test('solar corrections require several forecasted days and reject gaps, curtailment, wrong setup and retrospective forecasts',()=>{const key='k-0123456789abcdef',obs=[],forecasts=[];for(let i=1;i<=5;i++){const o=observations(`2026-10-${String(i).padStart(2,'0')}`,100,{solar:50})[1];obs.push(o);forecasts.push({key,from:o.from,to:o.to,issued:o.from-D,wh:100});}assert.equal(C.calibration(obs.slice(0,2),forecasts,key)[1].factor,1);assert.equal(C.calibration(obs,forecasts,key)[1].factor,.75);for(const invalid of [{coverage:.5},{solarCoverage:.5},{bulkCoverage:.5},{bulkCoverage:undefined},{mobileFree:false},{key:'different'}])assert.equal(C.calibration(obs.map(o=>({...o,...invalid})),forecasts,key)[1].factor,1);assert.equal(C.calibration(obs,forecasts.map(f=>({...f,issued:f.from+1})),key)[1].factor,1);});
 test('training preserves issue time, original raw yield and setup and never learns from the corrected forecast itself',()=>{const eq=equipment(),p=plan(eq),w=weather(),days=C.forecast(w,eq,p,{},now),rows=C.trainingRows(w,eq,p,days,'source');assert.ok(rows.length>30&&rows.length<=42);assert.ok(rows.every(r=>r.issued===w.updated&&r.from>r.issued));assert.equal(rows.find(r=>r.from===w.windows[4].from).wh,400);});
+
+test('unavailable forecasts identify missing tilt, heading or provider readings separately',()=>{
+ const eq=equipment(),p=plan(eq),w=weather();eq.groups[0].tilt=null;
+ assert.deepEqual(C.forecast(w,eq,p,{},now)[0].issues.map(i=>i.kind),['tilt']);eq.groups[0].tilt=30;p.groups.roof.azimuth=null;
+ assert.deepEqual(C.forecast(w,eq,p,{},now)[0].issues.map(i=>i.kind),['direction']);p.groups.roof.azimuth=180;w.solar=[];
+ assert.deepEqual(C.forecast(w,eq,p,{},now)[0].issues.map(i=>i.kind),['weather']);
+});
+test('an old cache with duplicate day labels yields a time diagnostic and one day button per date',()=>{
+ const eq=equipment(),p=plan(eq),w=weather();w.days.splice(1,0,{...w.days[0]});w.windows.push(...w.windows.slice(0,3));
+ const days=C.forecast(w,eq,p,{},now);assert.equal(days.length,14);assert.equal(new Set(days.map(d=>d.day)).size,14);assert.equal(days[0].total,null);assert.ok(days[0].issues.some(i=>i.kind==='time'));assert.equal(days[1].total,1920);
+});

@@ -8,8 +8,8 @@ android {
         applicationId 'de.wattpit.app'
         minSdk 26
         targetSdk 35
-        versionCode 34
-        versionName '1.4.0'
+        versionCode 35
+        versionName '1.4.1'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
     compileOptions {
