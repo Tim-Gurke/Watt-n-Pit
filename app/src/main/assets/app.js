@@ -471,7 +471,7 @@ lifecycle.poll();
 dashboard = new window.WattDashboard({native,resizeMini:drawMini,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
 extras = new window.WattExtras({native,renderSolar:()=>solar?.render(),getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,cancelArchive:()=>lifecycle.confirmCancellation(),repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
-solar = new window.WattSolarPlan({native:deviceNative,equipment,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,symbol:code=>extras.symbol(code)});
+solar = new window.WattSolarPlan({native:deviceNative,equipment,getSnapshot:()=>snapshot,getReading:reading,openModal,closeModal,toast,poll,symbol:code=>extras.symbol(code)});
 configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,dashboard,equipment,openModal,closeModal,toast,applied:backup=>{
   settingsDirty=false;poll();
   dashboard.config=window.WattDashboardCore.normalize(backup.dashboard);dashboard.saved=JSON.parse(JSON.stringify(dashboard.config));dashboard.cache.clear();

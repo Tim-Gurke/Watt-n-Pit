@@ -36,3 +36,61 @@ test('an old cache with duplicate day labels yields a time diagnostic and one da
  const eq=equipment(),p=plan(eq),w=weather();w.days.splice(1,0,{...w.days[0]});w.windows.push(...w.windows.slice(0,3));
  const days=C.forecast(w,eq,p,{},now);assert.equal(days.length,14);assert.equal(new Set(days.map(d=>d.day)).size,14);assert.equal(days[0].total,null);assert.ok(days[0].issues.some(i=>i.kind==='time'));assert.equal(days[1].total,1920);
 });
+
+function reserveFixture(){
+ const eq=equipment(),p=plan(eq),w=weather();p.usageMode='manual';p.manual=[240,240,240,240];
+ for(const v of w.solar[0].values){const hour=new Date(v.t-H/2).getUTCHours();v.v=hour>=7&&hour<18?500:0;}
+ const days=C.forecast(w,eq,p,{},now),battery={soc:90,capacity:100,voltage:10,t:now};
+ return {eq,p,w,days,battery};
+}
+test('sunset reserve caps every hour; surplus from a full battery cannot pay for the following night',()=>{
+ const {w,days,battery}=reserveFixture(),[d]=C.batteryForecast(days,w,battery,now);
+ assert.equal(d.evening.at,w.days[0].sunset);assert.equal(d.evening.soc,100);assert.equal(d.evening.excessWh,320);
+ assert.equal(d.morning.at,w.days[1].sunrise);assert.equal(d.morning.soc,87);assert.equal(d.morning.excessWh,320);
+ assert.ok(d.morning.low<=87&&d.morning.high>=87);assert.ok(d.morning.high<=100);
+});
+test('reserve starts from the current SOC, uses the remaining fraction of an hour and ignores earlier generation',()=>{
+ const f=reserveFixture(),at=now+H/2,run=w=>C.batteryForecast(C.forecast(w,f.eq,f.p,{},at),w,{...f.battery,soc:0,t:at},at)[0];
+ const baseline=run(f.w);assert.equal(baseline.evening.soc,38.5);
+ for(const v of f.w.solar[0].values)if(v.t<=at)v.v=10000;
+ assert.equal(run(f.w).evening.soc,baseline.evening.soc,'past yield is already contained in measured SOC');
+});
+test('direct solar consumption can hold a full battery without manufacturing additional reserve',()=>{
+ const f=reserveFixture();f.p.manual=[1920,1920,1920,1920];f.w.solar[0].values.forEach(v=>v.v=500);
+ const d=C.batteryForecast(C.forecast(f.w,f.eq,f.p,{},now),f.w,{...f.battery,soc:100},now)[0];
+ assert.equal(d.evening.soc,100);assert.equal(d.morning.soc,100);assert.equal(d.morning.excessWh,0);
+});
+test('reserve keeps missing SOC, stale readings, capacity, consumption, weather and solar events explicitly unknown',()=>{
+ const f=reserveFixture(),run=(battery=f.battery,days=f.days,w=f.w)=>C.batteryForecast(days,w,battery,now)[0];
+ for(const b of [null,{...f.battery,soc:null},{...f.battery,soc:101},{...f.battery,t:now-45001}]){const r=run(b);assert.equal(r.evening.soc,undefined);assert.match(r.evening.reason,/Ladezustand/);}
+ assert.match(run({...f.battery,capacity:0}).evening.reason,/Kapazität|Akkukapazität/);
+ assert.match(run({...f.battery,voltage:null}).evening.reason,/Spannung|Batteriespannung/);
+ assert.match(run(f.battery,C.forecast(f.w,f.eq,plan(f.eq),{},now)).evening.reason,/Verbrauch/);
+ const gap=structuredClone(f.w);gap.solar[0].values.find(v=>v.t===now+H).v=null;
+ const missing=run(f.battery,C.forecast(gap,f.eq,f.p,{},now),gap);assert.equal(missing.evening.soc,undefined);assert.match(missing.evening.reason,/Ertragsdaten/);
+ const noSun=structuredClone(f.days);noSun[0].sunset=null;assert.match(run(f.battery,noSun).evening.reason,/Sonnenuntergang/);
+ const noRise=structuredClone(f.w);noRise.days[1].sunrise=null;assert.match(run(f.battery,f.days,noRise).morning.reason,/Sonnenaufgang/);
+});
+test('a measured zero forecast stays zero and reports a depleted interval even after later solar charging',()=>{
+ const f=reserveFixture();f.w.solar[0].values.forEach(v=>v.v=0);let days=C.forecast(f.w,f.eq,f.p,{},now);
+ let d=C.batteryForecast(days,f.w,{...f.battery,soc:0},now)[0];assert.equal(d.evening.soc,0);assert.equal(d.evening.possibleShortfall,true);assert.ok(d.morning.shortfallWh>0);
+ f.w.solar[0].values.forEach(v=>{if(v.t>now+3*H)v.v=500;});days=C.forecast(f.w,f.eq,f.p,{},now);
+ d=C.batteryForecast(days,f.w,{...f.battery,soc:0},now)[0];assert.ok(d.evening.soc>0);assert.ok(d.evening.shortfallWh>0,'recharging does not erase an earlier outage');
+});
+test('reserve includes an unmetered mobile circuit exactly once and only after explicit activation',()=>{
+ const f=reserveFixture(),eq=equipment([{...equipment().groups[0],id:'case',count:1,placement:'mobile',measurement:'shunt'}]),p=plan(eq);p.usageMode='manual';p.manual=[240,240,240,240];p.groups.case.azimuth=180;p.groups.case.shade=[0,0,0];
+ const run=()=>C.batteryForecast(C.forecast(f.w,eq,p,{},now),f.w,{...f.battery,soc:0},now)[0].evening.soc;
+ assert.equal(run(),42);p.groups.case.active=true;assert.equal(run(),66);assert.deepEqual(p.manual,[240,240,240,240]);
+});
+test('sunrise uses its actual instant through autumn DST and a later target keeps its own chronological result',()=>{
+ const at=Date.parse('2026-10-24T16:00:00Z'),end=Date.parse('2026-10-26T00:00:00Z'),eq=equipment(),p=plan(eq),w=weather(Date.parse('2026-10-24T00:00:00Z'),3);p.usageMode='manual';p.manual=[240,240,240,240];
+ w.timezone='Europe/Berlin';w.days[0].sunset=at;w.days[1].sunrise=Date.parse('2026-10-25T06:00:00Z');
+ // A constant 10 W load across the repeated 02:00 is 140 Wh over 14 real hours.
+ const timeline=[];for(let t=at;t<end;t+=H)timeline.push({from:t,to:t+H,wh:0,slot:0});
+ const days=[{day:'2026-10-24',sunset:at,complete:true,spread:.3,usage:{parts:[110,50,80],manual:true},timeline}];
+ const r=C.batteryForecast(days,w,{soc:100,capacity:100,voltage:10,t:at},at)[0];assert.equal(r.evening.soc,100);assert.equal(r.morning.soc,86);assert.equal(r.morning.at,Date.parse('2026-10-25T06:00:00Z'));
+});
+test('a past sunset is not presented as a prediction; the next sunrise can still be estimated',()=>{
+ const f=reserveFixture(),at=Date.parse('2026-10-23T20:00:00Z'),days=C.forecast(f.w,f.eq,f.p,{},at),d=C.batteryForecast(days,f.w,{...f.battery,t:at},at)[0];
+ assert.equal(d.evening.soc,undefined);assert.match(d.evening.reason,/Vergangenheit/);assert.equal(d.morning.soc,79);
+});
