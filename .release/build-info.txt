@@ -1,0 +1,9 @@
+Watt’n’Pit 1.4.4 (versionCode 38)
+Release source: 435949cc37fe2a6b2452d531f4b4470b5c01f475
+Tested source head: d9068cc0db84bd15915043af3aaf8d2305b52e4b
+Source tree: 99fc6746cd2d344fb27e58d0005a43e5b9b9845d
+Successful workflow: 40095251959
+Tests: 185 JVM, 114 JavaScript; native SQLite/archive/weather, Android lint/builds, browser checks
+Unsigned APK SHA256: 1b727aae0a5ff8b37db0cd2b60c4eec94ff00f23b78df7619e2bb48c946a74fd
+Signed APK SHA256: c0c11c45315e2ae8c70b2c1826a689844e63950b16841896323fb828d05ac1c3
+Signer certificate SHA256: 0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2
