@@ -4,9 +4,15 @@
 
 **Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht.** Sie zeigt Messwerte, Verläufe und Energieauswertungen. Einstellungen an Solarregler und SmartShunt müssen weiterhin über die Victron-Software **VictronConnect** vorgenommen werden. Die Einstellungen in Watt’n’Pit betreffen nur die App und ändern keine Geräteparameter.
 
-**[Android-APK 1.4.2 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.2/Watt-n-Pit-v1.4.2.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.4.3 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.3/Watt-n-Pit-v1.4.3.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
+
+## Neu in 1.4.3
+
+Die abgestimmte Startvorlage hat eine höhere Solarvorschau und die Ladephase direkt darunter. Kacheln, Farben, Werte, Zeiträume und beide Ausrichtungen entsprechen der neuen Vorlage; neue Installationen starten beim Übersichtsverlauf mit **Heute**. Eigene gespeicherte Übersichten und Zeitraumauswahlen bleiben erhalten. Über **Standardübersicht wiederherstellen** ist die neue Kachelanordnung abrufbar.
+
+Die Tagesfelder der Solarvorschau passen sich der verfügbaren Breite an. Auf üblichen Handybreiten passen drei vollständige Tage einschließlich aller Prozentwerte hinein. Die Sonnen-Prozentwerte sind relative Einstrahlung; die Akku-Prozentwerte beschreiben die erwartete Reserve bei Sonnenuntergang. Fehlt diese, steht der Grund direkt unter der Vorschau und lässt sich für die ausführliche Erklärung antippen.
 
 ## Neu in 1.4.2
 
@@ -75,7 +81,7 @@ Die Hochkant-Vorlage enthält zehn Kacheln und eine Verlaufshöhe von 465 Pixeln
 
 Beim ersten Öffnen den Cockpit-Hinweis lesen und **Verstanden** wählen. Er erscheint auch bei bestehenden Installationen einmal nach diesem Update. Die Bestätigung bleibt nur auf diesem Gerät und wird nicht mit Einstellungen exportiert.
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.2/Watt-n-Pit-v1.4.2.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.3/Watt-n-Pit-v1.4.3.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.

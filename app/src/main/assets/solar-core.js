@@ -115,10 +115,10 @@
   function batteryForecast(days,weather,battery,now=Date.now()){
     const calendar=new Map((weather.days||[]).map(d=>[d.day,d]));
     const targets=days.map(d=>({day:d.day,evening:{at:finite(d.sunset)?d.sunset:null},morning:{at:calendar.get(nextDay(d.day))?.sunrise??null}}));
-    let problem='';
-    if(!battery||!finite(battery.soc)||battery.soc<0||battery.soc>100||!finite(battery.t)||battery.t>now+5000||now-battery.t>45000)problem='Für die Akkuprognose fehlt ein aktueller Ladezustand vom SmartShunt.';
-    else if(!finite(battery.capacity)||battery.capacity<=0)problem='Bitte die Akkukapazität in den Einstellungen hinterlegen.';
-    else if(!finite(battery.voltage)||battery.voltage<=0)problem='Für die Akkuprognose fehlt die Batteriespannung.';
+    let problem='',reasonCode='';
+    if(!battery||!finite(battery.soc)||battery.soc<0||battery.soc>100||!finite(battery.t)||battery.t>now+5000||now-battery.t>45000){reasonCode='soc';problem='Für die Akkuprognose fehlt ein aktueller Ladezustand vom SmartShunt.';}
+    else if(!finite(battery.capacity)||battery.capacity<=0){reasonCode='capacity';problem='Bitte die Akkukapazität in den Einstellungen hinterlegen.';}
+    else if(!finite(battery.voltage)||battery.voltage<=0){reasonCode='voltage';problem='Für die Akkuprognose fehlt die Batteriespannung.';}
     const cap=problem?null:battery.capacity*battery.voltage,energy=cap===null?null:cap*battery.soc/100;
     const scenarios=[{energy,excess:0,shortfall:0},{energy,excess:0,shortfall:0},{energy,excess:0,shortfall:0}];
     const hours=[];for(const d of days){const usageSpread=d.usage.manual?.25:d.usage.provisional?.5:.25;for(const h of d.timeline||[])hours.push({...h,complete:d.complete,spread:d.spread,load:d.usage.parts[h.slot],usageSpread});}
@@ -127,16 +127,16 @@
     for(const target of ordered){
       while(!problem&&cursor<target.at){
         while(index<hours.length&&hours[index].to<=cursor)index++;const h=hours[index];
-        if(!h||h.from>cursor||!h.complete||!finite(h.wh)||h.wh<0){problem='Für die Akkuprognose fehlen durchgängige Ertragsdaten bis zu diesem Zeitpunkt.';break;}
-        if(!finite(h.load)||h.load<0){problem='Der übliche Verbrauch wird noch ermittelt. Eigene saisonale Vorgaben sind freiwillig.';break;}
+        if(!h||h.from>cursor||!h.complete||!finite(h.wh)||h.wh<0){reasonCode='weather';problem='Für die Akkuprognose fehlen durchgängige Ertragsdaten bis zu diesem Zeitpunkt.';break;}
+        if(!finite(h.load)||h.load<0){reasonCode='consumption';problem='Der übliche Verbrauch wird noch ermittelt. Zum automatischen Lernen dienen geeignete vollständige Tage ohne ungemessene Zusatzladung. Eigene saisonale Vorgaben sind freiwillig.';break;}
         const end=Math.min(target.at,h.to),fraction=(end-cursor)/HOUR,load=h.load/[11,5,8][h.slot]*fraction,solar=h.wh*fraction;
         for(let i=0;i<3;i++){const s=scenarios[i],generation=solar*(i===1?1-h.spread:i===2?1+h.spread:1),use=load*(i===1?1+h.usageSpread:i===2?1-h.usageSpread:1),raw=s.energy+generation-use;s.excess+=Math.max(0,raw-cap);s.shortfall+=Math.max(0,-raw);s.energy=clamp(raw,0,cap);}
         cursor=end;
       }
-      if(problem)target.reason=problem;
+      if(problem){target.reason=problem;target.reasonCode=reasonCode;}
       else Object.assign(target,{soc:scenarios[0].energy/cap*100,low:scenarios[1].energy/cap*100,high:scenarios[2].energy/cap*100,excessWh:scenarios[0].excess,shortfallWh:scenarios[0].shortfall,possibleShortfall:scenarios[1].shortfall>0});
     }
-    for(const d of targets)for(const k of ['evening','morning']){const t=d[k];if(!finite(t.at))t.reason=k==='evening'?'Für diesen Tag fehlt der Sonnenuntergang.':'Für den nächsten Tag fehlt der Sonnenaufgang.';else if(t.at<now)t.reason='Dieser Zeitpunkt liegt bereits in der Vergangenheit.';}
+    for(const d of targets)for(const k of ['evening','morning']){const t=d[k];if(!finite(t.at)){t.reasonCode='sun';t.reason=k==='evening'?'Für diesen Tag fehlt der Sonnenuntergang.':'Für den nächsten Tag fehlt der Sonnenaufgang.';}else if(t.at<now){t.reasonCode='past';t.reason='Dieser Zeitpunkt liegt bereits in der Vergangenheit.';}}
     return targets;
   }
   function trainingRows(weather,equipment,plan,days,source=''){

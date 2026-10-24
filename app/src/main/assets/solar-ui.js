@@ -28,7 +28,9 @@
       window.onSolarCompass=result=>this.compassResult(result);
       document.addEventListener('watt-modal-close',()=>this.stopSensors());
       document.addEventListener('visibilitychange',()=>{if(document.hidden)this.stopSensors();else if($('solarCompass'))this.startCompass();});
-      if(window.ResizeObserver)new ResizeObserver(()=>{$('weatherStrip').classList.toggle('solar-strip-small',$('weatherStrip').clientHeight<112);}).observe($('weatherStrip'));
+      $('weatherNote').setAttribute('role','button');$('weatherNote').tabIndex=0;
+      $('weatherNote').onclick=e=>{e.stopPropagation();this.openDay(this.noteDay||0);};$('weatherNote').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();this.openDay(this.noteDay||0);}};
+      if(window.ResizeObserver){const observer=new ResizeObserver(()=>this.layoutPreview());observer.observe($('weatherStrip'));observer.observe($('weatherDays'));}
     }
     equipment(){return this.a.equipment.config();}
     plan(){
@@ -46,10 +48,10 @@
       if(this.a.native?.requestSolarData&&!snapshot.archiveBusy&&(Date.now()-this.lastRequest>300000||this.revision!==snapshot.historyRevision&&Date.now()-this.lastRequest>30000)){
         this.lastRequest=Date.now();this.revision=snapshot.historyRevision;this.a.native.requestSolarData();
       }
-      const note='Akku bei Sonnenuntergang'+(snapshot.weatherError?' · Wetter nicht aktuell':weather.partial?' · Wetterdaten teilweise unvollständig':'');$('weatherNote').textContent=note;$('weatherNote').title=note+' · Sonne: Strahlung relativ zum besten Vorschautag. Akku: feste Skala von 0 bis 100 %. Tag für Schätzbereich und den nächsten Sonnenaufgang antippen.'+(snapshot.weatherError?' '+snapshot.weatherError:weather.updated?' Stand '+new Date(weather.updated).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'');
-      if(key===this.renderKey)return;this.renderKey=key;
+      if(key===this.renderKey){this.renderNote(snapshot,weather,now);return;}this.renderKey=key;
       this.days=C.forecast(weather,eq,plan,this.knowledge,now);
       const reserves=C.batteryForecast(this.days,weather,shunt?{...shunt,capacity:snapshot.settings.capacity}:null,now);this.days.forEach((d,i)=>d.reserve=reserves[i]);
+      this.renderNote(snapshot,weather,now);
       const context=C.setupKey(eq,plan,weather.place||snapshot.settings.weatherPlace,this.knowledge.source);
       if(context!==this.contextKey){this.contextKey=context;this.a.native?.rememberSolarContext?.(context);}
       const remembered=context+':'+weather.updated;
@@ -66,6 +68,17 @@
       $('solarMobileToggle').hidden=!mobile.length;$('solarMobileToggle').textContent=mobile.length===1?'Mobil '+(active.length?'an':'aus'):`Mobil ${active.length}/${mobile.length}`;$('solarMobileToggle').setAttribute('aria-pressed',String(active.length>0));
       const usage=this.days[0]?.usage||C.consumption(plan,this.knowledge.observations,new Date().toISOString().slice(0,10));
       $('solarLearningNote').textContent=this.knowledge.error||(usage.wh==null?'Verbrauch wird automatisch ermittelt. Vollständige Messabschnitte ergänzen die Erfahrung.':`${usage.manual?'Eigener Standard':usage.provisional?'Vorläufiger Bedarf':'Erlernter Bedarf'}: ≈ ${energy(usage.wh)} pro Tag${usage.days?' · '+usage.days+' geeignete Tage':''}. Jahreszeit und Tagesabschnitte werden automatisch berücksichtigt.`);
+    }
+    layoutPreview(){
+      const strip=$('weatherStrip'),days=$('weatherDays'),width=days.clientWidth;if(!width)return;
+      const gap=parseFloat(getComputedStyle(days).columnGap)||4,columns=width>=620?Math.max(3,Math.floor((width+gap)/(116+gap))):width>=260?3:width>=175?2:1;
+      strip.style.setProperty('--solar-day-width',((width-gap*(columns-1))/columns)+'px');strip.classList.toggle('solar-strip-small',strip.clientHeight<112);
+    }
+    renderNote(snapshot,weather,now){
+      const index=this.days?.findIndex(d=>known(d.reserve?.evening.at)&&d.reserve.evening.at>=now);this.noteDay=index>=0?index:0;
+      const reserve=this.days?.[this.noteDay]?.reserve?.evening,labels={soc:'Akku: aktueller Shuntwert fehlt',capacity:'Akku: Kapazität fehlt',voltage:'Akku: Batteriespannung fehlt',consumption:'Akku: Verbrauch wird ermittelt',weather:'Akku: Ertragsdaten unvollständig',sun:'Akku: Sonnenzeit fehlt',past:'Akku: Zeitpunkt bereits vergangen'};
+      const text=(labels[reserve?.reasonCode]||'Akku bei Sonnenuntergang')+(snapshot.weatherError?' · Wetter nicht aktuell':weather.partial?' · Wetterdaten teilweise unvollständig':'');
+      $('weatherNote').textContent=text;$('weatherNote').title=(reserve?.reason?reserve.reason+' ':'')+'Akku bei Sonnenuntergang · feste Skala von 0 bis 100 %. Sonne: Einstrahlung relativ zum besten Vorschautag. Antippen öffnet die Erklärung und die Reserve beim nächsten Sonnenaufgang.'+(snapshot.weatherError?' '+snapshot.weatherError:weather.updated?' Stand '+new Date(weather.updated).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'');
     }
     scale(kind,label,value,text,title){return `<span class="solar-scale-row solar-scale-${kind}${known(value)?'':' solar-no-data'}" title="${esc(title)}"><b>${label}</b><span class="solar-track"><i style="width:${known(value)?Math.max(0,Math.min(100,value)):0}%"></i></span><em>${esc(text)}</em></span>`;}
     reservePanel(d){
