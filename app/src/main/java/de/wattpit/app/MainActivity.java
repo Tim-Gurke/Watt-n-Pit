@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.*;
 import android.provider.OpenableColumns;
+import android.provider.Settings;
 import android.view.*;
 import android.webkit.*;
 import de.wattpit.app.core.CsvCodec;
@@ -251,6 +252,29 @@ public final class MainActivity extends Activity {
     }
     final class Bridge {
         @JavascriptInterface public String appVersion(){return BuildConfig.VERSION_NAME;}
+        @JavascriptInterface public void openMonitorNotifications(){runOnUiThread(()->{
+            try{
+                MonitorService.ensureChannel(MainActivity.this);
+                startActivity(new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()).putExtra(Settings.EXTRA_CHANNEL_ID,MonitorService.CHANNEL));
+            }catch(ActivityNotFoundException e){
+                try{startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));}
+                catch(Exception unavailable){repository.message("Bitte die Benachrichtigung „Watt’n’Pit-Aufzeichnung“ in den Android-App-Einstellungen öffnen.");}
+            }
+        });}
+        @JavascriptInterface public void requestSunsetSoc(long at,long id){
+            if(at<=0||at>System.currentTimeMillis())return;
+            historyReads.execute(()->{
+                JSONObject result=new JSONObject();
+                try{
+                    String shunt="";JSONArray devices=repository.configs();
+                    for(int i=0;i<devices.length();i++)if(devices.getJSONObject(i).optString("kind").equals("shunt")){shunt=devices.getJSONObject(i).optString("mac");break;}
+                    JSONObject point=shunt.isEmpty()?null:repository.db.sunsetSoc(at,System.currentTimeMillis(),shunt);
+                    result.put("id",id).put("point",point==null?JSONObject.NULL:point);
+                }catch(Exception e){try{result.put("id",id).put("error","Der gespeicherte Akkustand konnte gerade nicht gelesen werden.");}catch(JSONException ignored){}}
+                if(!isDestroyed())call("onSolarSunsetSoc",result);
+            });
+        }
         @JavascriptInterface public String syncState(){return repository.syncState();}
         @JavascriptInterface public String backgroundArchive(long runId){return repository.archiveRun.background(runId)?"":"Dieser Synchronisationslauf ist bereits beendet. Bitte erneut versuchen.";}
         @JavascriptInterface public void requestHistory(String json){

@@ -94,4 +94,35 @@ public class HistoryQueryTest {
         assertTrue(found);
     }
 
+    private List<String> sunset(long at,long now,String device)throws Exception{
+        HistoryQuery q=HistoryQuery.sunsetSoc(at,now,device);List<String> result=new ArrayList<>();
+        try(PreparedStatement s=db.prepareStatement(q.sql)){
+            for(int i=0;i<q.args.length;i++)s.setString(i+1,q.args[i]);
+            try(ResultSet r=s.executeQuery()){while(r.next())result.add(r.getLong(1)+":"+r.getDouble(2)+":"+r.getString(3));}
+        }return result;
+    }
+    @Test public void sunsetUsesTheNearestOriginalSampleAndNeverAveragesTheSoc()throws Exception{
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,soc,period) VALUES "+
+                "(9900000,'A','shunt','archive',72.5,300),(10010000,'A','shunt','live',71.2,0),(10100000,'A','shunt','live',70,0)");
+        assertEquals(Collections.singletonList("10010000:71.2:live"),sunset(10000000,11000000,"A"));
+    }
+    @Test public void sunsetDoesNotUseOtherDevicesInvalidValuesOrDistantReadings()throws Exception{
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,soc,period) VALUES "+
+                "(10000000,'B','shunt','live',90,0),(10000000,'A','solar','live',80,0),"+
+                "(10000000,'A','shunt','live',101,0),(10000001,'A','shunt','archive',-1,30),"+
+                "(10000002,'A','shunt','archive',NULL,30),(10900001,'A','shunt','live',77,0)");
+        assertTrue(sunset(10000000,12000000,"A").isEmpty());
+    }
+    @Test public void sunsetCanUseAnOriginalArchiveZeroAndPrefersLiveAtTheSameTime()throws Exception{
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,soc,period) VALUES "+
+                "(10000000,'A','shunt','archive',0,1800)");
+        assertEquals(Collections.singletonList("10000000:0.0:archive"),sunset(10000000,11000000,"A"));
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,soc,period) VALUES (10000000,'A','shunt','live',.1,0)");
+        assertEquals(Collections.singletonList("10000000:0.1:live"),sunset(10000000,11000000,"A"));
+    }
+    @Test public void sunsetExcludesFutureSamplesEvenIfCloserToTheTarget()throws Exception{
+        db.createStatement().execute("INSERT INTO readings(ts,device,kind,origin,soc,period) VALUES "+
+                "(9900000,'A','shunt','archive',60,300),(10010000,'A','shunt','live',90,0)");
+        assertEquals(Collections.singletonList("9900000:60.0:archive"),sunset(10000000,10000000,"A"));
+    }
 }

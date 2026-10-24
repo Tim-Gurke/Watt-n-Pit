@@ -25,6 +25,15 @@ public final class HistoryQuery {
         Selection s=select(from,to,metric,source);
         return new HistoryQuery("SELECT "+s.field+",ts FROM readings WHERE "+s.where+" ORDER BY ts DESC LIMIT 1",s.args);
     }
+    /** Return one original SOC sample, never an interpolated chart point or another shunt. */
+    public static HistoryQuery sunsetSoc(long at,long now,String device) {
+        if(at<=0||at>now||device==null||device.isEmpty())throw new IllegalArgumentException("Ungültiger Bezugspunkt.");
+        long distance=15L*60000;
+        return new HistoryQuery("SELECT ts,soc,origin,period FROM readings WHERE kind='shunt' AND device=? "+
+                "AND ts>=? AND ts<=? AND soc>=0 AND soc<=100 "+
+                "ORDER BY ABS(ts-?),CASE origin WHEN 'live' THEN 0 WHEN 'archive' THEN 1 ELSE 2 END,period,ts DESC LIMIT 1",
+                Arrays.asList(device,String.valueOf(Math.max(0,at-distance)),String.valueOf(Math.min(now,at+distance)),String.valueOf(at)));
+    }
     public static HistoryQuery powerDevices(long from,long to,String source){
         Selection s=select(from,to,"batteryVoltage",source,false);
         return new HistoryQuery("SELECT DISTINCT device,kind FROM readings WHERE "+s.where,s.args);

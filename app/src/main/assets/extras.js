@@ -12,6 +12,7 @@ window.WattExtras=class {
     document.getElementById('weatherRefresh').onclick=()=>{if(a.native)a.native.refreshWeather();else a.toast('Wetter ist in der Android-App verfügbar.');};
     document.getElementById('copyArchiveDiagnostics').onclick=()=>{if(!a.native?.copyArchiveDiagnostics){a.toast('Diagnose kopieren ist in der Android-App verfügbar.');return;}const error=a.native.copyArchiveDiagnostics();a.toast(error||'Diagnose ohne private Gerätedaten kopiert.');};
     document.getElementById('archiveCancel').onclick=()=>a.cancelArchive();
+    document.getElementById('monitorNotifications').onclick=()=>{if(a.native?.openMonitorNotifications)a.native.openMonitorNotifications();else a.toast('Die Betriebsbenachrichtigung lässt sich in der Android-App einstellen.');};
     document.getElementById('deviceCards').addEventListener('click',e=>{const b=e.target.closest('.archive-import');if(!b)return;if(a.isDemo()){a.toast('Demo liest keine Geräte aus.');return;}if(a.native)a.native.importArchive(b.dataset.mac);else a.toast('Gerätearchive werden in der Android-App gelesen.');});
     window.onWeatherSearch=result=>{
       const query=document.getElementById('weatherQuery').value.trim();if(result.query!==query)return;
@@ -36,7 +37,11 @@ window.WattExtras=class {
     const cloud='<path d="M6 17a4 4 0 1 1 1-7.9A6 6 0 0 1 19 11a3 3 0 0 1 0 6Z"/>';
     let label='Keine Vorhersage',path='<path d="M10 8a3 3 0 1 1 4 3c-2 1-2 2-2 3m0 3v.1"/>';
     if(code===0){label='Sonnig';path=sun;}
-    else if(code===1||code===2){label='Heiter bis wolkig';path='<path d="M5 3v2M1 8h2m1-3 1 1m5-4v2"/><circle cx="7" cy="8" r="3.5"/>'+cloud;}
+    else if(code===1||code===2){
+      label='Heiter bis wolkig';const id='weather-cloud-'+(this.symbolId=(this.symbolId||0)+1);
+      const rays=Array.from({length:8},(_,i)=>{const a=i*Math.PI/4;return `M${(7+5.2*Math.cos(a)).toFixed(2)} ${(7+5.2*Math.sin(a)).toFixed(2)}L${(7+6.4*Math.cos(a)).toFixed(2)} ${(7+6.4*Math.sin(a)).toFixed(2)}`;}).join('');
+      path=`<defs><mask id="${id}" x="0" y="0" width="24" height="26" maskUnits="userSpaceOnUse"><rect width="24" height="26" fill="white" stroke="none"/><g fill="black" stroke="black">${cloud}</g></mask></defs><g mask="url(#${id})"><circle cx="7" cy="7" r="3.5"/><path d="${rays}"/></g>${cloud}`;
+    }
     else if(code===3){label='Bewölkt';path=cloud;}
     else if(code===45||code===48){label='Nebel';path=cloud+'<path d="M3 20h18M5 23h14"/>';}
     else if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)){label='Regen';path=cloud+'<path d="m7 20-1 2m6-2-1 2m6-2-1 2"/>';}

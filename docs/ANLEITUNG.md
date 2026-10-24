@@ -6,6 +6,8 @@ Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe d
 
 **Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht.** Sie zeigt Messwerte, Verläufe und Energieauswertungen. Einstellungen an Solarregler und SmartShunt müssen weiterhin über die Victron-Software **VictronConnect** vorgenommen werden. Die Einstellungen in Watt’n’Pit betreffen nur die App und ändern keine Geräteparameter.
 
+Auch Firmware-Updates deiner Victron-Geräte führst du weiterhin über die offiziellen Victron-Apps durch, bei SmartShunt und SmartSolar über VictronConnect. Watt’n’Pit kann keine Geräteupdates durchführen.
+
 ## 1. Installieren und Geräte einrichten
 
 1. Die APK herunterladen und auf **Android 8 oder neuer** installieren. Beim Update die bestehende App behalten und die neue APK darüber installieren.
@@ -258,3 +260,13 @@ Ladezustand und Restlaufzeit stammen vom SmartShunt. Temperatur und Zusatzspannu
 Die App kann auf mehreren Handys eingerichtet werden. Geräte und Sofortanzeigeschlüssel werden auf jedem Handy separat hinterlegt. Einstellungen lassen sich per JSON, Messdaten per CSV übertragen. Messungen, aktuelle Aufstellung und Lernstand werden nicht automatisch zwischen Handys abgeglichen; importierte CSV-Daten bilden keine verlässlichen neuen Lernbeispiele.
 
 Die Sofortanzeige empfängt ausgesendete Livewerte ohne feste Bluetooth-Verbindung. Der Gerätearchivabruf benötigt eine Verbindung: Laut Victron kann nur ein Handy zugleich mit demselben Gerät verbunden sein. Archive deshalb nacheinander ergänzen; eine offene VictronConnect-Verbindung kann den Abruf ebenfalls belegen. [Victron-Verbindungshinweise](https://www.victronenergy.com/media/pg/VictronConnect_app/en/troubleshooting.html).
+
+## Ergänzungen in 1.4.6
+
+Unter **Einstellungen → Akku & Aufzeichnung → Betriebsbenachrichtigung einstellen** öffnet sich der vorhandene Android-Benachrichtigungskanal **Watt’n’Pit-Aufzeichnung**. Seine Anzeige lässt sich dort ausblenden, ohne die Aufzeichnung zu pausieren. **Gerätearchiv importieren** ist ein getrennter Kanal. Android kann einen laufenden Vordergrunddienst zusätzlich in seiner Systemübersicht anzeigen. Pausieren und Fortsetzen bleiben in Watt’n’Pit verfügbar.
+
+Die Wh-Spanne eines Vorschautags ist das geschätzte **Gesamtpotenzial aller aktiven Kreise**, einschließlich der gemeldeten mobilen Aufstellung. Feste Kreise und mobile Entlastung werden darunter getrennt ausgewiesen. Die Solarertrag-Kachel misst nur die Solarregler; ungemessene mobile Entlastung ist darin nicht enthalten. Die Formel für gemessenen Verbrauch und Bilanz sowie die Prognoseberechnung bleiben unverändert. Ladebegrenzung kann den abgerufenen Ertrag verringern; die Schätzspanne ist keine garantierte Untergrenze.
+
+Nach dem heutigen Sonnenuntergang zeigt die Akkuvorschau den zeitlich nächsten gespeicherten SmartShunt-Messwert innerhalb von 15 Minuten vor oder nach Sonnenuntergang. Messzeit und Quelle stehen in der Tagesansicht. Es werden weder Zwischenwerte erfunden noch heutige Livewerte rückwirkend eingesetzt. Fehlt ein passender Originalwert, bleibt die Anzeige unbekannt und erklärt den Grund. Die Reserve beim nächsten Sonnenaufgang wird weiterhin ab dem aktuellen Ladezustand prognostiziert.
+
+© 2026 Tim Weißbach und Mitwirkende · Watt’n’Pit

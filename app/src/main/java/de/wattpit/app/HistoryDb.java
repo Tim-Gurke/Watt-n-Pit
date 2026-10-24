@@ -197,6 +197,14 @@ final class HistoryDb extends SQLiteOpenHelper {
         return result;
     }
 
+    JSONObject sunsetSoc(long at,long now,String device)throws Exception {
+        HistoryQuery query=HistoryQuery.sunsetSoc(at,now,device);
+        try(Cursor c=getReadableDatabase().rawQuery(query.sql,query.args)){
+            if(c.moveToFirst())return new JSONObject().put("t",c.getLong(0)).put("soc",c.getDouble(1)).put("origin",c.getString(2));
+        }
+        return null;
+    }
+
     JSONObject stats() throws Exception {
         try (Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*),MIN(ts),MAX(ts),SUM(CASE WHEN origin='archive' THEN 1 ELSE 0 END) FROM readings", null)) {
             c.moveToFirst();

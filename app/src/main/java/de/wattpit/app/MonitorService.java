@@ -14,7 +14,7 @@ import java.util.concurrent.*;
 
 /** Passive BLE monitor. No GATT writes, no changes to the Victron equipment. */
 public final class MonitorService extends Service {
-    private static final String CHANNEL = "wattpit-monitor";
+    static final String CHANNEL = "wattpit-monitor";
     private static final int NOTIFICATION = 10;
     private Repository repository;
     private BluetoothLeScanner scanner;
@@ -42,11 +42,15 @@ public final class MonitorService extends Service {
         }
     };
 
-    @Override public void onCreate() {
-        super.onCreate(); repository = Repository.get(this);
+    static void ensureChannel(Context context){
         NotificationChannel channel = new NotificationChannel(CHANNEL,"Watt’n’Pit-Aufzeichnung",NotificationManager.IMPORTANCE_LOW);
         channel.setDescription("Lokale Bluetooth-Aufzeichnung deiner Energieanlage");
-        getSystemService(NotificationManager.class).createNotificationChannel(channel);
+        context.getSystemService(NotificationManager.class).createNotificationChannel(channel);
+    }
+
+    @Override public void onCreate() {
+        super.onCreate(); repository = Repository.get(this);
+        ensureChannel(this);
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(bluetoothReceiver,filter,Context.RECEIVER_EXPORTED);
         else registerReceiver(bluetoothReceiver,filter);
