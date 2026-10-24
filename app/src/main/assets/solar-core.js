@@ -89,7 +89,7 @@
     const dated=new Map(),counts=new Map();for(const d of weather.days||[]){counts.set(d.day,(counts.get(d.day)||0)+1);if(today&&d.day>=today&&!dated.has(d.day))dated.set(d.day,d);}
     const days=[...dated.values()].slice(0,14);
     for(let index=0;index<days.length;index++){
-      const d=days[index],bins=PARTS.map(()=>({fixed:0,mobile:0,raw:0,remaining:0})),issues=[],add=(kind,g)=>{if(!issues.some(x=>x.kind===kind&&x.group===(g?.label||g?.id||'')))issues.push({kind,group:g?.label||g?.id||''});};let complete=(equipment.groups||[]).length>0,unknownShade=false,seen=0;
+      const d=days[index],bins=PARTS.map(()=>({fixed:0,mobile:0,raw:0,remaining:0})),timeline=new Map((byDay.get(d.day)||[]).map(h=>[h.t,{from:h.t-HOUR,to:h.t,wh:0,slot:h.slot}])),issues=[],add=(kind,g)=>{if(!issues.some(x=>x.kind===kind&&x.group===(g?.label||g?.id||'')))issues.push({kind,group:g?.label||g?.id||''});};let complete=(equipment.groups||[]).length>0,unknownShade=false,seen=0;
       if(!complete)add('equipment');
       const windows=(weather.windows||[]).filter(w=>w.day===d.day).sort((a,b)=>a.slot-b.slot),validWindows=windows.length===3&&windows.every((w,i)=>w.slot===i&&finite(w.from)&&finite(w.to)&&w.to>w.from&&(i===0||w.from===windows[i-1].to));
       const expected=validWindows?windows.reduce((sum,w)=>sum+(w.to-w.from)/HOUR,0):null;
@@ -101,19 +101,48 @@
         for(const {t,slot} of byDay.get(d.day)||[]){const value=series.get(t);if(!finite(value)||value<0){complete=false;continue;}groupHours++;const shade=setting.shade[slot];unknownShade=unknownShade||shade===null;const wh=g.count*g.watts*value/1000*.8*[1,.8,.55,.25][shade??0],isMobile=g.placement==='mobile',factor=isMobile?1:corrections[slot].factor;
           bins[slot][isMobile?'mobile':'fixed']+=wh*factor;if(!isMobile&&g.measurement==='solar')bins[slot].raw+=wh;
           bins[slot].remaining+=wh*factor*clamp((t-now)/HOUR,0,1);
+          timeline.get(t).wh+=wh*factor;
         }
         if(groupHours!==expected){complete=false;if(validWindows)add('weather');}seen=Math.max(seen,groupHours);
       }
       if(active.length&&!seen)complete=false;
       const fixed=complete?bins.reduce((a,b)=>a+b.fixed,0):null,mobile=complete?bins.reduce((a,b)=>a+b.mobile,0):null,total=fixed===null?null:fixed+mobile,usage=consumption(plan,knowledge.observations,d.day,now);
       const spread=clamp(Math.max(...corrections.map(x=>x.spread))+.025*index+(unknownShade?.2:0),.2,.8);
-      out.push({...d,code:sunshineCode(d),index,complete,issues,unknownShade,fixed,mobile,total,low:total===null?null:total*(1-spread),high:total===null?null:total*(1+spread),parts:bins,usage,balance:total===null||usage.wh===null?null:total-usage.wh,key,learningDays:Math.min(...corrections.map(x=>x.days))});
+      out.push({...d,code:sunshineCode(d),index,complete,issues,unknownShade,fixed,mobile,total,low:total===null?null:total*(1-spread),high:total===null?null:total*(1+spread),spread,timeline:[...timeline.values()],parts:bins,usage,balance:total===null||usage.wh===null?null:total-usage.wh,key,learningDays:Math.min(...corrections.map(x=>x.days))});
     }return out;
+  }
+  function nextDay(day){const t=Date.parse(day+'T12:00:00Z');return finite(t)?new Date(t+DAY).toISOString().slice(0,10):'';}
+  function batteryForecast(days,weather,battery,now=Date.now()){
+    const calendar=new Map((weather.days||[]).map(d=>[d.day,d]));
+    const targets=days.map(d=>({day:d.day,evening:{at:finite(d.sunset)?d.sunset:null},morning:{at:calendar.get(nextDay(d.day))?.sunrise??null}}));
+    let problem='';
+    if(!battery||!finite(battery.soc)||battery.soc<0||battery.soc>100||!finite(battery.t)||battery.t>now+5000||now-battery.t>45000)problem='Für die Akkuprognose fehlt ein aktueller Ladezustand vom SmartShunt.';
+    else if(!finite(battery.capacity)||battery.capacity<=0)problem='Bitte die Akkukapazität in den Einstellungen hinterlegen.';
+    else if(!finite(battery.voltage)||battery.voltage<=0)problem='Für die Akkuprognose fehlt die Batteriespannung.';
+    const cap=problem?null:battery.capacity*battery.voltage,energy=cap===null?null:cap*battery.soc/100;
+    const scenarios=[{energy,excess:0,shortfall:0},{energy,excess:0,shortfall:0},{energy,excess:0,shortfall:0}];
+    const hours=[];for(const d of days){const usageSpread=d.usage.manual?.25:d.usage.provisional?.5:.25;for(const h of d.timeline||[])hours.push({...h,complete:d.complete,spread:d.spread,load:d.usage.parts[h.slot],usageSpread});}
+    hours.sort((a,b)=>a.from-b.from);let cursor=now,index=0;
+    const ordered=targets.flatMap(d=>['evening','morning'].map(k=>d[k])).filter(t=>finite(t.at)&&t.at>=now).sort((a,b)=>a.at-b.at);
+    for(const target of ordered){
+      while(!problem&&cursor<target.at){
+        while(index<hours.length&&hours[index].to<=cursor)index++;const h=hours[index];
+        if(!h||h.from>cursor||!h.complete||!finite(h.wh)||h.wh<0){problem='Für die Akkuprognose fehlen durchgängige Ertragsdaten bis zu diesem Zeitpunkt.';break;}
+        if(!finite(h.load)||h.load<0){problem='Der übliche Verbrauch wird noch ermittelt. Eigene saisonale Vorgaben sind freiwillig.';break;}
+        const end=Math.min(target.at,h.to),fraction=(end-cursor)/HOUR,load=h.load/[11,5,8][h.slot]*fraction,solar=h.wh*fraction;
+        for(let i=0;i<3;i++){const s=scenarios[i],generation=solar*(i===1?1-h.spread:i===2?1+h.spread:1),use=load*(i===1?1+h.usageSpread:i===2?1-h.usageSpread:1),raw=s.energy+generation-use;s.excess+=Math.max(0,raw-cap);s.shortfall+=Math.max(0,-raw);s.energy=clamp(raw,0,cap);}
+        cursor=end;
+      }
+      if(problem)target.reason=problem;
+      else Object.assign(target,{soc:scenarios[0].energy/cap*100,low:scenarios[1].energy/cap*100,high:scenarios[2].energy/cap*100,excessWh:scenarios[0].excess,shortfallWh:scenarios[0].shortfall,possibleShortfall:scenarios[1].shortfall>0});
+    }
+    for(const d of targets)for(const k of ['evening','morning']){const t=d[k];if(!finite(t.at))t.reason=k==='evening'?'Für diesen Tag fehlt der Sonnenuntergang.':'Für den nächsten Tag fehlt der Sonnenaufgang.';else if(t.at<now)t.reason='Dieser Zeitpunkt liegt bereits in der Vergangenheit.';}
+    return targets;
   }
   function trainingRows(weather,equipment,plan,days,source=''){
     const key=setupKey(equipment,plan,weather.place,source),groups=equipment.groups||[];
     if(groups.some(g=>plan.groups[g.id]?.active&&g.placement==='mobile')||groups.some(g=>plan.groups[g.id]?.active&&g.measurement==='solar'&&!geometry(g,plan.groups[g.id])))return [];
     const rows=[];for(const d of days){if(!d.complete)continue;for(let slot=0;slot<3;slot++){const bounds=(weather.windows||[]).find(w=>w.day===d.day&&w.slot===slot);if(bounds&&bounds.from>weather.updated)rows.push({key,from:bounds.from,to:bounds.to,issued:weather.updated,wh:d.parts[slot].raw});}}return rows;
   }
-  return {HOUR,DAY,DIRECTIONS,PARTS,bearing,direction,panelHeading,geometry,normalize,newSite,stamp,part,setupKey,median,seasonWeights,consumption,calibration,sunshineCode,forecast,trainingRows};
+  return {HOUR,DAY,DIRECTIONS,PARTS,bearing,direction,panelHeading,geometry,normalize,newSite,stamp,part,setupKey,median,seasonWeights,consumption,calibration,sunshineCode,forecast,batteryForecast,trainingRows};
 });
