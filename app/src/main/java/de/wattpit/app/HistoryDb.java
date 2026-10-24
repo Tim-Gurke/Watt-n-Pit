@@ -13,6 +13,7 @@ import de.wattpit.app.core.ArchiveSyncPlan;
 import de.wattpit.app.core.EnergyIntegral;
 import de.wattpit.app.core.SampleTimeline;
 import de.wattpit.app.core.HistorySchema;
+import de.wattpit.app.core.VictronSettings;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.*;
@@ -21,19 +22,38 @@ import java.util.*;
 
 final class HistoryDb extends SQLiteOpenHelper {
     private static final String[] NUMBERS = {"voltage","current","power","soc","solar","yieldWh","ttg","consumed","temperature","aux","load","state","error","alarm","pvVoltage","auxRaw"};
-    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 5); setWriteAheadLoggingEnabled(true); }
+    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 6); setWriteAheadLoggingEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL(HistorySchema.CREATE);
         db.execSQL("CREATE INDEX history_window ON readings(ts,kind,origin)");
         db.execSQL("CREATE INDEX history_device ON readings(device,ts)");
         createDaily(db);
         createArchives(db);
+        createDeviceSettings(db);
     }
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) createDaily(db);
         if(oldVersion<3){db.execSQL("ALTER TABLE readings ADD COLUMN period INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE readings ADD COLUMN pvVoltage REAL");db.execSQL("ALTER TABLE readings ADD COLUMN auxRaw REAL");createArchives(db);}
         else if(oldVersion<4)db.execSQL("ALTER TABLE device_daily ADD COLUMN finalized INTEGER NOT NULL DEFAULT 0");
         if(oldVersion<5)for(String sql:HistorySchema.MIGRATE)db.execSQL(sql);
+        if(oldVersion<6)createDeviceSettings(db);
+    }
+
+    private static void createDeviceSettings(SQLiteDatabase db){db.execSQL("CREATE TABLE device_settings(device TEXT NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(device,start))");}
+    /** Equal reads confirm an interval; a changed profile never applies before the new read. */
+    synchronized void deviceSettings(String device,JSONObject snapshot)throws Exception{
+        long at=snapshot.getLong("at"),start=at;SQLiteDatabase db=getWritableDatabase();
+        try(Cursor c=db.rawQuery("SELECT start,end,payload FROM device_settings WHERE device=? ORDER BY start DESC LIMIT 1",new String[]{device})){
+            if(c.moveToFirst()&&at>=c.getLong(1)&&at-c.getLong(1)<=VictronSettings.MAX_AGE&&new JSONObject(c.getString(2)).getJSONObject("values").toString().equals(snapshot.getJSONObject("values").toString()))start=c.getLong(0);
+        }
+        ContentValues v=new ContentValues();v.put("device",device);v.put("start",start);v.put("end",at);v.put("payload",snapshot.toString());db.insertWithOnConflict("device_settings",null,v,SQLiteDatabase.CONFLICT_REPLACE);
+        db.delete("device_settings","end<?",new String[]{""+(at-410L*86400000)});
+    }
+    JSONArray deviceSettingsHistory(String device,long from,long to)throws Exception{
+        JSONArray result=new JSONArray();
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT start,end,payload FROM device_settings WHERE device=? AND start<=? AND end>=? ORDER BY start",new String[]{device,""+to,""+(from-VictronSettings.MAX_AGE)})){
+            while(c.moveToNext())result.put(new JSONObject(c.getString(2)).put("since",c.getLong(0)).put("until",c.getLong(1)));
+        }return result;
     }
 
     private static void createArchives(SQLiteDatabase db) {
@@ -254,32 +274,57 @@ final class HistoryDb extends SQLiteOpenHelper {
         }
         return new JSONObject().put("days",days);
     }
-    /** Complete local time bins for planning; never extrapolates an incomplete measurement day. */
+    /** Original energy formula in local bins; learning may use complete sub-intervals of a bin. */
     JSONArray planningObservations(long from,long to,JSONObject weather,String solarDevice,String shuntDevice)throws Exception{
+        return planningObservations(from,to,weather,solarDevice,shuntDevice,Collections.emptyList());
+    }
+    JSONArray planningObservations(long from,long to,JSONObject weather,String solarDevice,String shuntDevice,List<Long> changes)throws Exception{
         java.time.ZoneId zone;try{zone=java.time.ZoneId.of(weather.optString("timezone",java.time.ZoneId.systemDefault().getId()));}catch(Exception e){zone=java.time.ZoneId.systemDefault();}
         java.time.LocalDate day=java.time.Instant.ofEpochMilli(from).atZone(zone).toLocalDate();
         List<EnergyIntegral.Sample> solarSamples=planningSamples(from,to,"solar",solarDevice);
         List<SampleTimeline.Interval> solar=SampleTimeline.intervals(solarSamples,from,to,false);
         List<SampleTimeline.Interval> battery=EnergyIntegral.powerIntervals(planningSamples(from,to,"batteryPower",shuntDevice),planningSamples(from,to,"batteryVoltage",shuntDevice),planningSamples(from,to,"batteryCurrent",shuntDevice),from,to);
         List<SampleTimeline.Interval> states=SampleTimeline.intervals(planningSamples(from,to,"state",solarDevice),from,to,false);
+        List<SampleTimeline.Interval> volts=SampleTimeline.intervals(planningSamples(from,to,"solarVoltage",solarDevice),from,to,false);
+        List<SampleTimeline.Interval> amps=SampleTimeline.intervals(planningSamples(from,to,"solarCurrent",solarDevice),from,to,true);
+        List<SampleTimeline.Interval> errors=SampleTimeline.intervals(planningSamples(from,to,"error",solarDevice),from,to,false);
         JSONArray days=weather.optJSONArray("days"),rows=new JSONArray();
         while(day.atStartOfDay(zone).toInstant().toEpochMilli()<to){
             long start=day.atStartOfDay(zone).toInstant().toEpochMilli(),end=day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),rise=start,set=end;
             if(days!=null)for(int i=0;i<days.length();i++){JSONObject d=days.getJSONObject(i);if(day.toString().equals(d.optString("day"))){long r=d.optLong("sunrise"),s=d.optLong("sunset");if(r>=start&&s>r&&s<=end){rise=r;set=s;}break;}}
             long[] bounds={start,day.atTime(11,0).atZone(zone).toInstant().toEpochMilli(),day.atTime(16,0).atZone(zone).toInstant().toEpochMilli(),end};
             for(int slot=0;slot<3;slot++){
-                long a=bounds[slot],b=bounds[slot+1];if(a<from||b>to)continue;
-                long sunFrom=Math.max(a,Math.min(b,rise)),sunTo=Math.max(sunFrom,Math.min(b,set));
-                EnergyIntegral.Flow flow=EnergyIntegral.flowIntervals(clipIntervals(solar,a,b),clipIntervals(battery,a,b),a,b,sunFrom,sunTo);
-                long lightFrom=flow.solarFrom,lightTo=flow.solarTo,bulk=0;for(SampleTimeline.Interval x:clipIntervals(states,lightFrom,lightTo))if(x.a==3&&x.b==3)bulk+=x.to-x.from;
-                boolean extraCharging=false;EnergyIntegral.Point previous=null;for(EnergyIntegral.Point point:flow.consumption.points){if(previous!=null&&!point.gap&&point.wh<previous.wh-2)extraCharging=true;previous=point;}
-                rows.put(new JSONObject().put("day",day.toString()).put("slot",slot).put("from",a).put("to",b)
-                    .put("consumption",flow.consumption.wh==null?JSONObject.NULL:flow.consumption.wh).put("solar",flow.solar.wh==null?JSONObject.NULL:flow.solar.wh)
-                    .put("coverage",flow.consumption.coverage(a,b)).put("solarCoverage",lightTo>lightFrom?flow.solar.coverage(lightFrom,lightTo):1).put("extraCharging",extraCharging)
-                    .put("actualSolarCoverage",planningCoverage(solar,a,b))
-                    .put("bulkCoverage",lightTo>lightFrom?Math.min(1,bulk/(double)(lightTo-lightFrom)):1));
+                long a=bounds[slot],b=bounds[slot+1];if(a<from||a>=to)continue;
+                JSONObject row=planningFlow(a,b,rise,set,solar,battery,states).put("day",day.toString()).put("slot",slot);
+                TreeSet<Long> cuts=new TreeSet<>();long endOfData=Math.min(b,to);cuts.add(a);cuts.add(endOfData);
+                for(long t=a+3600000;t<endOfData;t+=3600000)cuts.add(t);
+                if(rise>a&&rise<endOfData)cuts.add(rise);if(set>a&&set<endOfData)cuts.add(set);
+                for(long t:changes)if(t>a&&t<endOfData)cuts.add(t);
+                JSONArray segments=new JSONArray();Long previous=null;
+                for(long next:cuts){if(previous!=null&&next>previous){
+                    JSONObject segment=planningFlow(previous,next,rise,set,solar,battery,states);
+                    planningRange(segment,"voltage",volts,previous,next);planningRange(segment,"current",amps,previous,next);planningRange(segment,"error",errors,previous,next);
+                    segments.put(segment);
+                }previous=next;}
+                rows.put(row.put("segments",segments));
             }day=day.plusDays(1);
         }return rows;
+    }
+    private static JSONObject planningFlow(long a,long b,long rise,long set,List<SampleTimeline.Interval> solar,List<SampleTimeline.Interval> battery,List<SampleTimeline.Interval> states)throws Exception{
+        long sunFrom=Math.max(a,Math.min(b,rise)),sunTo=Math.max(sunFrom,Math.min(b,set));
+        EnergyIntegral.Flow flow=EnergyIntegral.flowIntervals(clipIntervals(solar,a,b),clipIntervals(battery,a,b),a,b,sunFrom,sunTo);
+        long lightFrom=flow.solarFrom,lightTo=flow.solarTo,bulk=0;for(SampleTimeline.Interval x:clipIntervals(states,lightFrom,lightTo))if(x.a==3&&x.b==3)bulk+=x.to-x.from;
+        EnergyIntegral.Result measuredSolar=EnergyIntegral.calculateIntervals(clipIntervals(solar,lightFrom,lightTo),lightFrom,lightTo,false,true);
+        boolean extraCharging=false;EnergyIntegral.Point previous=null;for(EnergyIntegral.Point point:flow.consumption.points){if(previous!=null&&!point.gap&&point.wh<previous.wh-2)extraCharging=true;previous=point;}
+        return new JSONObject().put("from",a).put("to",b).put("consumption",flow.consumption.wh==null?JSONObject.NULL:flow.consumption.wh).put("solar",lightFrom==lightTo?0:measuredSolar.wh==null?JSONObject.NULL:measuredSolar.wh)
+            .put("coverage",flow.consumption.coverage(a,b)).put("solarCoverage",lightTo>lightFrom?measuredSolar.coverage(lightFrom,lightTo):1).put("extraCharging",extraCharging)
+            .put("actualSolarCoverage",planningCoverage(solar,a,b)).put("lightMillis",Math.max(0,lightTo-lightFrom))
+            .put("bulkCoverage",lightTo>lightFrom?Math.min(1,bulk/(double)(lightTo-lightFrom)):1);
+    }
+    private static void planningRange(JSONObject row,String name,List<SampleTimeline.Interval> intervals,long from,long to)throws Exception{
+        double min=Double.POSITIVE_INFINITY,max=Double.NEGATIVE_INFINITY;long covered=0;
+        for(SampleTimeline.Interval x:clipIntervals(intervals,from,to)){covered+=x.to-x.from;min=Math.min(min,Math.min(x.a,x.b));max=Math.max(max,Math.max(x.a,x.b));}
+        if(covered>=(to-from)*.98)row.put(name+"Min",min).put(name+"Max",max);
     }
     private List<EnergyIntegral.Sample> planningSamples(long from,long to,String field,String device){
         if(device==null||device.isEmpty())return new ArrayList<>();

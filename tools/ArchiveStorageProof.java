@@ -219,13 +219,17 @@ public final class ArchiveStorageProof {
             JSONObject solar=new JSONObject().put("mac","live-solar").put("kind","solar"),shunt=new JSONObject().put("mac","live-shunt").put("kind","shunt");
             repo.prefs.edit().putString("devices",new JSONArray().put(solar).put(shunt).toString()).putInt("sampleSeconds",60).putLong("proofFixtureTime",now).commit();
             db.beginTransaction();try{
-                for(long t=0;t<=end+300;t+=60){
+                // Queries over 21 days can outlast five minutes on a slow test runner.
+                for(long t=0;t<=end+3600;t+=60){
                     Reading s=new Reading();s.timestamp=base+t*1000;s.device="live-solar";s.kind="solar";s.period=60;s.solar=60.0;history.insert(s);
                     Reading b=new Reading();b.timestamp=s.timestamp;b.device="live-shunt";b.kind="shunt";b.period=60;b.voltage=12.0;b.current=-5.0;history.insert(b);
                 }
                 db.setTransactionSuccessful();
             }finally{db.endTransaction();}
             snapshot(repo,"live-solar","solar",end,now,c,0xec8a);snapshot(repo,"live-shunt","shunt",end,now,c,0xed8d,0xed8c);
+            require(repo.deviceSettingsDue(solar,now),"missing settings request one initial bounded read even with complete measurements");
+            repo.prefs.edit().putString("deviceSettings.live-solar",new JSONObject().put("at",now).toString()).putString("deviceSettings.live-shunt",new JSONObject().put("at",now).toString()).commit();
+            require(!repo.deviceSettingsDue(solar,now+300000)&&repo.deviceSettingsDue(solar,now+VictronSettings.MAX_AGE),"settings refresh has a six-hour interval instead of reconnecting at every poll");
             require(repo.automaticArchiveDevices().length()==0,"actual Repository starts no archive when all live data exist");
             require(!repo.archiveNeedsData(solar,now+300000)&&!repo.archiveNeedsData(shunt,now+300000),"advancing five minutes with continued recording still needs no connection");
             db.execSQL("DELETE FROM readings WHERE device='live-solar' AND ts>? AND ts<?",new Object[]{now-3*86400000L,now-90000});

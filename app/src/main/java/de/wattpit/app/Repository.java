@@ -78,6 +78,27 @@ final class Repository {
         if(!kind.equals("solar")&&!kind.equals("shunt"))return;
         JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));all.put(kind,result);prefs.edit().putString("archiveDiagnostics",all.toString()).apply();
     }
+    void saveDeviceSettings(String mac,String kind,JSONObject values,int total,long at)throws Exception{
+        JSONObject result=new JSONObject().put("at",at).put("kind",kind).put("values",values).put("expected",total);
+        db.deviceSettings(mac,result);
+        if(!prefs.edit().putString("deviceSettings."+mac,result.toString()).commit())throw new java.io.IOException("Geräteeinstellungen konnten nicht gespeichert werden.");
+        invalidateStats();
+    }
+    private JSONObject deviceSettingsSnapshot()throws JSONException{
+        JSONObject result=new JSONObject();JSONArray devices=configs();long now=System.currentTimeMillis();
+        for(int i=0;i<devices.length();i++){
+            JSONObject d=devices.getJSONObject(i),saved=new JSONObject(prefs.getString("deviceSettings."+d.optString("mac"),"{}"));
+            if(saved.length()==0)continue;String kind=d.optString("kind");
+            if(kind.equals("solar")){
+                Reading reading=latest.get(d.optString("mac"));JSONObject values=saved.optJSONObject("values");String limit="unknown";
+                if(values!=null&&reading!=null&&reading.state!=null&&reading.error!=null&&reading.error==0&&reading.timestamp<=now+5000&&now-reading.timestamp<=45000&&saved.optLong("at")<=now&&now-saved.optLong("at")<=VictronSettings.MAX_AGE)
+                    limit=VictronSettings.limit(reading.state,reading.voltage==null?Double.NaN:reading.voltage,reading.current==null?Double.NaN:reading.current,number(values,"absorptionVoltage"),number(values,"maxChargeCurrent"),number(values,"temperatureCompensation"));
+                saved.put("limit",limit);
+            }
+            result.put(kind,saved);
+        }return result;
+    }
+    private static Double number(JSONObject values,String key){double value=values.optDouble(key,Double.NaN);return Double.isFinite(value)?value:null;}
     synchronized String diagnosticText()throws JSONException{
         JSONObject all=new JSONObject(prefs.getString("archiveDiagnostics","{}"));StringBuilder text=new StringBuilder("Watt’n’Pit "+BuildConfig.VERSION_NAME+" · Archivdiagnose\n");
         for(String kind:new String[]{"solar","shunt"}){
@@ -102,9 +123,13 @@ final class Repository {
         for(int i=0;i<all.length();i++){JSONObject cfg=all.getJSONObject(i);String mac=cfg.getString("mac");
             long next=prefs.getLong("archiveNext."+mac,0);
             if((retriesOnly&&(!prefs.getBoolean("archivePending."+mac,false)||!archiveReceptionRecovered(mac,now)))||!ArchiveSchedule.automaticDue(next,now))continue;
-            if(ArchiveSchedule.automaticDue(next,now,archiveNeedsData(cfg,now)))due.put(cfg);
+            if(ArchiveSchedule.automaticDue(next,now,deviceSettingsDue(cfg,now)||archiveNeedsData(cfg,now)))due.put(cfg);
         }
         return due;
+    }
+    boolean deviceSettingsDue(JSONObject cfg,long now){
+        try{long at=new JSONObject(prefs.getString("deviceSettings."+cfg.optString("mac"),"{}")).optLong("at");return at<=0||at>now||now-at>=VictronSettings.MAX_AGE;}
+        catch(JSONException e){return true;}
     }
     /** Read-only local preflight. No GATT connection is needed to find a data gap. */
     boolean archiveNeedsData(JSONObject cfg,long now){
@@ -290,7 +315,7 @@ final class Repository {
         if (now - statsTime > 30_000) { cachedStats = db.stats(); statsTime = now; }
         JSONObject result=new JSONObject().put("dataAt",now).put("archiveBusy",archiveBusy).put("historyRevision",historyRevision).put("running",running).put("status",status).put("devices",devices).put("found",discovery)
                 .put("equipment",equipment()).put("archiveDiagnostics",new JSONObject(prefs.getString("archiveDiagnostics","{}"))).put("archive",archive).put("deviceHistory",db.histories()).put("weatherError",prefs.getString("weatherError","")).put("weather",new JSONObject(prefs.getString("weatherCache","{}"))).put("readings",readings).put("stats",cachedStats).put("solarDaily",db.daily()).put("event",event).put("eventId",eventId)
-                .put("settings",settingsSnapshot());
+                .put("settings",settingsSnapshot()).put("deviceSettings",deviceSettingsSnapshot());
         if(!archiveBusy){lastSnapshot=result.toString();lastSnapshotAt=now;}
         return result;
     }

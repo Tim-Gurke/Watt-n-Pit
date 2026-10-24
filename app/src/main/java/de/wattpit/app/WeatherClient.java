@@ -69,7 +69,8 @@ final class WeatherClient {
                 JSONObject eq=new JSONObject(equipment),plan=SolarPlanning.checked(new JSONObject(setup),eq);JSONArray groups=eq.getJSONArray("groups");java.util.Set<String> requested=new java.util.LinkedHashSet<>();boolean partial=false;
                 for(int i=0;i<groups.length();i++){
                     JSONObject g=groups.getJSONObject(i),setting=plan.getJSONObject("groups").getJSONObject(g.getString("id"));
-                    if(!setting.optBoolean("active"))continue;String geometry=SolarPlanning.geometry(g,setting);if(geometry==null||!requested.add(geometry))continue;
+                    // Keep the known mobile geometry after switching it off, for recent learning.
+                    String geometry=SolarPlanning.geometry(g,setting);if(geometry==null||!requested.add(geometry))continue;
                     if(!place.equals(repository.prefs.getString("weatherPlace",""))||!setup.equals(repository.prefs.getString("solar-setup-v1","{}")))break;
                     try{
                         String[] angles=geometry.split(":");series.put(irradiance(geometry,get(base+"&hourly=global_tilted_irradiance&tilt="+angles[0]+"&azimuth="+angles[1])));
