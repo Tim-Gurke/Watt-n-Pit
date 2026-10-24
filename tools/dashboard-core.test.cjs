@@ -262,10 +262,10 @@ test('readable numbers handle shorthand white, custom dark surfaces and transpar
   }
   assert.notEqual(C.readableColor('#e8bb57','#fff','#f4f6f9'),'#ffffff');
 });
-test('the standard portrait overview follows the approved ten-tile layout and preserves the existing wide positions',()=>{
-  const board=C.defaults();
+test('the 1.4.3 standard portrait overview matches the approved taller preview and preserves wide positions',()=>{
+  const board=C.defaults();assert.equal(board.tiles.find(t=>t.metric==='solar').period.amount,3);
   assert.deepEqual(board.tiles.map(t=>t.metric),['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy','state','chargeTime']);
-  assert.deepEqual(board.tiles.map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:5},{x:4,y:0,w:4,h:7},{x:8,y:7,w:4,h:5.5},{x:8,y:0,w:4,h:7},{x:0,y:7.5,w:4,h:2.5},{x:0,y:10,w:4,h:2.5},{x:0,y:12.5,w:12,h:4},{x:4,y:7,w:4,h:5.5},{x:4,y:16.5,w:4,h:3.5},{x:0,y:5,w:4,h:2.5}]);
+  assert.deepEqual(board.tiles.map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:5},{x:4,y:0,w:4,h:7},{x:8,y:7,w:4,h:5.5},{x:8,y:0,w:4,h:7},{x:0,y:7.5,w:4,h:2.5},{x:0,y:10,w:4,h:2.5},{x:0,y:12.5,w:12,h:5},{x:4,y:7,w:4,h:5.5},{x:4,y:17.5,w:4,h:3.5},{x:0,y:5,w:4,h:2.5}]);
   assert.deepEqual(board.tiles.slice(0,8).map(t=>t.layouts.wide),[{x:0,y:0,w:2,h:4},{x:2,y:0,w:2,h:8},{x:7,y:0,w:3,h:8},{x:4,y:0,w:3,h:8},{x:0,y:4,w:2,h:2},{x:0,y:6,w:2,h:2},{x:0,y:8,w:12,h:4},{x:10,y:0,w:2,h:8}]);
   assert.deepEqual(board.historyHeight,{compact:465,wide:380});
   assert.equal(board.tiles[1].valueMode,'live');assert.equal(board.tiles[1].scaleMode,'auto');

@@ -43,7 +43,7 @@ final class Repository {
     }
     private JSONObject settingsSnapshot()throws JSONException{
         return new JSONObject().put("theme",prefs.getString("theme","dark")).put("palette",prefs.getString("palette","classic"))
-            .put("miniRange",prefs.getString("miniRange","sunrise")).put("weatherPlace",new JSONObject(prefs.getString("weatherPlace","{}")))
+            .put("miniRange",prefs.getString("miniRange","today")).put("weatherPlace",new JSONObject(prefs.getString("weatherPlace","{}")))
             .put("capacity",prefs.getFloat("capacity",100f)).put("sampleSeconds",prefs.getInt("sampleSeconds",10)).put("solarSetup",new JSONObject(prefs.getString("solar-setup-v1","{}")));
     }
     /** Frozen history/statistics plus current app settings, without database or monitor waits. */
@@ -304,7 +304,7 @@ final class Repository {
             throw new IllegalArgumentException("Bitte gültige Einstellungen eingeben.");
         String palette=settings.optString("palette",prefs.getString("palette","classic"));
         if(!Arrays.asList("classic","blue","green","turquoise","orange","neutral").contains(palette))throw new IllegalArgumentException("Unbekanntes Farbdesign.");
-        String miniRange=settings.optString("miniRange",prefs.getString("miniRange","sunrise"));
+        String miniRange=settings.optString("miniRange",prefs.getString("miniRange","today"));
         if(!Arrays.asList("sunrise","today","last6h","last24h","yesterday","week","month").contains(miniRange))throw new IllegalArgumentException("Unbekannter Übersichtszeitraum.");
         return prefs.edit().putString("miniRange",miniRange).putString("palette",palette).putString("theme",theme).putFloat("capacity",(float)capacity).putInt("sampleSeconds",seconds);
     }

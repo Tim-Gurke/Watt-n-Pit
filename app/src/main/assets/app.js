@@ -280,7 +280,7 @@ function loadHistory() {
 function delayedHistory(){clearTimeout(loadTimer);loadTimer=setTimeout(loadHistory,300);}
 function loadMini(force=false) {
   if(lifecycle?.blocked)return;
-  const mode=native?snapshot.settings.miniRange||'sunrise':localStorage.getItem('wattpit-mini-range')||'sunrise';
+  const mode=native?snapshot.settings.miniRange||'today':localStorage.getItem('wattpit-mini-range')||'today';
   miniWindow=window.WattDashboardCore.miniWindow(mode,snapshot.weather,dataTime());
   $('miniRange').value=mode;$('miniPeriodLabel').textContent=miniWindow.label.toLocaleUpperCase('de-DE');
   $('miniPeriodNote').textContent=miniWindow.note;$('miniPeriodNote').hidden=!miniWindow.note;

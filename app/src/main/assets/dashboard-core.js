@@ -217,14 +217,14 @@
     const ids=['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy','state','chargeTime'];
     const energyPeriod={...tile('energyBalance').period};
     const layouts={
-      compact:[[0,0,4,5],[4,0,4,7],[8,7,4,5.5],[8,0,4,7],[0,7.5,4,2.5],[0,10,4,2.5],[0,12.5,12,4],[4,7,4,5.5],[4,16.5,4,3.5],[0,5,4,2.5]],
+      compact:[[0,0,4,5],[4,0,4,7],[8,7,4,5.5],[8,0,4,7],[0,7.5,4,2.5],[0,10,4,2.5],[0,12.5,12,5],[4,7,4,5.5],[4,17.5,4,3.5],[0,5,4,2.5]],
       wide:[[0,0,2,4],[2,0,2,8],[7,0,3,8],[4,0,3,8],[0,4,2,2],[0,6,2,2],[0,8,12,4],[10,0,2,8],[0,12,4,3],[0,15,4,4]]
     };
     return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,historyHeight:historyHeight(),blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
       const t=tile(id,'default-'+id);
       for(const profile of ['compact','wide']){const [x,y,w,h]=layouts[profile][i];t.layouts[profile]={x,y,w,h};}
       if(id==='soc'){t.fontSize=20;t.scaleMode='auto';}
-      if(id==='solar'){t.type='chart';t.scaleMode='auto';t.valueMode='live';t.period.mode='sunrise';}
+      if(id==='solar'){t.type='chart';t.scaleMode='auto';t.valueMode='live';t.period.mode='sunrise';t.period.amount=3;}
       if(CATALOG[id].flow)t.period={...energyPeriod,mode:id==='solarEnergy'?'sunrise':energyPeriod.mode};
       if(id==='power')t.title='Aktuell';
       return t;

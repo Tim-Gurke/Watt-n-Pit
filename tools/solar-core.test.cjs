@@ -62,10 +62,10 @@ test('direct solar consumption can hold a full battery without manufacturing add
 });
 test('reserve keeps missing SOC, stale readings, capacity, consumption, weather and solar events explicitly unknown',()=>{
  const f=reserveFixture(),run=(battery=f.battery,days=f.days,w=f.w)=>C.batteryForecast(days,w,battery,now)[0];
- for(const b of [null,{...f.battery,soc:null},{...f.battery,soc:101},{...f.battery,t:now-45001}]){const r=run(b);assert.equal(r.evening.soc,undefined);assert.match(r.evening.reason,/Ladezustand/);}
+ for(const b of [null,{...f.battery,soc:null},{...f.battery,soc:101},{...f.battery,t:now-45001}]){const r=run(b);assert.equal(r.evening.soc,undefined);assert.match(r.evening.reason,/Ladezustand/);assert.equal(r.evening.reasonCode,'soc');}
  assert.match(run({...f.battery,capacity:0}).evening.reason,/Kapazität|Akkukapazität/);
  assert.match(run({...f.battery,voltage:null}).evening.reason,/Spannung|Batteriespannung/);
- assert.match(run(f.battery,C.forecast(f.w,f.eq,plan(f.eq),{},now)).evening.reason,/Verbrauch/);
+ const waiting=run(f.battery,C.forecast(f.w,f.eq,plan(f.eq),{},now));assert.match(waiting.evening.reason,/Verbrauch/);assert.equal(waiting.evening.reasonCode,'consumption');
  const gap=structuredClone(f.w);gap.solar[0].values.find(v=>v.t===now+H).v=null;
  const missing=run(f.battery,C.forecast(gap,f.eq,f.p,{},now),gap);assert.equal(missing.evening.soc,undefined);assert.match(missing.evening.reason,/Ertragsdaten/);
  const noSun=structuredClone(f.days);noSun[0].sunset=null;assert.match(run(f.battery,noSun).evening.reason,/Sonnenuntergang/);
