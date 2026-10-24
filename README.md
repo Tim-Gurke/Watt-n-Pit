@@ -4,9 +4,15 @@
 
 **Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht.** Sie zeigt Messwerte, Verläufe und Energieauswertungen. Einstellungen an Solarregler und SmartShunt müssen weiterhin über die Victron-Software **VictronConnect** vorgenommen werden. Die Einstellungen in Watt’n’Pit betreffen nur die App und ändern keine Geräteparameter.
 
-**[Android-APK 1.4.3 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.3/Watt-n-Pit-v1.4.3.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.4.4 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.4/Watt-n-Pit-v1.4.4.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
+
+## Neu in 1.4.4
+
+Das Verbrauchslernen nutzt geeignete **Messabschnitte mit und ohne mobiles Modul**. Ein fehlender Tagesabschnitt verwirft nicht mehr den ganzen Tag. Nachtdaten bleiben bei „Mobil an“ nutzbar; geeignete Tagesabschnitte ergänzen einen klar als Schätzung behandelten mobilen Beitrag. Fehlende Tageszeiten werden zunächst vorsichtig hochgerechnet. Jahreszeit und bisherige Erfahrung bleiben berücksichtigt.
+
+Beim Geräteabruf liest Watt’n’Pit zusätzlich die verfügbaren **aktiven Ladeeinstellungen aus SmartShunt und SmartSolar**. Unter einem Vorschautag erklärt **Aktive Ladeeinstellungen und Begrenzung**, welche Werte zuletzt gelesen wurden. Schonladeprofile, Stromgrenzen und unklare Ladephasen dürfen die Solarerfahrung nicht nach unten verfälschen. Angezeigte 100 % allein beweisen keine Abregelung. Entgangene Wh bleiben eine Schätzung; Watt’n’Pit ändert keine Geräteparameter.
 
 ## Neu in 1.4.3
 
@@ -81,7 +87,7 @@ Die Hochkant-Vorlage enthält zehn Kacheln und eine Verlaufshöhe von 465 Pixeln
 
 Beim ersten Öffnen den Cockpit-Hinweis lesen und **Verstanden** wählen. Er erscheint auch bei bestehenden Installationen einmal nach diesem Update. Die Bestätigung bleibt nur auf diesem Gerät und wird nicht mit Einstellungen exportiert.
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.3/Watt-n-Pit-v1.4.3.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.4/Watt-n-Pit-v1.4.4.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.
@@ -119,7 +125,7 @@ Die vorhandene Wetterkachel zeigt jetzt eine **Solarvorschau für 14 Tage** mit 
 
 Mobile Module sind standardmäßig aus. Der Schalter **Mobil an/aus** meldet die tatsächliche Aufstellung; nach einem Standortwechsel sind sie wieder aus. Ein ungemessener PWM-Kreis zählt ausschließlich als **geschätzte Verbrauchsentlastung**. Die bisherige Messformel bleibt erhalten, der PWM-Beitrag wird darin nicht ein zweites Mal abgezogen.
 
-Der Verbrauch lernt ohne vorherige Eingaben aus vollständig erfassten Tagen. Jahreszeit und Tagesabschnitte gehen mit gleitenden Übergängen ein; eigene saisonale Wh-Werte sind freiwillig. Ohne ausreichende Daten erscheint **Wird ermittelt** oder eine vorläufige Schätzung. Gespeicherte ursprüngliche Vorhersagen werden erst nach mehreren vergleichbaren Tagen vorsichtig an passende Messwerte angepasst. Messlücken, gemeldete Zusatzladung und erkennbare Abregelung sind keine gültigen Lernbeispiele. Lernstände bleiben auf diesem Telefon; mehrere Handys gleichen sie nicht automatisch ab.
+Der Verbrauch lernt ohne vorherige Eingaben aus geeigneten Messabschnitten, auch bei mobiler Aufstellung. Jahreszeit und Tagesabschnitte gehen mit gleitenden Übergängen ein; eigene saisonale Wh-Werte sind freiwillig. Ohne ausreichende Daten erscheint **Wird ermittelt** oder eine vorläufige Schätzung. Gespeicherte ursprüngliche Vorhersagen werden erst nach mehreren vergleichbaren Tagen vorsichtig an passende Messwerte angepasst. Messlücken, gemeldete Zusatzladung und erkennbare Abregelung sind keine gültigen Lernbeispiele. Lernstände bleiben auf diesem Telefon; mehrere Handys gleichen sie nicht automatisch ab.
 
 **1.4.1 korrigiert die Zuordnung der Wettertage über die Zeitumstellung.** Der 25. Oktober erscheint einmal und wird als 25-Stunden-Tag berechnet. Fehlende Anlagenangaben und fehlende Wetterdaten erhalten getrennte Hinweise.
 

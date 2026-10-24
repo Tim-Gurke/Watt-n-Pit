@@ -12,6 +12,7 @@ import de.wattpit.app.core.ArchiveDiagnostic;
 import de.wattpit.app.core.ArchiveLink;
 import de.wattpit.app.core.ArchiveSyncPlan;
 import de.wattpit.app.core.ArchiveTransferPlan;
+import de.wattpit.app.core.VictronSettings;
 import org.json.*;
 import java.io.IOException;
 import java.time.*;
@@ -153,10 +154,13 @@ public final class ArchiveService extends Service {
         return exchange(reg,command,null);
     }
     private byte[] exchange(int reg,byte[] command,java.util.function.Predicate<byte[]> accept) throws Exception {
+        return exchange(reg,command,accept,12000);
+    }
+    private byte[] exchange(int reg,byte[] command,java.util.function.Predicate<byte[]> accept,long timeout) throws Exception {
         check();messages.removeIf(m->m.reg==reg);
         maintain();
         write(data,command);
-        long deadline=SystemClock.elapsedRealtime()+12000;
+        long deadline=SystemClock.elapsedRealtime()+timeout;
         while(SystemClock.elapsedRealtime()<deadline){
             check();
             while(!messages.isEmpty()){
@@ -172,6 +176,17 @@ public final class ArchiveService extends Service {
         throw new TimeoutException("Keine Archivantwort.");
     }
     private byte[] read(int reg) throws Exception{return exchange(reg,ArchiveCodec.read(reg));}
+    private boolean readSettings()throws Exception{
+        stage("Aktive Ladeeinstellungen lesen");JSONObject values=new JSONObject();
+        List<VictronSettings.Field> fields=VictronSettings.fields(kind);long deadline=SystemClock.elapsedRealtime()+3000;
+        for(VictronSettings.Field field:fields){
+            if(SystemClock.elapsedRealtime()>=deadline)break;
+            byte[] bytes;try{bytes=exchange(field.register,ArchiveCodec.read(field.register),null,1000);}catch(TimeoutException e){trace("Einstellungsabfrage nicht beantwortet · Archivabruf wird fortgesetzt");break;}
+            Double value=field.decode(bytes);if(value!=null)values.put(field.name,value);
+        }
+        repository.saveDeviceSettings(mac,kind,values,fields.size(),System.currentTimeMillis());
+        trace("Ladeeinstellungen · "+values.length()+" von "+fields.size()+" gelesen · nur Lesezugriff");return values.length()>0;
+    }
     private byte[] require(int reg) throws Exception{byte[] b=read(reg);if(b==null)throw new IllegalArgumentException("Dieses Gerät stellt kein unterstütztes Trendarchiv bereit.");return b;}
     private void connect(BluetoothDevice device) throws Exception {
         int bond=device.getBondState();
@@ -237,9 +252,10 @@ public final class ArchiveService extends Service {
             if(cfg==null)throw new IllegalArgumentException("Bitte zuerst ein Gerät einrichten.");kind=cfg.getString("kind");
             BluetoothManager manager=getSystemService(BluetoothManager.class);BluetoothAdapter adapter=manager==null?null:manager.getAdapter();
             if(adapter==null||!adapter.isEnabled())throw new IllegalArgumentException("Bitte Bluetooth einschalten.");
-            if(automatic&&!repository.archiveNeedsData(cfg,System.currentTimeMillis())){importComplete=true;return;}
+            if(automatic&&!repository.deviceSettingsDue(cfg,System.currentTimeMillis())&&!repository.archiveNeedsData(cfg,System.currentTimeMillis())){importComplete=true;return;}
             repository.archiveAttemptStarted(mac);
             connect(adapter.getRemoteDevice(mac));
+            boolean settingsAvailable=readSettings();
             stage("Archivmetadaten lesen");
             long currentUptime=ArchiveCodec.u(require(0xec5a),0,4);
             long metadataAt=System.currentTimeMillis();
@@ -356,6 +372,7 @@ public final class ArchiveService extends Service {
                 processed=transfer.processed;skipped=transfer.skipped;unmapped=transfer.deferred+unmappedValues;
                 progress(ArchiveSession.label(field.name)+" · "+Math.min(100,(int)(processed*100L/Math.max(1,total)))+" % · "+changed+" Werte übernommen");
             }
+            if(settingsAvailable)readSettings();
             repository.invalidateStats();String result=changed+" neue oder ergänzte Werte · "+missing+" ohne Messwert";
             if(skipped>0)result+=" · "+skipped+" bereits vorhanden, nicht geladen";
             if(unmapped>0)result+=" · "+unmapped+" ohne Zeitreferenz zurückgestellt";

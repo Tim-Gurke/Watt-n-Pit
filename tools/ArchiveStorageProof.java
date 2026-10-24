@@ -226,6 +226,9 @@ public final class ArchiveStorageProof {
                 db.setTransactionSuccessful();
             }finally{db.endTransaction();}
             snapshot(repo,"live-solar","solar",end,now,c,0xec8a);snapshot(repo,"live-shunt","shunt",end,now,c,0xed8d,0xed8c);
+            require(repo.deviceSettingsDue(solar,now),"missing settings request one initial bounded read even with complete measurements");
+            repo.prefs.edit().putString("deviceSettings.live-solar",new JSONObject().put("at",now).toString()).putString("deviceSettings.live-shunt",new JSONObject().put("at",now).toString()).commit();
+            require(!repo.deviceSettingsDue(solar,now+300000)&&repo.deviceSettingsDue(solar,now+VictronSettings.MAX_AGE),"settings refresh has a six-hour interval instead of reconnecting at every poll");
             require(repo.automaticArchiveDevices().length()==0,"actual Repository starts no archive when all live data exist");
             require(!repo.archiveNeedsData(solar,now+300000)&&!repo.archiveNeedsData(shunt,now+300000),"advancing five minutes with continued recording still needs no connection");
             db.execSQL("DELETE FROM readings WHERE device='live-solar' AND ts>? AND ts<?",new Object[]{now-3*86400000L,now-90000});

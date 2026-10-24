@@ -3,7 +3,7 @@ package de.wattpit.app.core;
 import java.io.ByteArrayOutputStream;
 import java.util.*;
 
-/** Bounded Victron stored-trend protocol. No settings, clock or erase commands. */
+/** Bounded Victron trend and settings reads. No configuration, clock or erase writes. */
 public final class ArchiveCodec {
     private ArchiveCodec() { }
     public static final long NA = 0xffffffffL;
@@ -16,7 +16,7 @@ public final class ArchiveCodec {
         if(!readable(reg))throw new IllegalArgumentException("Register nicht zum Lesen freigegeben.");
         return new byte[]{5,3,(byte)0x81,0x19,(byte)(reg>>8),(byte)reg};
     }
-    private static boolean readable(int r) {return r>=0xec4a&&r<=0xec5f&&r!=0xec5c || r==0xec63||r==0xec64|| r==0xeef8 || r>=0x1050&&r<=0x106e || r>=0x0300&&r<=0x0311;}
+    private static boolean readable(int r) {return r>=0xec4a&&r<=0xec5f&&r!=0xec5c || r==0xec63||r==0xec64|| r==0xeef8 || r>=0x1050&&r<=0x106e || r>=0x0300&&r<=0x0311 || VictronSettings.readable(r);}
     public static byte[] request(int reg,byte[] payload) {
         if(!(reg==0xec5b&&payload.length==6 || (reg==0xec63||reg==0xec64)&&payload.length==4))
             throw new IllegalArgumentException("Nur Archivabfragen sind freigegeben.");
