@@ -4,7 +4,7 @@
 
 **Watt’n’Pit ist eine Energieanzeige und ein Cockpit. Die App ersetzt VictronConnect nicht.** Sie zeigt Messwerte, Verläufe und Energieauswertungen. Einstellungen an Solarregler und SmartShunt müssen weiterhin über die Victron-Software **VictronConnect** vorgenommen werden. Die Einstellungen in Watt’n’Pit betreffen nur die App und ändern keine Geräteparameter.
 
-**[Android-APK 1.4.0 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.0/Watt-n-Pit-v1.4.0.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.4.1 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.1/Watt-n-Pit-v1.4.1.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
 
@@ -71,7 +71,7 @@ Die Hochkant-Vorlage enthält zehn Kacheln und eine Verlaufshöhe von 465 Pixeln
 
 Beim ersten Öffnen den Cockpit-Hinweis lesen und **Verstanden** wählen. Er erscheint auch bei bestehenden Installationen einmal nach diesem Update. Die Bestätigung bleibt nur auf diesem Gerät und wird nicht mit Einstellungen exportiert.
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.0/Watt-n-Pit-v1.4.0.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.4.1/Watt-n-Pit-v1.4.1.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.
@@ -111,6 +111,8 @@ Mobile Module sind standardmäßig aus. Der Schalter **Mobil an/aus** meldet die
 
 Der Verbrauch lernt ohne vorherige Eingaben aus vollständig erfassten Tagen. Jahreszeit und Tagesabschnitte gehen mit gleitenden Übergängen ein; eigene saisonale Wh-Werte sind freiwillig. Ohne ausreichende Daten erscheint **Wird ermittelt** oder eine vorläufige Schätzung. Gespeicherte ursprüngliche Vorhersagen werden erst nach mehreren vergleichbaren Tagen vorsichtig an passende Messwerte angepasst. Messlücken, gemeldete Zusatzladung und erkennbare Abregelung sind keine gültigen Lernbeispiele. Lernstände bleiben auf diesem Telefon; mehrere Handys gleichen sie nicht automatisch ab.
 
+**1.4.1 korrigiert die Zuordnung der Wettertage über die Zeitumstellung.** Der 25. Oktober erscheint einmal und wird als 25-Stunden-Tag berechnet. Fehlende Anlagenangaben und fehlende Wetterdaten erhalten getrennte Hinweise.
+
 [Bedienung und Grenzen](docs/ANLEITUNG.md#7-solarvorschau-und-solaranlage-einstellen) · [Version 1.4.0](docs/releases/1.4.0.md)
 
 ## Lokal und mit optionalem Wetter
@@ -127,7 +129,7 @@ Es bleiben immer die **drei neuesten Releases mit APK-Downloads** verfügbar.
 
 Die App ändert keine Ladeparameter und löscht keine Gerätetrends. Temperatur und Zusatzspannung benötigen einen entsprechend eingerichteten Geräteeingang. Eine lang laufende Aufzeichnung kann durch Android-Energiespareinstellungen begrenzt werden.
 
-Automatisierte Prüfung: **178 JVM-Tests und 99 Node-Tests**, zusätzliche SQLite-/Speicher-/Neustartprüfungen mit aufgezeichneten Victron-Antworten sowie 12 Vordergrundprüfungen, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen, Energiekurven und Farbdesigns. Die Energieberechnung prüft zusätzlich direkten Solarverbrauch, Laden/Entladen, nicht gemessenen PWM-Ertrag, Nachtverbrauch trotz Sonnenaufgangsfenster, gemeinsame Messabdeckung, Messlücken und Quellenüberlappung. Browserprüfungen decken die Umstellung bestehender Kacheln, Zeitraumwahl, Einheiten und Einstellungsexport/-import ab. Die bisherigen Browserprüfungen testen zusätzlich asynchrone Abfragen während des Imports, die Wahl pro Abruf, Wiederöffnen, Gerätewechsel sowie die verschiebbare Kurvenmarkierung, sichtbare Warteanzeige, Abbruch und Erhalt offener Eingaben. Die neuen Synchronisationstests prüfen außerdem ältere Lücken, teilweise vorhandene Pakete, Livewerte, Auflösungen, unabhängige App-Installationen und Geräte, Wiederaufnahme und Neustart-Zeitanker. Die tatsächliche Dauer des Bluetooth-Abrufs und die Android-Dateiauswahl sind zusätzlich am Telefon zu bestätigen. [Versionshinweise](docs/releases/1.4.0.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
+Automatisierte Prüfung: **182 JVM-Tests und 101 Node-Tests**, zusätzliche SQLite-/Speicher-/Neustartprüfungen mit aufgezeichneten Victron-Antworten sowie 12 Vordergrundprüfungen, Android-Lint und Android-Build sowie Browserprüfungen für Bedienung, Speicherung, Importabgleich, Sonnenaufgang, Skalen, Energiekurven und Farbdesigns. Die Energieberechnung prüft zusätzlich direkten Solarverbrauch, Laden/Entladen, nicht gemessenen PWM-Ertrag, Nachtverbrauch trotz Sonnenaufgangsfenster, gemeinsame Messabdeckung, Messlücken und Quellenüberlappung. Browserprüfungen decken die Umstellung bestehender Kacheln, Zeitraumwahl, Einheiten und Einstellungsexport/-import ab. Die bisherigen Browserprüfungen testen zusätzlich asynchrone Abfragen während des Imports, die Wahl pro Abruf, Wiederöffnen, Gerätewechsel sowie die verschiebbare Kurvenmarkierung, sichtbare Warteanzeige, Abbruch und Erhalt offener Eingaben. Die neuen Synchronisationstests prüfen außerdem ältere Lücken, teilweise vorhandene Pakete, Livewerte, Auflösungen, unabhängige App-Installationen und Geräte, Wiederaufnahme und Neustart-Zeitanker. Die tatsächliche Dauer des Bluetooth-Abrufs und die Android-Dateiauswahl sind zusätzlich am Telefon zu bestätigen. [Versionshinweise](docs/releases/1.4.1.md) · [Technische Grundlage](docs/ARCHITECTURE.md)
 
 ## Entwicklung
 

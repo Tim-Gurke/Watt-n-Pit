@@ -98,7 +98,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
             try(Cursor c=db.rawQuery("SELECT MAX(end) FROM observations WHERE source=?",new String[]{source})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(since,c.getLong(0)-2L*86400000);}
             String currentKey="";try(Cursor c=db.rawQuery("SELECT key FROM contexts WHERE source=? ORDER BY at DESC LIMIT 1",new String[]{source})){if(c.moveToFirst())currentKey=c.getString(0);}
             String signature=repository.prefs.getString("equipment-v1","{\"version\":1,\"groups\":[]}")+"|"+repository.prefs.getString("solar-setup-v1","{}");
-            JSONArray observations=weather.optInt("version")==4&&!signature.equals(weather.optString("signature"))?new JSONArray():repository.db.planningObservations(since,now,weather,devices[0],devices[1]);
+            JSONArray observations=weather.optInt("version")>=4&&!signature.equals(weather.optString("signature"))?new JSONArray():repository.db.planningObservations(since,now,weather,devices[0],devices[1]);
             db.beginTransaction();try{for(int i=0;i<observations.length();i++){
                 JSONObject row=observations.getJSONObject(i);long from=row.getLong("from"),to=row.getLong("to");String key="";boolean free=false,known=false;
                 try(Cursor c=db.rawQuery("SELECT key,mobile_free FROM contexts WHERE source=? AND at<=? ORDER BY at DESC LIMIT 1",new String[]{source,""+from})){if(c.moveToFirst()){known=true;key=c.getString(0);free=c.getInt(1)==1;}}

@@ -86,21 +86,28 @@
     const active=(equipment.groups||[]).filter(g=>plan.groups[g.id]?.active),mapped=new Map();
     for(const series of weather.solar||[])mapped.set(series.geometry,new Map((series.values||[]).map(p=>[p.t,p.v])));
     const byDay=new Map();for(const h of weather.hours||[]){const local=stamp(h.t-HOUR/2,weather.timezone);if(!local)continue;const list=byDay.get(local.day)||[];list.push({t:h.t,slot:part(local.hour)});byDay.set(local.day,list);}
-    const days=(weather.days||[]).filter(x=>today&&x.day>=today).slice(0,14);
+    const dated=new Map(),counts=new Map();for(const d of weather.days||[]){counts.set(d.day,(counts.get(d.day)||0)+1);if(today&&d.day>=today&&!dated.has(d.day))dated.set(d.day,d);}
+    const days=[...dated.values()].slice(0,14);
     for(let index=0;index<days.length;index++){
-      const d=days[index],bins=PARTS.map(()=>({fixed:0,mobile:0,raw:0,remaining:0}));let complete=(equipment.groups||[]).length>0,unknownShade=false,seen=0;
-      for(const g of active){const setting=plan.groups[g.id],geom=geometry(g,setting),series=mapped.get(geom);if(!geom||!series){complete=false;continue;}let groupHours=0;
+      const d=days[index],bins=PARTS.map(()=>({fixed:0,mobile:0,raw:0,remaining:0})),issues=[],add=(kind,g)=>{if(!issues.some(x=>x.kind===kind&&x.group===(g?.label||g?.id||'')))issues.push({kind,group:g?.label||g?.id||''});};let complete=(equipment.groups||[]).length>0,unknownShade=false,seen=0;
+      if(!complete)add('equipment');
+      const windows=(weather.windows||[]).filter(w=>w.day===d.day).sort((a,b)=>a.slot-b.slot),validWindows=windows.length===3&&windows.every((w,i)=>w.slot===i&&finite(w.from)&&finite(w.to)&&w.to>w.from&&(i===0||w.from===windows[i-1].to));
+      const expected=validWindows?windows.reduce((sum,w)=>sum+(w.to-w.from)/HOUR,0):null;
+      for(const g of active){const setting=plan.groups[g.id],geom=geometry(g,setting),series=mapped.get(geom);
+        if(!finite(g.tilt)||g.tilt<0||g.tilt>90){complete=false;add('tilt',g);continue;}
+        if(!geom){complete=false;add('direction',g);continue;}
+        if(!series){complete=false;add('weather');continue;}let groupHours=0;
+        if(!validWindows||counts.get(d.day)!==1){complete=false;add('time');}
         for(const {t,slot} of byDay.get(d.day)||[]){const value=series.get(t);if(!finite(value)||value<0){complete=false;continue;}groupHours++;const shade=setting.shade[slot];unknownShade=unknownShade||shade===null;const wh=g.count*g.watts*value/1000*.8*[1,.8,.55,.25][shade??0],isMobile=g.placement==='mobile',factor=isMobile?1:corrections[slot].factor;
           bins[slot][isMobile?'mobile':'fixed']+=wh*factor;if(!isMobile&&g.measurement==='solar')bins[slot].raw+=wh;
           bins[slot].remaining+=wh*factor*clamp((t-now)/HOUR,0,1);
         }
-        const windows=(weather.windows||[]).filter(w=>w.day===d.day),expected=windows.length===3?windows.reduce((sum,w)=>sum+(w.to-w.from)/HOUR,0):24;
-        if(groupHours!==expected)complete=false;seen=Math.max(seen,groupHours);
+        if(groupHours!==expected){complete=false;if(validWindows)add('weather');}seen=Math.max(seen,groupHours);
       }
       if(active.length&&!seen)complete=false;
       const fixed=complete?bins.reduce((a,b)=>a+b.fixed,0):null,mobile=complete?bins.reduce((a,b)=>a+b.mobile,0):null,total=fixed===null?null:fixed+mobile,usage=consumption(plan,knowledge.observations,d.day,now);
       const spread=clamp(Math.max(...corrections.map(x=>x.spread))+.025*index+(unknownShade?.2:0),.2,.8);
-      out.push({...d,code:sunshineCode(d),index,complete,unknownShade,fixed,mobile,total,low:total===null?null:total*(1-spread),high:total===null?null:total*(1+spread),parts:bins,usage,balance:total===null||usage.wh===null?null:total-usage.wh,key,learningDays:Math.min(...corrections.map(x=>x.days))});
+      out.push({...d,code:sunshineCode(d),index,complete,issues,unknownShade,fixed,mobile,total,low:total===null?null:total*(1-spread),high:total===null?null:total*(1+spread),parts:bins,usage,balance:total===null||usage.wh===null?null:total-usage.wh,key,learningDays:Math.min(...corrections.map(x=>x.days))});
     }return out;
   }
   function trainingRows(weather,equipment,plan,days,source=''){
