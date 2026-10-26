@@ -17,6 +17,7 @@ public final class MonitorService extends Service {
     static final String CHANNEL = "wattpit-monitor";
     private static final int NOTIFICATION = 10;
     private Repository repository;
+    private RollerBle roller;
     private BluetoothLeScanner scanner;
     private boolean scanning;
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
@@ -49,7 +50,7 @@ public final class MonitorService extends Service {
     }
 
     @Override public void onCreate() {
-        super.onCreate(); repository = Repository.get(this);
+        super.onCreate(); repository = Repository.get(this);roller=new RollerBle(this);
         ensureChannel(this);
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(bluetoothReceiver,filter,Context.RECEIVER_EXPORTED);
@@ -67,6 +68,7 @@ public final class MonitorService extends Service {
         } catch (SecurityException e) { repository.status = "Aufzeichnung konnte nicht gestartet werden. App öffnen und Berechtigungen prüfen."; stopSelf(); return START_NOT_STICKY; }
         boolean first = !repository.running;
         repository.running = true;
+        roller.start();
         repository.prefs.edit().putBoolean("recording",true).apply();
         restartScan();
         if (first) worker.scheduleWithFixedDelay(() -> main.post(() -> {
@@ -124,6 +126,7 @@ public final class MonitorService extends Service {
     }
     @Override public void onDestroy() {
         repository.running = false;
+        if(roller!=null)roller.stop();
         repository.status = "Aufzeichnung pausiert";
         if (scanner != null && scanning && hasPermissions()) {
             try { scanner.stopScan(callback); } catch (SecurityException | IllegalStateException ignored) { }

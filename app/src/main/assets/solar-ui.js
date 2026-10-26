@@ -50,13 +50,15 @@
       if(error)throw Error(error);this.renderKey='';this.contextKey=null;this.a.poll();this.render();
     }
     render(){
-      const snapshot=this.a.getSnapshot(),weather=snapshot.weather||{},eq=this.equipment(),plan=this.plan(),now=Date.now(),shunt=this.a.getReading?.('shunt'),key=JSON.stringify([weather,eq,plan,this.knowledge.updated,this.knowledge.error,Math.floor(now/60000),shunt?[Math.round(shunt.soc),Math.round(shunt.voltage*10)/10]:null,snapshot.settings.capacity,snapshot.deviceSettings]);
+      let rollerState={};try{rollerState=JSON.parse(this.a.native?.rollerSnapshot?.()||'{}');}catch(_){}
+      const rollerLoads=window.WattRollerCore?.loads(rollerState)||[];
+      const snapshot=this.a.getSnapshot(),weather=snapshot.weather||{},eq=this.equipment(),plan=this.plan(),now=Date.now(),shunt=this.a.getReading?.('shunt'),key=JSON.stringify([weather,eq,plan,this.knowledge.updated,this.knowledge.error,Math.floor(now/60000),shunt?[Math.round(shunt.soc),Math.round(shunt.voltage*10)/10]:null,snapshot.settings.capacity,snapshot.deviceSettings,rollerLoads]);
       if(this.a.native?.requestSolarData&&!snapshot.archiveBusy&&(Date.now()-this.lastRequest>300000||this.revision!==snapshot.historyRevision&&Date.now()-this.lastRequest>30000)){
         this.lastRequest=Date.now();this.revision=snapshot.historyRevision;this.a.native.requestSolarData();
       }
       if(key===this.renderKey){this.renderNote(snapshot,weather,now);return;}this.renderKey=key;
       this.days=C.forecast(weather,eq,plan,this.knowledge,now);
-      const reserves=C.batteryForecast(this.days,weather,shunt?{...shunt,capacity:snapshot.settings.capacity}:null,now);this.days.forEach((d,i)=>d.reserve=reserves[i]);
+      const reserves=C.batteryForecast(this.days,weather,shunt?{...shunt,capacity:snapshot.settings.capacity}:null,now,rollerLoads);this.days.forEach((d,i)=>d.reserve=reserves[i]);
       this.savedSunset(snapshot,now);
       this.renderNote(snapshot,weather,now);
       const place=snapshot.settings.weatherPlace||weather.place,context=C.setupKey(eq,plan,place,this.knowledge.source),solarKey=C.calibrationKey(eq,plan,place,this.knowledge.source);

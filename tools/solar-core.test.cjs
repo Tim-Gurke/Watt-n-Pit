@@ -166,3 +166,10 @@ test('learned rates and forecast loads use real DST duration instead of treating
  const obs=observations('2026-10-22',240),d=C.forecast(w,eq,p,{observations:obs},from)[0];assert.equal(d.usage.wh,250);assert.deepEqual(d.usage.parts,[120,50,80]);assert.deepEqual(d.usage.hours,[12,5,8]);
  const morning=observations('2026-10-22',240)[0];morning.to+=H;morning.consumption=120;assert.equal(C.consumption(p,[morning],'2026-10-23',now).wh,240);
 });
+test('planned roller charging is subtracted once from the remaining battery forecast',()=>{
+ const f=reserveFixture();for(const h of f.days[0].timeline)h.wh=0;
+ const at=f.days[0].sunset-3600000,battery={...f.battery,t:at,soc:90};
+ const baseline=C.batteryForecast(f.days,f.w,battery,at)[0].evening;
+ const charged=C.batteryForecast(f.days,f.w,battery,at,[{from:at,to:at+3600000,watts:138}])[0].evening;
+ assert.ok(Math.abs(baseline.soc-charged.soc-13.8)<1e-8);
+});

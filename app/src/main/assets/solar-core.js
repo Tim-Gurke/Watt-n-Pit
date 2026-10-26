@@ -134,7 +134,7 @@
     }return out;
   }
   function nextDay(day){const t=Date.parse(day+'T12:00:00Z');return finite(t)?new Date(t+DAY).toISOString().slice(0,10):'';}
-  function batteryForecast(days,weather,battery,now=Date.now()){
+  function batteryForecast(days,weather,battery,now=Date.now(),extraLoads=[]){
     const calendar=new Map((weather.days||[]).map(d=>[d.day,d]));
     const targets=days.map(d=>({day:d.day,evening:{at:finite(d.sunset)?d.sunset:null},morning:{at:calendar.get(nextDay(d.day))?.sunrise??null}}));
     let problem='',reasonCode='';
@@ -151,7 +151,7 @@
         while(index<hours.length&&hours[index].to<=cursor)index++;const h=hours[index];
         if(!h||h.from>cursor||!h.complete||!finite(h.wh)||h.wh<0){reasonCode='weather';problem='Für die Akkuprognose fehlen durchgängige Ertragsdaten bis zu diesem Zeitpunkt.';break;}
         if(!finite(h.load)||h.load<0){reasonCode='consumption';problem='Der übliche Verbrauch wird noch aus geeigneten Messabschnitten ermittelt. Auch Nachtabschnitte bei gemeldeter mobiler Aufstellung können helfen. Eigene saisonale Vorgaben sind freiwillig.';break;}
-        const end=Math.min(target.at,h.to),fraction=(end-cursor)/HOUR,load=h.load/h.loadHours*fraction,solar=h.wh*fraction;
+        const end=Math.min(target.at,h.to),fraction=(end-cursor)/HOUR,load=h.load/h.loadHours*fraction+extraLoads.reduce((sum,l)=>sum+Math.max(0,Math.min(end,l.to)-Math.max(cursor,l.from))/HOUR*l.watts,0),solar=h.wh*fraction;
         for(let i=0;i<3;i++){const s=scenarios[i],generation=solar*(i===1?1-h.spread:i===2?1+h.spread:1),use=load*(i===1?1+h.usageSpread:i===2?1-h.usageSpread:1),raw=s.energy+generation-use;s.excess+=Math.max(0,raw-cap);s.shortfall+=Math.max(0,-raw);s.energy=clamp(raw,0,cap);}
         cursor=end;
       }

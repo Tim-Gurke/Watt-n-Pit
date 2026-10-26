@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="solar.css">
 <link rel="stylesheet" href="tile-detail.css">
 <link rel="stylesheet" href="lifecycle.css">
+<link rel="stylesheet" href="roller.css">
 </head>
 <body>
 <header class="topbar">
@@ -40,6 +41,7 @@
   </div>
   </div>
   <div id="weatherDock" hidden><div id="weatherStrip" class="weather-strip" hidden><div class="weather-heading"><span id="weatherPlaceName" class="weather-name"></span><span id="weatherPeriod" class="weather-period">14 Tage · Solar</span><button id="solarMobileToggle" class="textbutton solar-mobile-button" hidden>Mobil aus</button><button id="solarSetupButton" class="textbutton" aria-label="Aufstellung ändern" title="Aufstellung ändern"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="6"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg></button><button id="weatherRefresh" class="textbutton" aria-label="Wetter aktualisieren">↻</button></div><div id="weatherDays" class="weather-days" tabindex="0" aria-label="14 Tage Solarvorschau, seitlich wischbar; Tag für Details antippen"></div><p class="weather-credit"><span id="weatherNote"></span><span class="weather-attribution">Open-Meteo · CC BY 4.0</span></p></div></div>
+  <article class="card roller-panel" id="rollerPanel" hidden><div class="roller-heading"><div><p class="eyebrow">ZUSATZSPEICHER</p><h2 id="rollerName">Roller</h2></div><button class="quiet" id="rollerConfigure">Einrichten</button></div><p id="rollerState" class="muted"></p><div class="roller-values"><div><strong id="rollerSoc">— %</strong><span>Ladezustand · BMS</span></div><div><strong id="rollerPower">— W</strong><span>Batterieleistung · BMS</span></div><div><strong id="rollerCharged">— Wh</strong><span>Geladen · gemessene Abschnitte</span></div><div><strong id="rollerInput">— Wh</strong><span>Wohnwagenanteil · geschätzt</span></div></div><p id="rollerLiveNote" class="muted"></p><button class="primary" id="rollerSession">Ladeaufzeichnung starten</button><p id="rollerGaps" class="muted"></p><button id="rollerJournal" class="quiet">Ladejournal</button><p id="rollerPlan"></p><p class="muted">Zuordnung innerhalb des Shuntverbrauchs. Keine zusätzliche Belastung der Gesamtbilanz.</p></article>
 </section>
 <section id="history" class="page">
   <div class="pagehead"><div><p class="eyebrow">DEINE DATEN BLEIBEN BEI DIR</p><h1>Der Verlauf.</h1></div><button class="iconbutton" id="historyImport" aria-label="CSV importieren"></button></div>
@@ -63,7 +65,7 @@
   <article class="card discovery"><div class="section-heading"><div><h2>In deiner Nähe</h2><p class="muted" id="scanStatus">Die Suche startet mit der Aufzeichnung.</p></div><button class="secondary" id="scanButton">Suche starten</button></div><div id="foundDevices"></div></article>
   <article class="card setup-guide"><span class="eyebrow">SO VERBINDEST DU WATT’N’PIT</span><h2>Der Schlüssel steckt in VictronConnect.</h2><ol><li>SmartSolar bzw. SmartShunt in <strong>VictronConnect</strong> öffnen.</li><li>Unter <strong>Einstellungen → ⋮ → Produktinfo</strong> die <strong>Sofortanzeige über Bluetooth</strong> einschalten.</li><li>Bei <strong>Sofortanzeige-Details → Anzeigen</strong> die MAC-Adresse und den <strong>32-stelligen Verschlüsselungsschlüssel</strong> übernehmen.</li><li>Hier das gefundene Gerät wählen, den Schlüssel einfügen und die Aufzeichnung starten.</li></ol><p class="muted">Der Schlüssel ist je Gerät unterschiedlich. Er ist nicht die sechsstellige Bluetooth-PIN. Zum Empfang die aktive Geräteverbindung in VictronConnect verlassen.</p></article>
 </section>
-<section id="settings" class="page">
+<section id="settings" class="page"><article class="card settings-card"><h2>Roller und Ladeplanung</h2><p class="muted">Speicherprofil, direktes JBD/Overkill-BMS, Ladeverluste und geplante Fahrt.</p><button class="quiet" id="rollerSettings">Roller einrichten</button></article>
   <div class="pagehead"><div><p class="eyebrow">PASST ZU DEINEM SETUP</p><h1>Dein Watt’n’Pit.</h1></div></div>
   <article class="card settings-card"><h2>Ansicht</h2><p class="muted">Jede Kachel lässt sich durch Antippen anpassen. Unter „Anordnen“ kannst du sie frei verschieben und überlappen.</p><button class="quiet" id="resetDashboard">Standardübersicht wiederherstellen</button><div class="setting-row"><div><strong>Farbschema</strong><p class="muted">Für Sonne und Feierabend.</p></div><div class="segments compact" id="themeButtons"><button data-theme="dark">Dunkel</button><button data-theme="light">Hell</button></div></div></article>
   <article class="card settings-card"><h2>Deine Farben</h2><p class="muted">Fertige Farbdesigns für die ganze App. Eigene Kachelfarben bleiben erhalten.</p><div id="paletteChoices" class="palette-choices"></div></article>
@@ -112,6 +114,8 @@
 <script src="extras.js"></script>
 <script src="lifecycle.js"></script>
 <script src="read-bridge.js"></script>
+<script src="roller-core.js"></script>
+<script src="roller-ui.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

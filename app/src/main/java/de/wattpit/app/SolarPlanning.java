@@ -148,6 +148,10 @@ final class SolarPlanning extends SQLiteOpenHelper {
         JSONObject equipment=snapshot.getJSONObject("equipment"),plan=snapshot.getJSONObject("setup").getJSONObject("groups");JSONArray groups=equipment.getJSONArray("groups");
         for(int i=0;i<groups.length();i++){JSONObject g=groups.getJSONObject(i);if(plan.getJSONObject(g.getString("id")).optBoolean("active")&&!g.optString("measurement").equals("solar"))return true;}return false;
     }
+    private boolean rollerCharging(long from,long to)throws JSONException{
+        JSONArray windows=new JSONArray(repository.prefs.getString("rollerChargeWindows","[]"));
+        for(int i=0;i<windows.length();i++){JSONObject w=windows.getJSONObject(i);long end=w.optLong("to");if(w.optLong("from")<to&&(end==0||end>from))return true;}return false;
+    }
     private boolean annotate(JSONObject row,NavigableMap<Long,ContextEntry> contexts,JSONArray profiles,JSONObject weather,String currentKey,String solarKey,long now)throws Exception{
         JSONArray segments=row.getJSONArray("segments");double wh=0,estimatedWh=0;long duration=0,estimated=0,latest=0;boolean solarEligible=true,free=true;String rowKey="";
         JSONObject current=new JSONObject().put("equipment",repository.equipment()).put("setup",setup());
@@ -171,6 +175,8 @@ final class SolarPlanning extends SQLiteOpenHelper {
             double sectionWh=0,sectionEstimatedWh=0;long sectionDuration=0,sectionEstimated=0,sectionLatest=0;
             for(int j=0;j<pieces.length();j++){
                 JSONObject part=pieces.getJSONObject(j);long a=part.getLong("from"),b=part.getLong("to");
+                // Deliberately assigned roller charging must not become normal household demand.
+                if(rollerCharging(a,b))continue;
                 // Unknown intervals stay out; only their actually observed neighbours can teach usage.
                 if(!known&&part.optDouble("actualSolarCoverage",0)<.98)continue;
                 if(part.optDouble("coverage",0)<.98)continue;

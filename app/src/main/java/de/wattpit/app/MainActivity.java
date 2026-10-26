@@ -220,6 +220,7 @@ public final class MainActivity extends Activity {
             try(OutputStream output=getContentResolver().openOutputStream(uri,"wt")){
                 if(output==null)throw new IOException();
                 JSONObject diagnostic=solarPlanning.diagnosticSnapshot().get(2,TimeUnit.MINUTES);
+                diagnostic.put("roller",RollerStore.get(MainActivity.this).snapshot());
                 try(ZipOutputStream zip=new ZipOutputStream(output)){
                     zip.putNextEntry(new ZipEntry("diagnose.json"));zip.write(diagnostic.toString(2).getBytes(StandardCharsets.UTF_8));zip.closeEntry();
                     zip.putNextEntry(new ZipEntry("verlauf.csv"));repository.db.exportTo(zip);zip.closeEntry();
@@ -263,6 +264,10 @@ public final class MainActivity extends Activity {
         });
     }
     final class Bridge {
+        @JavascriptInterface public String rollerSnapshot(){try{return RollerStore.get(MainActivity.this).snapshot().toString();}catch(Exception e){return "{}";}}
+        @JavascriptInterface public String saveRoller(String json){try{RollerStore.get(MainActivity.this).configure(json);return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public String rollerSession(boolean start){try{RollerStore.get(MainActivity.this).toggle(start);return "";}catch(Exception e){return Repository.safeError(e);}}
+        @SuppressLint("MissingPermission") @JavascriptInterface public String rollerDevices(){try{JSONArray result=new JSONArray();android.bluetooth.BluetoothManager manager=getSystemService(android.bluetooth.BluetoothManager.class);android.bluetooth.BluetoothAdapter adapter=manager==null?null:manager.getAdapter();if(adapter!=null)for(android.bluetooth.BluetoothDevice device:adapter.getBondedDevices())result.put(new JSONObject().put("mac",device.getAddress()).put("name",device.getName()));return result.toString();}catch(Exception e){return "[]";}}
         @JavascriptInterface public String appVersion(){return BuildConfig.VERSION_NAME;}
         @JavascriptInterface public void openMonitorNotifications(){runOnUiThread(()->{
             try{
