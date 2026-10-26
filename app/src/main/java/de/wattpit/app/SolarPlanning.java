@@ -149,7 +149,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
         for(int i=0;i<groups.length();i++){JSONObject g=groups.getJSONObject(i);if(plan.getJSONObject(g.getString("id")).optBoolean("active")&&!g.optString("measurement").equals("solar"))return true;}return false;
     }
     private boolean annotate(JSONObject row,NavigableMap<Long,ContextEntry> contexts,JSONArray profiles,JSONObject weather,String currentKey,String solarKey,long now)throws Exception{
-        JSONArray segments=row.getJSONArray("segments");double wh=0;long duration=0,estimated=0,latest=0;boolean solarEligible=true,free=true;String rowKey="";
+        JSONArray segments=row.getJSONArray("segments");double wh=0,estimatedWh=0;long duration=0,estimated=0,latest=0;boolean solarEligible=true,free=true;String rowKey="";
         JSONObject current=new JSONObject().put("equipment",repository.equipment()).put("setup",setup());
         for(int i=0;i<segments.length();i++){
             JSONObject segment=segments.getJSONObject(i);long from=segment.getLong("from"),to=segment.getLong("to");ContextEntry context=at(contexts,from);
@@ -167,30 +167,39 @@ final class SolarPlanning extends SQLiteOpenHelper {
             }else free=false;
             boolean night=segment.optLong("lightMillis",1)==0,clear=unrestricted(segment,profileAt(profiles,from,to));
             if(!night&&(segment.optDouble("solarCoverage",0)<.98||!clear||context==null||!context.solarKey.equals(solarKey)))solarEligible=false;
-            // Before context history, only truly observed solar intervals can establish a baseline.
-            boolean actual=segment.optDouble("actualSolarCoverage",0)>=.98;
-            if(!known&&!actual)continue;
-            if(segment.optDouble("coverage",0)<.98)continue;
-            double measured=segment.optDouble("consumption",Double.NaN);if(!Double.isFinite(measured))continue;
-            boolean estimate=false;double value=measured;
-            if(extra&&!night){
-                if(!known||!clear)continue;
-                Double mobile=mobileEstimate(snapshot,weather,from,to,row.getInt("slot"));if(mobile==null){if(context!=null&&!context.key.equals(currentKey))return false;continue;}
-                value+=mobile;estimate=true;
-            }else if(segment.optBoolean("extraCharging"))continue;
-            if(value<0||value>1000000)continue;
-            wh+=value;duration+=to-from;if(estimate)estimated+=to-from;latest=Math.max(latest,to);
+            JSONArray pieces=segment.optJSONArray("usageSegments");if(pieces==null)pieces=new JSONArray().put(segment);
+            double sectionWh=0,sectionEstimatedWh=0;long sectionDuration=0,sectionEstimated=0,sectionLatest=0;
+            for(int j=0;j<pieces.length();j++){
+                JSONObject part=pieces.getJSONObject(j);long a=part.getLong("from"),b=part.getLong("to");
+                // Unknown intervals stay out; only their actually observed neighbours can teach usage.
+                if(!known&&part.optDouble("actualSolarCoverage",0)<.98)continue;
+                if(part.optDouble("coverage",0)<.98)continue;
+                double value=part.optDouble("consumption",Double.NaN);if(!Double.isFinite(value))continue;
+                boolean estimate=extra&&!night;
+                if(estimate){
+                    if(!known||!unrestricted(part,profileAt(profiles,a,b)))continue;
+                    Double mobile=mobileEstimate(snapshot,weather,a,b,row.getInt("slot"));if(mobile==null){if(context!=null&&!context.key.equals(currentKey))return false;continue;}
+                    value+=mobile;
+                }else if(segment.optBoolean("extraCharging")||part.optBoolean("extraCharging"))continue;
+                if(Math.abs(value)>1000000)continue;
+                sectionWh+=value;sectionDuration+=b-a;sectionLatest=Math.max(sectionLatest,b);
+                if(estimate){sectionEstimated+=b-a;sectionEstimatedWh+=value;}
+            }
+            // Keep the original hourly/setup bucket: clipping negative fragments alone
+            // would bias a variable mobile source upwards. Judge their signed sum together.
+            if(sectionWh<0||sectionWh>1000000)continue;
+            wh+=sectionWh;duration+=sectionDuration;estimated+=sectionEstimated;estimatedWh+=sectionEstimatedWh;latest=Math.max(latest,sectionLatest);
         }
         row.remove("segments");row.put("key",rowKey).put("solarKey",solarKey).put("mobileFree",free&&!row.optBoolean("extraCharging"))
             .put("learningVersion",2).put("solarEligible",solarEligible&&row.getLong("to")<=now)
-            .put("usage",new JSONObject().put("wh",wh).put("duration",duration).put("estimatedDuration",estimated).put("latest",latest));return true;
+            .put("usage",new JSONObject().put("wh",wh).put("duration",duration).put("estimatedDuration",estimated).put("estimatedWh",estimatedWh).put("measuredWh",wh-estimatedWh).put("latest",latest));return true;
     }
     void request(){
         if(closed||!busy.compareAndSet(false,true))return;
         worker.execute(()->{JSONObject result=new JSONObject();try{
             if(repository.archiveBusy)return;long now=System.currentTimeMillis();String[] devices=devices();String source=source(devices());
             JSONObject weather=new JSONObject(repository.prefs.getString("weatherCache","{}"));SQLiteDatabase db=getWritableDatabase();long since=now-7L*86400000;
-            boolean rebuild=repository.prefs.getInt("planningEnergyVersion."+source,0)<147;
+            boolean rebuild=repository.prefs.getInt("planningEnergyVersion."+source,0)<1472;
             if(rebuild){try(Cursor c=db.rawQuery("SELECT MIN(start) FROM observations WHERE source=?",new String[]{source})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(now-400L*86400000,Math.min(since,c.getLong(0)));}}
             else try(Cursor c=db.rawQuery("SELECT MAX(end) FROM observations WHERE source=? AND end<=?",new String[]{source,""+now})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(since,c.getLong(0)-2L*86400000);}
             NavigableMap<Long,ContextEntry> contexts=new TreeMap<>();List<Long> changes=new ArrayList<>();
@@ -205,7 +214,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
                 if(!annotate(row,contexts,profiles,weather,currentKey,solarKey,now))continue;
                 ContentValues v=new ContentValues();v.put("start",from);v.put("end",to);v.put("source",source);v.put("payload",row.toString());db.insertWithOnConflict("observations",null,v,SQLiteDatabase.CONFLICT_REPLACE);
             }db.delete("observations","end<?",new String[]{""+(now-400L*86400000)});db.delete("contexts","at<?",new String[]{""+(now-410L*86400000)});db.setTransactionSuccessful();}finally{db.endTransaction();}
-            if(observations.length()>0)repository.prefs.edit().putInt("planningEnergyVersion."+source,147).apply();
+            if(observations.length()>0)repository.prefs.edit().putInt("planningEnergyVersion."+source,1472).apply();
             JSONArray samples=new JSONArray(),forecasts=new JSONArray();
             try(Cursor c=db.rawQuery("SELECT payload FROM observations WHERE source=? ORDER BY start DESC LIMIT 1300",new String[]{source})){while(c.moveToNext()){JSONObject row=new JSONObject(c.getString(0));if(!row.has("solarKey")&&currentKey.equals(row.optString("key")))row.put("solarKey",solarKey);samples.put(row);}}
             // One original eligible prediction per interval keeps the bridge payload small.
@@ -217,7 +226,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
     }
     Future<JSONObject> diagnosticSnapshot(){return worker.submit(()->{
         long now=System.currentTimeMillis();String[] selected=devices();String currentSource=source(selected);SQLiteDatabase db=getReadableDatabase();
-        JSONObject result=new JSONObject().put("format","Watt-n-Pit-Diagnose").put("version",1).put("appVersion",BuildConfig.VERSION_NAME).put("at",now)
+        JSONObject result=new JSONObject().put("format","Watt-n-Pit-Diagnose").put("version",1).put("appVersion",BuildConfig.VERSION_NAME).put("learningAlgorithm",1472).put("at",now)
             .put("timezone",java.util.TimeZone.getDefault().getID()).put("source",currentSource).put("equipment",repository.equipment()).put("setup",setup())
             .put("weather",new JSONObject(repository.prefs.getString("weatherCache","{}"))).put("history",repository.db.stats())
             .put("capacity",repository.prefs.getFloat("capacity",100f)).put("sampleSeconds",repository.prefs.getInt("sampleSeconds",10));

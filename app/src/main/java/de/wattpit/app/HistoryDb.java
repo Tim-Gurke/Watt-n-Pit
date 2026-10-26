@@ -298,6 +298,9 @@ final class HistoryDb extends SQLiteOpenHelper {
         List<SampleTimeline.Interval> volts=SampleTimeline.intervals(planningSamples(from,to,"solarVoltage",solarDevice),from,to,false);
         List<SampleTimeline.Interval> amps=SampleTimeline.intervals(planningSamples(from,to,"solarCurrent",solarDevice),from,to,true);
         List<SampleTimeline.Interval> errors=SampleTimeline.intervals(planningSamples(from,to,"error",solarDevice),from,to,false);
+        TreeSet<Long> energyCuts=new TreeSet<>(),statusCuts=new TreeSet<>();
+        planningRunCuts(energyCuts,solar,0);planningRunCuts(energyCuts,battery,0);
+        planningRunCuts(statusCuts,states,1);planningRunCuts(statusCuts,errors,2);planningRunCuts(statusCuts,volts,0);planningRunCuts(statusCuts,amps,0);
         JSONArray days=weather.optJSONArray("days"),rows=new JSONArray();
         while(day.atStartOfDay(zone).toInstant().toEpochMilli()<to){
             long start=day.atStartOfDay(zone).toInstant().toEpochMilli(),end=day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),rise=start,set=end;
@@ -312,13 +315,34 @@ final class HistoryDb extends SQLiteOpenHelper {
                 for(long t:changes)if(t>a&&t<endOfData)cuts.add(t);
                 JSONArray segments=new JSONArray();Long previous=null;
                 for(long next:cuts){if(previous!=null&&next>previous){
-                    JSONObject segment=planningFlow(previous,next,rise,set,solar,battery,states);
-                    planningRange(segment,"voltage",volts,previous,next);planningRange(segment,"current",amps,previous,next);planningRange(segment,"error",errors,previous,next);
+                    JSONObject segment=planningSegment(previous,next,rise,set,solar,battery,states,volts,amps,errors);
+                    TreeSet<Long> pieces=new TreeSet<>(energyCuts.subSet(previous,false,next,false));
+                    if(segment.getLong("lightMillis")>0)pieces.addAll(statusCuts.subSet(previous,false,next,false));
+                    if(!pieces.isEmpty()){
+                        pieces.add(previous);pieces.add(next);JSONArray observed=new JSONArray();Long part=null;
+                        for(long edge:pieces){if(part!=null)observed.put(planningSegment(part,edge,rise,set,solar,battery,states,volts,amps,errors));part=edge;}
+                        segment.put("usageSegments",observed);
+                    }
                     segments.put(segment);
                 }previous=next;}
                 rows.put(row.put("segments",segments));
             }day=day.plusDays(1);
         }return rows;
+    }
+    /** Split only at real gaps or changes in Bulk/error eligibility, never at every sample. */
+    private static void planningRunCuts(TreeSet<Long> cuts,List<SampleTimeline.Interval> intervals,int condition){
+        long start=-1,end=-1;
+        for(SampleTimeline.Interval x:intervals){
+            boolean eligible=condition==0||(condition==1?x.a==3&&x.b==3:x.a==0&&x.b==0);
+            if(!eligible)continue;
+            if(start>=0&&x.from<=end){end=Math.max(end,x.to);continue;}
+            if(start>=0){cuts.add(start);cuts.add(end);}start=x.from;end=x.to;
+        }
+        if(start>=0){cuts.add(start);cuts.add(end);}
+    }
+    private static JSONObject planningSegment(long from,long to,long rise,long set,List<SampleTimeline.Interval> solar,List<SampleTimeline.Interval> battery,List<SampleTimeline.Interval> states,List<SampleTimeline.Interval> volts,List<SampleTimeline.Interval> amps,List<SampleTimeline.Interval> errors)throws Exception{
+        JSONObject segment=planningFlow(from,to,rise,set,solar,battery,states);
+        planningRange(segment,"voltage",volts,from,to);planningRange(segment,"current",amps,from,to);planningRange(segment,"error",errors,from,to);return segment;
     }
     private static JSONObject planningFlow(long a,long b,long rise,long set,List<SampleTimeline.Interval> solar,List<SampleTimeline.Interval> battery,List<SampleTimeline.Interval> states)throws Exception{
         long sunFrom=Math.max(a,Math.min(b,rise)),sunTo=Math.max(sunFrom,Math.min(b,set));

@@ -64,7 +64,7 @@
       const available=plan.manual.map((x,i)=>finite(x)?weights[i]:0),total=available.reduce((a,b)=>a+b,0);
       if(total>.01){const wh=plan.manual.reduce((sum,x,i)=>sum+(finite(x)?x*available[i]/total:0),0);return {wh,parts:[wh*11/24,wh*5/24,wh*8/24],days:0,manual:true,provisional:total<.99};}
     }
-    const samples=[],nominal=[11,5,8],target=seasonPosition(day),comparable=new Map();
+    const samples=[],nominal=[11,5,8],target=seasonPosition(day);
     for(const o of observations||[]){
       if(!Number.isInteger(o.slot)||o.slot<0||o.slot>2||seasonPosition(o.day)===null)continue;
       let wh,duration,estimated=0,latest;
@@ -72,17 +72,29 @@
       else{if(!o.mobileFree||!finite(o.coverage)||o.coverage<.98)continue;wh=o.consumption;duration=o.to-o.from;latest=o.to;}
       if(!finite(wh)||wh<0||!finite(duration)||duration<15*60000||duration>13*HOUR||!finite(latest)||latest>now||now-latest>400*DAY)continue;
       const gap=Math.abs(seasonPosition(o.day)-target),distance=Math.min(gap,366-gap),season=Math.exp(-.5*(distance/45)**2),age=Math.max(0,(now-latest)/DAY);
-      const hours=duration/HOUR,estimateShare=estimated/duration,weight=(.08+.92*season)*Math.exp(-age/240)*hours*(1-.6*estimateShare);
-      samples.push({day:o.day,slot:o.slot,rate:wh/hours,hours,estimated:estimated/HOUR,weight});comparable.set(o.day,season);
+      const hours=duration/HOUR,estimatedHours=estimated/HOUR,effectiveHours=hours-.6*estimatedHours;
+      const estimatedWh=o.usage?.estimatedWh,split=o.learningVersion===2&&finite(estimatedWh)&&estimatedWh>=0&&estimatedWh<=wh+1e-8
+        &&(estimated!==0||estimatedWh===0)&&(estimated!==duration||Math.abs(estimatedWh-wh)<1e-8);
+      const rate=split?(wh-.6*Math.min(wh,estimatedWh))/effectiveHours:wh/hours;
+      const weight=(.08+.92*season)*Math.exp(-age/240)*effectiveHours;
+      samples.push({day:o.day,slot:o.slot,rate,hours,estimated:estimatedHours,effectiveHours,season,weight});
     }
     if(!samples.length)return {wh:null,parts:[null,null,null],days:0,manual:false,provisional:true};
     const accepted=rows=>{const typical=median(rows.map(x=>x.rate));return rows.length<7?rows:rows.filter(x=>typical===0?x.rate===0:x.rate<=typical*3);};
     const average=rows=>{if(!rows.length)return null;const clean=accepted(rows),weight=clean.reduce((s,x)=>s+x.weight,0);return weight?clean.reduce((s,x)=>s+x.rate*x.weight,0)/weight:null;};
     const fallback=average(samples),rates=nominal.map((_,slot)=>average(samples.filter(x=>x.slot===slot))),extrapolated=rates.some(x=>x===null);
-    const parts=rates.map((x,i)=>(x??fallback)*nominal[i]),days=new Set(samples.map(x=>x.day)).size,hours=samples.reduce((s,x)=>s+x.hours,0),estimatedHours=samples.reduce((s,x)=>s+x.estimated,0);
-    const provisional=extrapolated||days<5||[...comparable.values()].reduce((a,b)=>a+b,0)<3||estimatedHours/hours>.5;
-    const slotStats=nominal.map((_,slot)=>{const rows=accepted(samples.filter(x=>x.slot===slot));return {slot,hours:rows.reduce((s,x)=>s+x.hours,0),estimatedHours:rows.reduce((s,x)=>s+x.estimated,0),days:new Set(rows.map(x=>x.day)).size,extrapolated:rates[slot]===null};});
-    return {wh:parts.reduce((a,b)=>a+b,0),parts,days,manual:false,provisional,extrapolated,sampleHours:hours,estimatedHours,slotStats,usedHours:slotStats.reduce((s,x)=>s+x.hours,0),usedEstimatedHours:slotStats.reduce((s,x)=>s+x.estimatedHours,0),uncertainty:extrapolated?.8:Math.max(provisional?.5:.25,estimatedHours/hours*.6)};
+    const parts=rates.map((x,i)=>(x??fallback)*nominal[i]),hours=samples.reduce((s,x)=>s+x.hours,0),estimatedHours=samples.reduce((s,x)=>s+x.estimated,0),usedDays=new Set();
+    const slotStats=nominal.map((nominalHours,slot)=>{
+      const rows=accepted(samples.filter(x=>x.slot===slot)),byDay=new Map();
+      let hours=0,estimatedHours=0,effectiveHours=0;
+      for(const x of rows){hours+=x.hours;estimatedHours+=x.estimated;effectiveHours+=x.effectiveHours;usedDays.add(x.day);const d=byDay.get(x.day)||{hours:0,estimated:0,season:x.season};d.hours+=x.hours;d.estimated+=x.estimated;byDay.set(x.day,d);}
+      const days=byDay.size,comparableDays=[...byDay.values()].reduce((s,x)=>s+x.season*(1-.6*x.estimated/x.hours),0),extrapolated=rates[slot]===null;
+      const provisional=extrapolated||days<3||effectiveHours<nominalHours||comparableDays<2.5;
+      const uncertainty=extrapolated?.8:Math.max(provisional?.5:.25,days<3?.8-.15*(days-1):0,estimatedHours/hours*.6);
+      return {slot,hours,estimatedHours,measuredHours:hours-estimatedHours,effectiveHours,days,comparableDays,extrapolated,provisional,uncertainty};
+    });
+    const days=usedDays.size,provisional=days<5||slotStats.some(x=>x.provisional);
+    return {wh:parts.reduce((a,b)=>a+b,0),parts,days,manual:false,provisional,extrapolated,sampleHours:hours,estimatedHours,slotStats,usedHours:slotStats.reduce((s,x)=>s+x.hours,0),usedEstimatedHours:slotStats.reduce((s,x)=>s+x.estimatedHours,0),uncertainty:Math.max(...slotStats.map(x=>x.uncertainty))};
   }
   function sunshineCode(day){
     if(finite(day.hours)&&finite(day.sunrise)&&finite(day.sunset)&&day.sunset>day.sunrise){const share=clamp(day.hours/((day.sunset-day.sunrise)/HOUR),0,1);return share>=.75?0:share>=.2?2:3;}
@@ -131,7 +143,7 @@
     else if(!finite(battery.voltage)||battery.voltage<=0){reasonCode='voltage';problem='Für die Akkuprognose fehlt die Batteriespannung.';}
     const cap=problem?null:battery.capacity*battery.voltage,energy=cap===null?null:cap*battery.soc/100;
     const scenarios=[{energy,excess:0,shortfall:0},{energy,excess:0,shortfall:0},{energy,excess:0,shortfall:0}];
-    const hours=[];for(const d of days){const usageSpread=d.usage.uncertainty??(d.usage.manual?.25:d.usage.provisional?.5:.25);for(const h of d.timeline||[])hours.push({...h,complete:d.complete,spread:d.spread,load:d.usage.parts[h.slot],loadHours:d.usage.hours?.[h.slot]??[11,5,8][h.slot],usageSpread});}
+    const hours=[];for(const d of days){const usageSpread=d.usage.uncertainty??(d.usage.manual?.25:d.usage.provisional?.5:.25);for(const h of d.timeline||[])hours.push({...h,complete:d.complete,spread:d.spread,load:d.usage.parts[h.slot],loadHours:d.usage.hours?.[h.slot]??[11,5,8][h.slot],usageSpread:d.usage.slotStats?.[h.slot]?.uncertainty??usageSpread});}
     hours.sort((a,b)=>a.from-b.from);let cursor=now,index=0;
     const ordered=targets.flatMap(d=>['evening','morning'].map(k=>d[k])).filter(t=>finite(t.at)&&t.at>=now).sort((a,b)=>a.at-b.at);
     for(const target of ordered){

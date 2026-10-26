@@ -91,6 +91,7 @@ final class SolarPlanningProof {
         result=ask(planning,replies);mid=row(result.getJSONArray("observations"),start+11*hour);
         check(mid.getJSONObject("usage").getLong("duration")==5*hour&&mid.getJSONObject("usage").getLong("estimatedDuration")==17*hour/4&&mid.getBoolean("solarEligible"),"a mobile switch inside an hour splits only that interval and keeps fixed-source solar experience");
         db.execSQL("DELETE FROM contexts WHERE at>?",new Object[]{start});
+        fragmentedLearning(repo,planning,replies,start);
         history.execSQL("DELETE FROM readings WHERE device='planning-shunt' AND ts>=? AND ts<=?",new Object[]{start+11*hour,start+16*hour});
         result=ask(planning,replies);mid=row(result.getJSONArray("observations"),start+11*hour);
         check(mid.getBoolean("solarEligible")&&mid.getDouble("solarCoverage")==1&&mid.getDouble("coverage")<.98,"independently measured solar can train even when the Shunt has a gap");
@@ -120,5 +121,22 @@ final class SolarPlanningProof {
         long before;try(Cursor c=history.rawQuery("SELECT COUNT(*) FROM readings",null)){c.moveToFirst();before=c.getLong(0);}
         history.execSQL("DROP TABLE device_settings");repo.db.onUpgrade(history,5,6);
         try(Cursor c=history.rawQuery("SELECT COUNT(*) FROM readings",null)){c.moveToFirst();check(c.getLong(0)==before,"history v5 migration adds profile storage without changing or rebuilding measurements");}
+    }
+    private static void fragmentedLearning(Repository repo,SolarPlanning planning,BlockingQueue<JSONObject> replies,long start)throws Exception{
+        long hour=3600000L,from=start+11*hour,to=from+hour;SQLiteDatabase history=repo.db.getWritableDatabase();
+        history.execSQL("DELETE FROM readings WHERE device IN ('planning-solar','planning-shunt') AND ts>=? AND ts<=?",new Object[]{from,to});
+        for(long t=from;t<=to;t+=10000){
+            boolean missingStatus=t>from&&t<to&&(t-from)%300000==0;
+            Reading s=new Reading();s.timestamp=t;s.device="planning-solar";s.kind="solar";s.origin="live";s.period=10;s.solar=6.0;s.voltage=13.0;s.current=.5;if(!missingStatus){s.state=3;s.error=0;}repo.db.insert(s);
+            Reading b=new Reading();b.timestamp=t;b.device="planning-shunt";b.kind="shunt";b.origin="live";b.period=10;b.voltage=12.0;b.current=0.0;repo.db.insert(b);
+        }
+        JSONObject mid=row(ask(planning,replies).getJSONArray("observations"),from),usage=mid.getJSONObject("usage");
+        long observed=5*hour-11*20000;
+        check(usage.getLong("duration")==observed&&usage.getLong("estimatedDuration")==observed,"eleven short status gaps keep the observed parts of the learning hour without filling the missing 220 seconds");
+        check(Math.abs(usage.getDouble("wh")-14.0*observed/hour)<1e-8&&Math.abs(mid.getDouble("consumption")-30)<1e-8,"partial learning keeps proportional mobile potential and preserves the measured five-hour energy total");
+        check(!mid.getBoolean("solarEligible"),"partial consumption evidence cannot certify a gappy full interval for solar calibration");
+        check(Math.abs(usage.getDouble("wh")-usage.getDouble("measuredWh")-usage.getDouble("estimatedWh"))<1e-8,"measured and estimated usage contributions reconcile to the original learning total");
+        history.execSQL("DELETE FROM readings WHERE device IN ('planning-solar','planning-shunt') AND ts>=? AND ts<=?",new Object[]{from,to});
+        for(long t=from;t<=to;t+=1800000){Reading s=new Reading();s.timestamp=t;s.device="planning-solar";s.kind="solar";s.origin="archive";s.period=1800;s.solar=6.0;s.voltage=13.0;s.current=.5;s.state=3;s.error=0;repo.db.insert(s);Reading b=new Reading();b.timestamp=t;b.device="planning-shunt";b.kind="shunt";b.origin="archive";b.period=1800;b.voltage=12.0;b.current=0.0;repo.db.insert(b);}
     }
 }

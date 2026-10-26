@@ -12,6 +12,27 @@ test('a rejected consumption outlier is not counted among evaluated daypart hour
  const rows=[];for(let i=1;i<=7;i++){const day='2026-10-'+String(i).padStart(2,'0'),start=Date.parse(day+'T00:00:00Z');rows.push({day,slot:0,learningVersion:2,usage:{wh:i===7?1000:10,duration:H,estimatedDuration:0,latest:start+H}});}
  const u=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.equal(u.slotStats[0].hours,6);assert.equal(u.slotStats[0].days,6);assert.equal(u.usedHours,6);
 });
+test('many measured nights cannot promote one estimated midday to a settled seasonal daypart',()=>{
+ const rows=[];
+ for(let i=15;i<=21;i++)for(const slot of [0,2]){const day=`2026-10-${i}`,start=Date.parse(day+'T00:00:00Z'),hours=slot===0?8:6;rows.push({day,slot,learningVersion:2,usage:{wh:hours*10,duration:hours*H,estimatedDuration:0,estimatedWh:0,latest:start+(slot===0?hours:24)*H}});}
+ rows.push({day:'2026-10-22',slot:1,learningVersion:2,usage:{wh:60,duration:3*H,estimatedDuration:3*H,estimatedWh:60,latest:Date.parse('2026-10-22T14:00:00Z')}});
+ const u=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);
+ assert.equal(u.days,8);assert.equal(u.extrapolated,false);assert.equal(u.provisional,true);
+ assert.equal(u.slotStats[0].provisional,false);assert.equal(u.slotStats[2].provisional,false);
+ assert.equal(u.slotStats[1].days,1);assert.equal(u.slotStats[1].provisional,true);assert.equal(u.slotStats[1].uncertainty,.8);
+ assert.ok(Math.abs(u.parts[1]-100)<1e-8,'an unsupported night-based prior does not replace the midday rate');
+});
+test('measured and estimated Wh in one daypart get separate weights without changing their raw totals',()=>{
+ const usage={wh:100,measuredWh:20,estimatedWh:80,duration:4*H,estimatedDuration:2*H,latest:now-H};
+ const u=C.consumption({usageMode:'auto'},[{day:'2026-10-23',slot:1,learningVersion:2,usage}],'2026-10-23',now);
+ assert.ok(Math.abs(u.parts[1]-(20+.4*80)/(2+.4*2)*5)<1e-8);
+ assert.equal(u.slotStats[1].measuredHours,2);assert.equal(u.slotStats[1].estimatedHours,2);
+ assert.equal(usage.wh,100);assert.equal(usage.estimatedWh,80);
+});
+test('multiple fragments from one date do not count as several comparable days',()=>{
+ const rows=Array.from({length:8},(_,i)=>({day:'2026-10-22',slot:1,learningVersion:2,usage:{wh:10,duration:H,estimatedDuration:0,latest:now-(i+1)*H}}));
+ const s=C.consumption({usageMode:'auto'},rows,'2026-10-23',now).slotStats[1];assert.equal(s.days,1);assert.equal(s.provisional,true);assert.equal(s.uncertainty,.8);
+});
 const equipment=(extra=[])=>E.normalize({version:1,groups:[{id:'roof',label:'Dach',count:2,watts:100,tilt:30,placement:'fixed',measurement:'solar',controller:'MPPT'},...extra]});
 const plan=eq=>C.normalize({groups:{roof:{azimuth:180,shade:[0,0,0]}}},eq);
 function weather(from=Date.parse('2026-10-23T00:00:00Z'),length=14,hoursPerDay=24){
@@ -104,6 +125,12 @@ test('sunrise uses its actual instant through autumn DST and a later target keep
 test('a past sunset is not presented as a prediction; the next sunrise can still be estimated',()=>{
  const f=reserveFixture(),at=Date.parse('2026-10-23T20:00:00Z'),days=C.forecast(f.w,f.eq,f.p,{},at),d=C.batteryForecast(days,f.w,{...f.battery,t:at},at)[0];
  assert.equal(d.evening.soc,undefined);assert.match(d.evening.reason,/Vergangenheit/);assert.equal(d.morning.soc,79);
+});
+test('reserve uncertainty follows the daypart being consumed instead of unrelated sparse midday evidence',()=>{
+ const at=Date.parse('2026-10-23T00:00:00Z'),weather={days:[{day:'2026-10-23',sunset:at+H}]};
+ const days=[{day:'2026-10-23',sunset:at+H,complete:true,spread:0,usage:{parts:[110,50,80],hours:[11,5,8],uncertainty:.8,slotStats:[{uncertainty:.25},{uncertainty:.8},{uncertainty:.25}]},timeline:[{from:at,to:at+H,wh:0,slot:0}]}];
+ const r=C.batteryForecast(days,weather,{soc:50,capacity:100,voltage:10,t:at},at)[0].evening;
+ assert.equal(r.soc,49);assert.equal(r.low,48.75);assert.equal(r.high,49.25);
 });
 test('partial mobile days learn without complete-day veto; missing dayparts remain provisional',()=>{
  const p=plan(equipment()),rows=observations('2026-10-22',240,{mobileFree:false,learningVersion:2});
