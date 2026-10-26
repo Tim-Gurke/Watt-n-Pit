@@ -184,11 +184,14 @@ function reloadMissingData(){
 let modalReturnScroll=0;
 function openModal(title,content) {
   const sheet=$('modal').querySelector('.sheet'),keep=!$('modal').hidden&&$('modalTitle').textContent===title,position=keep?sheet.scrollTop:0;
+  const expanded=keep?new Map([...sheet.querySelectorAll('details')].map(el=>[el.querySelector('summary')?.textContent,el.open])):null;
   if($('modal').hidden)modalReturnScroll=window.scrollY;
   document.dispatchEvent(new Event('watt-modal-close'));
   $('modalTitle').textContent = title; $('modalBody').innerHTML = content; $('modal').hidden = false;
   document.body.style.overflow = 'hidden';
+  if(expanded)sheet.querySelectorAll('details').forEach(el=>{const key=el.querySelector('summary')?.textContent;if(expanded.has(key))el.open=expanded.get(key);});
   sheet.scrollTop=position;$('closeModal').focus({preventScroll:true});
+  if(keep)requestAnimationFrame(()=>{if(!$('modal').hidden&&$('modalTitle').textContent===title)sheet.scrollTop=position;});
 }
 function closeModal() {
   if (currentImport?.busy) return;

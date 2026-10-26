@@ -7,9 +7,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   await page.evaluate(()=>{localStorage.setItem('wattpit-roller',JSON.stringify({mac:'AA:BB:CC:DD:EE:FF'}));roller.render();dashboard.editing=true;dashboard.config.tiles[0].layouts.compact.y=40;dashboard.commit();});
   const tile=page.locator('[data-tile="default-soc"]');await tile.scrollIntoViewIfNeeded();const before=await page.evaluate(()=>scrollY);assert.ok(before>300);
   await page.evaluate(()=>{const t=dashboard.config.tiles[0];t.layouts.compact.w=5;dashboard.commit();});await page.waitForTimeout(80);assert.ok(Math.abs(await page.evaluate(()=>scrollY)-before)<4,'tile resize jumped scroll position');
-  await page.evaluate(()=>dashboard.editor('default-soc'));await page.evaluate(()=>document.querySelector('#modal .sheet').scrollTop=250);
+  await page.evaluate(()=>dashboard.editor('default-soc'));await page.evaluate(()=>{document.querySelectorAll('#modal details').forEach(el=>el.open=true);document.querySelector('#modal .sheet').scrollTop=250;});
   const modalScroll=await page.locator('#modal .sheet').evaluate(e=>e.scrollTop);assert.ok(modalScroll>50);
-  await page.evaluate(()=>{document.getElementById('tileMetric').value='current';document.getElementById('tileMetric').dispatchEvent(new Event('change'));});
+  await page.evaluate(()=>{document.getElementById('tileMetric').value='current';document.getElementById('tileMetric').dispatchEvent(new Event('change'));});await page.waitForTimeout(60);
   assert.ok(Math.abs(await page.locator('#modal .sheet').evaluate(e=>e.scrollTop)-modalScroll)<4,'editor lost its scroll position');await page.locator('#closeModal').click();
   await page.evaluate(()=>{dashboard.config.blockOrder=['roller','tiles','history','record'];dashboard.commit();});
   assert.equal(await page.locator('#overviewBlocks > div').first().getAttribute('data-overview-block'),'roller');
