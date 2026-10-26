@@ -151,7 +151,8 @@
       $('detailLegend').innerHTML=this.series.map((s,i)=>`<span><i style="background:${this.color(s,i)}"></i>${esc(label(s.tile))} · ${esc(s.tile.unit)}</span>`).join('');
       const notes=[this.base.note||'',m.hint||''];
       if(primary.data.pending)notes.push('Daten werden im Hintergrund geladen …');
-      if(m.energy)notes.push(Math.floor((primary.data.summary?.coverage||0)*100)+' % des Zeitraums erfasst.');
+      if(m.energy)notes.push(Math.floor((primary.data.summary?.coverage||0)*100)+' % des Zeitraums abgedeckt.');
+      if(m.energy&&primary.data.summary?.interpolatedMillis>0)notes.push('Davon '+(primary.data.summary.interpolatedMillis/60000).toLocaleString('de-DE',{maximumFractionDigits:1})+' min kurz interpoliert. Verfügbare Originaldaten haben Vorrang; größere Lücken bleiben offen.');
       if(m.liveOnly||m.status)notes.push('Für diesen Wert steht kein gespeicherter Verlauf zur Verfügung.');
       $('detailNote').textContent=notes.filter(Boolean).join(' ');this.draw();
     }

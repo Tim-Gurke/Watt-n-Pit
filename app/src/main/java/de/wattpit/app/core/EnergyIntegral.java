@@ -3,7 +3,7 @@ package de.wattpit.app.core;
 import java.util.*;
 import de.wattpit.app.core.SampleTimeline.Interval;
 
-/** Integrates original power samples. Unknown intervals are excluded, never extrapolated. */
+/** Integrates supported samples; bounded live interpolation stays explicitly labelled. */
 public final class EnergyIntegral {
     public static final long LOOKAROUND = 65535L * 1500;
     public static final class Sample extends SampleTimeline.Sample {
@@ -19,8 +19,10 @@ public final class EnergyIntegral {
         public Double wh;
         public double minimumWh,maximumWh;
         public long coveredMillis;
+        public long interpolatedMillis;
         public final List<Point> points=new ArrayList<>();
         public double coverage(long from,long to){return to>from?Math.min(1,coveredMillis/(double)(to-from)):0;}
+        public double measuredCoverage(long from,long to){return to>from?Math.min(1,(coveredMillis-interpolatedMillis)/(double)(to-from)):0;}
     }
     public static final class Flow {
         public final Result solar,consumption,balance;
@@ -46,7 +48,7 @@ public final class EnergyIntegral {
         List<Interval> s=new ArrayList<>();
         for(Interval x:observed)if(x.a>0||x.b>0){solarFrom=Math.min(solarFrom,x.from);solarTo=Math.max(solarTo,x.to);}
         if(solarFrom>from)s.add(new Interval(from,solarFrom,0,0));
-        for(Interval x:observed){long start=Math.max(solarFrom,x.from),end=Math.min(solarTo,x.to);if(end>start)s.add(new Interval(start,end,x.value(start),x.value(end)));}
+        for(Interval x:observed){long start=Math.max(solarFrom,x.from),end=Math.min(solarTo,x.to);if(end>start)s.add(new Interval(start,end,x.value(start),x.value(end),x.interpolated));}
         if(solarTo<to)s.add(new Interval(solarTo,to,0,0));
         List<Interval> generation=new ArrayList<>(),loads=new ArrayList<>(),net=new ArrayList<>();
         int i=0,j=0;
@@ -55,9 +57,10 @@ public final class EnergyIntegral {
             if(end>start){
                 double sa=x.value(start),sb=x.value(end),ba=y.value(start),bb=y.value(end);
                 long gs=Math.max(start,solarFrom),ge=Math.min(end,solarTo);
-                if(ge>gs)generation.add(new Interval(gs,ge,x.value(gs),x.value(ge)));
+                boolean estimated=x.interpolated||y.interpolated;
+                if(ge>gs)generation.add(new Interval(gs,ge,x.value(gs),x.value(ge),estimated));
                 // Keep signed residuals: an unmetered charger can make calculated consumption negative.
-                loads.add(new Interval(start,end,sa-ba,sb-bb));net.add(new Interval(start,end,ba,bb));
+                loads.add(new Interval(start,end,sa-ba,sb-bb,estimated));net.add(new Interval(start,end,ba,bb,estimated));
             }
             if(x.to<=y.to)i++;if(y.to<=x.to)j++;
         }
@@ -78,24 +81,27 @@ public final class EnergyIntegral {
     }
     /** Complementary Voltage/Current channels need no extra BLE fetch to derive power. */
     public static List<Interval> powerIntervals(List<Sample> power,List<Sample> voltage,List<Sample> current,long from,long to){
+        return powerIntervals(power,voltage,current,from,to,true);
+    }
+    public static List<Interval> powerIntervals(List<Sample> power,List<Sample> voltage,List<Sample> current,long from,long to,boolean interpolate){
         Map<String,List<Sample>> volts=new LinkedHashMap<>(),amps=new LinkedHashMap<>();
         for(Sample s:voltage)volts.computeIfAbsent(s.device,k->new ArrayList<>()).add(s);
         for(Sample s:current)amps.computeIfAbsent(s.device,k->new ArrayList<>()).add(s);
         List<Interval> derived=new ArrayList<>();
         for(String device:volts.keySet()){
-            List<Interval> v=SampleTimeline.intervals(volts.get(device),from,to,false),c=SampleTimeline.intervals(amps.getOrDefault(device,Collections.emptyList()),from,to,true),part=new ArrayList<>();
+            List<Interval> v=SampleTimeline.energyIntervals(volts.get(device),from,to,false,interpolate),c=SampleTimeline.energyIntervals(amps.getOrDefault(device,Collections.emptyList()),from,to,true,interpolate),part=new ArrayList<>();
             int i=0,j=0;while(i<v.size()&&j<c.size()){
                 Interval a=v.get(i),b=c.get(j);long start=Math.max(a.from,b.from),end=Math.min(a.to,b.to);
-                if(end>start)part.add(new Interval(start,end,a.value(start)*b.value(start),a.value(end)*b.value(end)));
+                if(end>start)part.add(new Interval(start,end,a.value(start)*b.value(start),a.value(end)*b.value(end),a.interpolated||b.interpolated));
                 if(a.to<=b.to)i++;if(b.to<=a.to)j++;
             }
             derived=SampleTimeline.prefer(derived,part);
         }
-        return SampleTimeline.prefer(SampleTimeline.intervals(power,from,to,true),derived);
+        return SampleTimeline.prefer(SampleTimeline.energyIntervals(power,from,to,true,interpolate),derived);
     }
     public static Result calculateIntervals(List<Interval> intervals,long from,long to,boolean discharge,boolean balance){return integrate(intervals,from,to,discharge,balance);}
     private static List<Interval> intervals(List<Sample> samples,long from,long to,boolean signed){
-        return SampleTimeline.intervals(samples,from,to,signed);
+        return SampleTimeline.energyIntervals(samples,from,to,signed);
     }
     private static Result integrate(List<Interval> intervals,long from,long to,boolean discharge,boolean balance) {
         Result result=new Result();List<Point> raw=new ArrayList<>();double energy=0;long lastEnd=-1;
@@ -107,7 +113,7 @@ public final class EnergyIntegral {
                 if(zero>time&&zero<end)raw.add(new Point(zero,energy+a*(zero-time)/7200000.0,false));
             }
             energy+=(balance?(a+b)/2:positiveArea(discharge?-a:a,discharge?-b:b))*(end-time)/3600000.0;
-            result.coveredMillis+=end-time;raw.add(new Point(end,energy,false));lastEnd=end;
+            result.coveredMillis+=end-time;if(interval.interpolated)result.interpolatedMillis+=end-time;raw.add(new Point(end,energy,false));lastEnd=end;
         }
         if(result.coveredMillis==0)return result;
         result.wh=energy;

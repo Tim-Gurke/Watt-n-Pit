@@ -20,6 +20,7 @@ import java.nio.*;
 import java.nio.charset.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.zip.*;
 
 public final class MainActivity extends Activity {
     private WebView web;
@@ -38,7 +39,7 @@ public final class MainActivity extends Activity {
     private String pendingArchive;
     private long stoppedAt;
     private boolean entered,foreground,checkingArchive;
-    private static final int PERMISSIONS = 11, BLUETOOTH = 12, IMPORT = 20, EXPORT = 21, IMPORT_SETTINGS = 22, EXPORT_SETTINGS = 23;
+    private static final int PERMISSIONS = 11, BLUETOOTH = 12, IMPORT = 20, EXPORT = 21, IMPORT_SETTINGS = 22, EXPORT_SETTINGS = 23, EXPORT_DIAGNOSTICS = 25;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override public void onCreate(Bundle savedInstanceState) {
@@ -214,6 +215,17 @@ public final class MainActivity extends Activity {
                 if (output == null) throw new IOException();
                 repository.db.exportTo(output); repository.message("Verlauf als CSV gespeichert.");
             } catch (Exception e) { error(e); }
+        });
+        if(requestCode==EXPORT_DIAGNOSTICS)files.execute(()->{
+            try(OutputStream output=getContentResolver().openOutputStream(uri,"wt")){
+                if(output==null)throw new IOException();
+                JSONObject diagnostic=solarPlanning.diagnosticSnapshot().get(2,TimeUnit.MINUTES);
+                try(ZipOutputStream zip=new ZipOutputStream(output)){
+                    zip.putNextEntry(new ZipEntry("diagnose.json"));zip.write(diagnostic.toString(2).getBytes(StandardCharsets.UTF_8));zip.closeEntry();
+                    zip.putNextEntry(new ZipEntry("verlauf.csv"));repository.db.exportTo(zip);zip.closeEntry();
+                }
+                repository.message("Mess- und Lerndiagnose gespeichert.");
+            }catch(Exception e){error(e);}
         });
         if(requestCode==IMPORT_SETTINGS)files.execute(()->{
             try(InputStream input=getContentResolver().openInputStream(uri);ByteArrayOutputStream buffer=new ByteArrayOutputStream()){
@@ -392,6 +404,10 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void chooseExport() {
             runOnUiThread(() -> startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                     .setType("text/csv").putExtra(Intent.EXTRA_TITLE,"Watt-n-Pit-Verlauf.csv"),EXPORT));
+        }
+        @JavascriptInterface public void choosePlanningDiagnostics(){
+            runOnUiThread(()->startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType("application/zip").putExtra(Intent.EXTRA_TITLE,"Watt-n-Pit-Diagnose-"+BuildConfig.VERSION_NAME+".zip"),EXPORT_DIAGNOSTICS));
         }
         @JavascriptInterface public void importCsv(String mapping, String kind) {
             files.execute(() -> {

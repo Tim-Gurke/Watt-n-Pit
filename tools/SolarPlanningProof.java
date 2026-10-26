@@ -41,6 +41,11 @@ final class SolarPlanningProof {
             check(row(result.getJSONArray("observations"),start).getBoolean("mobileFree")&&row(result.getJSONArray("observations"),start).getString("key").equals(key),"observations keep their source and the setup valid at the measured time");
             long issued=System.currentTimeMillis(),future=issued+day;planning.remember(new JSONArray().put(new JSONObject().put("key",key).put("from",future).put("to",future+5*hour).put("issued",issued).put("wh",321)).toString());planning.request();result=replies.poll(20,TimeUnit.SECONDS);
             check(result!=null&&result.getJSONArray("forecasts").length()==1&&result.getJSONArray("forecasts").getJSONObject(0).getDouble("wh")==321,"original issue time and predicted Wh survive native forecast storage");
+            repo.prefs.edit().putString("diagnostic-private-test","DIAGNOSTIC-SECRET-SENTINEL").commit();
+            JSONObject diagnostic=planning.diagnosticSnapshot().get(20,TimeUnit.SECONDS);
+            check(diagnostic.getString("format").equals("Watt-n-Pit-Diagnose")&&diagnostic.getJSONArray("observations").length()>0&&diagnostic.getJSONArray("contexts").length()>0,"diagnostic snapshot retains the actual learning observations and setup timeline");
+            check(diagnostic.getJSONArray("forecasts").getJSONObject(0).getDouble("wh")==321&&diagnostic.getJSONArray("devices").length()==2&&diagnostic.has("weather")&&diagnostic.has("history"),"diagnostic snapshot includes original forecasts, weather, device profiles and measurement inventory");
+            check(!diagnostic.toString().contains("DIAGNOSTIC-SECRET-SENTINEL"),"diagnostic snapshot never serializes arbitrary private preferences");
             db.execSQL("INSERT INTO contexts(at,key,mobile_free,source) VALUES(?,?,0,?)",new Object[]{System.currentTimeMillis(),"k-fedcba9876543210",source.toString()});
             repo.db.getWritableDatabase().execSQL("UPDATE readings SET solar=600 WHERE device='planning-solar'");planning.request();result=replies.poll(20,TimeUnit.SECONDS);
             check(result!=null&&row(result.getJSONArray("observations"),start).getDouble("consumption")==132,"a changed site/setup cannot overwrite an earlier site's learned observations with current weather windows");

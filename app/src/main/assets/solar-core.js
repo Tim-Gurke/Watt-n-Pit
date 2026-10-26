@@ -76,11 +76,13 @@
       samples.push({day:o.day,slot:o.slot,rate:wh/hours,hours,estimated:estimated/HOUR,weight});comparable.set(o.day,season);
     }
     if(!samples.length)return {wh:null,parts:[null,null,null],days:0,manual:false,provisional:true};
-    const average=rows=>{if(!rows.length)return null;const typical=median(rows.map(x=>x.rate)),clean=rows.length<7?rows:rows.filter(x=>typical===0?x.rate===0:x.rate<=typical*3),weight=clean.reduce((s,x)=>s+x.weight,0);return weight?clean.reduce((s,x)=>s+x.rate*x.weight,0)/weight:null;};
+    const accepted=rows=>{const typical=median(rows.map(x=>x.rate));return rows.length<7?rows:rows.filter(x=>typical===0?x.rate===0:x.rate<=typical*3);};
+    const average=rows=>{if(!rows.length)return null;const clean=accepted(rows),weight=clean.reduce((s,x)=>s+x.weight,0);return weight?clean.reduce((s,x)=>s+x.rate*x.weight,0)/weight:null;};
     const fallback=average(samples),rates=nominal.map((_,slot)=>average(samples.filter(x=>x.slot===slot))),extrapolated=rates.some(x=>x===null);
     const parts=rates.map((x,i)=>(x??fallback)*nominal[i]),days=new Set(samples.map(x=>x.day)).size,hours=samples.reduce((s,x)=>s+x.hours,0),estimatedHours=samples.reduce((s,x)=>s+x.estimated,0);
     const provisional=extrapolated||days<5||[...comparable.values()].reduce((a,b)=>a+b,0)<3||estimatedHours/hours>.5;
-    return {wh:parts.reduce((a,b)=>a+b,0),parts,days,manual:false,provisional,extrapolated,sampleHours:hours,estimatedHours,uncertainty:extrapolated?.8:Math.max(provisional?.5:.25,estimatedHours/hours*.6)};
+    const slotStats=nominal.map((_,slot)=>{const rows=accepted(samples.filter(x=>x.slot===slot));return {slot,hours:rows.reduce((s,x)=>s+x.hours,0),estimatedHours:rows.reduce((s,x)=>s+x.estimated,0),days:new Set(rows.map(x=>x.day)).size,extrapolated:rates[slot]===null};});
+    return {wh:parts.reduce((a,b)=>a+b,0),parts,days,manual:false,provisional,extrapolated,sampleHours:hours,estimatedHours,slotStats,usedHours:slotStats.reduce((s,x)=>s+x.hours,0),usedEstimatedHours:slotStats.reduce((s,x)=>s+x.estimatedHours,0),uncertainty:extrapolated?.8:Math.max(provisional?.5:.25,estimatedHours/hours*.6)};
   }
   function sunshineCode(day){
     if(finite(day.hours)&&finite(day.sunrise)&&finite(day.sunset)&&day.sunset>day.sunrise){const share=clamp(day.hours/((day.sunset-day.sunrise)/HOUR),0,1);return share>=.75?0:share>=.2?2:3;}

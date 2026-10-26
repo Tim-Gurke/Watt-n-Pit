@@ -10,8 +10,32 @@ public class EnergyIntegralTest {
         EnergyIntegral.Result r=EnergyIntegral.calculate(Arrays.asList(sample(0,60,0,"live"),sample(10,60,10,"live"),sample(20,60,10,"live")),0,20000,false);
         assertEquals(1.0/3,r.wh,1e-9);assertEquals(20000,r.coveredMillis);
     }
-    @Test public void recordedLiveCadenceLeavesMissedReceptionIntervalsOpen(){
-        assertNull(EnergyIntegral.calculate(Arrays.asList(sample(0,60,10,"live"),sample(20,60,10,"live")),0,20000,false).wh);
+    @Test public void aShortLiveDelayIsLabelledButDoesNotCountAsActualArchiveCoverage(){
+        List<EnergyIntegral.Sample> values=Arrays.asList(sample(0,60,10,"live"),sample(20,60,10,"live"));
+        EnergyIntegral.Result r=EnergyIntegral.calculate(values,0,20000,false);
+        assertEquals(1.0/3,r.wh,1e-9);assertEquals(20000,r.interpolatedMillis);assertEquals(0,r.measuredCoverage(0,20000),0);
+        assertTrue(SampleTimeline.intervals(values,0,20000,false).isEmpty());
+    }
+    @Test public void aDelayBeyondThirtySecondsStaysOpen(){
+        assertNull(EnergyIntegral.calculate(Arrays.asList(sample(0,60,10,"live"),sample(31,60,10,"live")),0,31000,false).wh);
+    }
+    @Test public void actualArchivesAlwaysReplaceAnEstimatedLiveBridge(){
+        List<EnergyIntegral.Sample> values=Arrays.asList(sample(0,120,10,"live"),sample(20,120,10,"live"),sample(0,60,30,"archive"),sample(20,60,30,"archive"));
+        EnergyIntegral.Result r=EnergyIntegral.calculate(values,0,20000,false);
+        assertEquals(1.0/3,r.wh,1e-9);assertEquals(0,r.interpolatedMillis);assertEquals(1,r.measuredCoverage(0,20000),0);
+    }
+    @Test public void fineOriginalArchivesRetainAPeakMissedByCoarseLiveSampling(){
+        List<EnergyIntegral.Sample> values=new ArrayList<>();for(int i=0;i<=20;i++)values.add(sample(i,i==0||i==20?0:100,1,"archive"));
+        for(int i=0;i<=20;i+=10)values.add(sample(i,0,10,"live"));
+        EnergyIntegral.Result r=EnergyIntegral.calculate(values,0,20000,false);
+        assertEquals(1900.0/3600,r.wh,1e-9);assertEquals(20000,r.coveredMillis);assertEquals(0,r.interpolatedMillis);
+    }
+    @Test public void derivedObservedPowerReplacesAnEstimatedDirectPowerBridge(){
+        List<EnergyIntegral.Sample> direct=Arrays.asList(sample(0,120,10,"live"),sample(20,120,10,"live"));
+        List<EnergyIntegral.Sample> voltage=Arrays.asList(sample(0,12,30,"archive"),sample(20,12,30,"archive"));
+        List<EnergyIntegral.Sample> current=Arrays.asList(sample(0,5,30,"archive"),sample(20,5,30,"archive"));
+        EnergyIntegral.Result r=EnergyIntegral.calculateIntervals(EnergyIntegral.powerIntervals(direct,voltage,current,0,20000),0,20000,false,true);
+        assertEquals(1.0/3,r.wh,1e-9);assertEquals(0,r.interpolatedMillis);
     }
     @Test public void resolvesFractionsBelowTheDeviceTenWhSteps(){
         List<EnergyIntegral.Sample> data=new ArrayList<>();for(int t=0;t<=3600;t+=30)data.add(sample(t,3,30,"archive"));

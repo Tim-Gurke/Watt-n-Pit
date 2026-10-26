@@ -297,7 +297,7 @@ function energyPlotPoints(data){
   return [...(data?.solar?.points||[]),...(data?.consumption?.points||[]),...($('energyBalance').checked?data?.balance?.points||[]:[])].sort((a,b)=>a.t-b.t);
 }
 function energyDescription(data){
-  const describe=(series,label)=>{const s=series?.summary||{},coverage=Math.floor((s.coverage||0)*100);return `${label}: ${num(s.last,2)} Wh · ${coverage} % der Zeit erfasst`;};
+  const describe=(series,label)=>{const s=series?.summary||{},coverage=Math.floor((s.coverage||0)*100);return `${label}: ${num(s.last,2)} Wh · ${coverage} % der Zeit abgedeckt${s.interpolatedMillis>0?' · davon '+num(s.interpolatedMillis/60000,1)+' min kurz interpoliert':''}`;};
   return describe(data?.solar,'Solarertrag')+' · '+describe(data?.consumption,'Verbrauch')+' · '+describe(data?.balance,'Bilanz')+'. + Überschuss · − Defizit.';
 }
 function sampleEnergyDemo(from,to,solarFrom=from,solarTo=to){
@@ -405,7 +405,7 @@ function renderDaily() {
  el.innerHTML='<h2>Solar-Tagesarchiv</h2><p class="muted">Ertrag: Tageswerte des Solarladereglers. Verbrauch: aus Solar- und Shunt-Messungen berechnet, einschließlich der Nacht. Messlücken bleiben unberechnet; heute ist vorläufig.</p><div style="overflow-x:auto" tabindex="0" aria-label="Tagesarchiv, weitere Spalten seitlich erreichbar"><table><thead><tr><th>Tag</th><th>Ertrag Wh</th><th>Verbrauch Wh</th><th>Maximum W</th><th>Batterie min/max V</th></tr></thead><tbody>'+rows.map(r=>{
   const day=consumption.get(r.day),known=day?.last!=null&&Number.isFinite(Number(day.last));
   const amount=known?num(day.last,2):waiting.has(r.day.slice(0,7))?'…':'—';
-  const coverage=known?`${Math.floor(Math.max(0,Math.min(1,day.coverage||0))*100)} % erfasst`:waiting.has(r.day.slice(0,7))?'wird berechnet':'keine Messdaten';
+  const coverage=known?`${Math.floor(Math.max(0,Math.min(1,day.coverage||0))*100)} % erfasst${day.interpolatedMillis>0?' · kurz interpoliert':''}`:waiting.has(r.day.slice(0,7))?'wird berechnet':'keine Messdaten';
   return `<tr><td>${escapeHtml(r.day)}</td><td>${num(r['Yield(Wh)'])}</td><td>${amount}<span class="daily-coverage">${coverage}</span></td><td>${num(r['Max. PV power(W)'])}</td><td>${num(r['Min. battery voltage(V)'],2)} / ${num(r['Max. battery voltage(V)'],2)}</td></tr>`;
  }).join('')+'</tbody></table></div>';
 }
@@ -461,6 +461,7 @@ $('zoomIn').onclick=()=>zoom(.5);$('zoomOut').onclick=()=>zoom(2);$('openScale')
 $('resetChart').onclick=()=>{viewFrom=baseFrom;viewTo=baseTo;manualY=null;loadHistory();};
 ['importCsv','historyImport','settingsImport'].forEach(id=>$(id).onclick=chooseImport);
 ['exportCsv','settingsExport'].forEach(id=>$(id).onclick=chooseExport);
+$('exportPlanningDiagnostics').onclick=()=>{if(native?.choosePlanningDiagnostics)native.choosePlanningDiagnostics();else toast('Der Diagnoseexport ist in der Android-App verfügbar.');};
 ['capacitySetting','sampleSetting'].forEach(id=>$(id).oninput=()=>settingsDirty=true);
 $('saveSettings').onclick=()=>{const settings={capacity:Number($('capacitySetting').value),sampleSeconds:Number($('sampleSetting').value)};if(!settings.capacity||settings.capacity<=0||settings.capacity>10000){toast('Bitte eine Kapazität zwischen 1 und 10.000 Ah eingeben.');return;}const error=native?native.settings(JSON.stringify(settings)):'';if(error){toast(error);return;}Object.assign(snapshot.settings,settings);settingsDirty=false;toast('Einstellungen gespeichert.');renderOverview();};
 $('miniRange').onchange=()=>{const miniRange=$('miniRange').value,error=native?native.settings(JSON.stringify({miniRange})):'';if(error){toast(error);loadMini(true);return;}snapshot.settings.miniRange=miniRange;if(!native)localStorage.setItem('wattpit-mini-range',miniRange);loadMini(true);};

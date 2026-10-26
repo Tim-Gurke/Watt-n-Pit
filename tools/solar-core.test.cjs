@@ -1,6 +1,17 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const C=require('../app/src/main/assets/solar-core.js'),E=require('../app/src/main/assets/equipment.js');
 const H=C.HOUR,D=C.DAY,now=Date.parse('2026-10-23T12:00:00Z');
+test('learning coverage reports actual hours per daypart instead of equating partial days with full days',()=>{
+ const p={usageMode:'auto'},start=Date.parse('2026-10-22T00:00:00Z');
+ const rows=[{day:'2026-10-22',slot:0,learningVersion:2,usage:{wh:20,duration:2*H,estimatedDuration:0,latest:start+2*H}},{day:'2026-10-22',slot:2,learningVersion:2,usage:{wh:30,duration:H,estimatedDuration:H,latest:start+20*H}}];
+ const u=C.consumption(p,rows,'2026-10-23',now);
+ assert.equal(u.days,1);assert.equal(u.usedHours,3);assert.equal(u.usedEstimatedHours,1);
+ assert.deepEqual(u.slotStats.map(s=>[s.hours,s.estimatedHours,s.days,s.extrapolated]),[[2,0,1,false],[0,0,0,true],[1,1,1,false]]);
+});
+test('a rejected consumption outlier is not counted among evaluated daypart hours',()=>{
+ const rows=[];for(let i=1;i<=7;i++){const day='2026-10-'+String(i).padStart(2,'0'),start=Date.parse(day+'T00:00:00Z');rows.push({day,slot:0,learningVersion:2,usage:{wh:i===7?1000:10,duration:H,estimatedDuration:0,latest:start+H}});}
+ const u=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.equal(u.slotStats[0].hours,6);assert.equal(u.slotStats[0].days,6);assert.equal(u.usedHours,6);
+});
 const equipment=(extra=[])=>E.normalize({version:1,groups:[{id:'roof',label:'Dach',count:2,watts:100,tilt:30,placement:'fixed',measurement:'solar',controller:'MPPT'},...extra]});
 const plan=eq=>C.normalize({groups:{roof:{azimuth:180,shade:[0,0,0]}}},eq);
 function weather(from=Date.parse('2026-10-23T00:00:00Z'),length=14,hoursPerDay=24){

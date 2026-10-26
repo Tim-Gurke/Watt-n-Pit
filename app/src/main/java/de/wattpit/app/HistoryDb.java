@@ -261,7 +261,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         if(from<0||to<=from||to-from>32L*86400000)throw new IllegalArgumentException("Ungültiger Tageszeitraum.");
         long end=Math.min(to,System.currentTimeMillis());JSONArray days=new JSONArray();
         if(end<=from)return new JSONObject().put("days",days);
-        List<SampleTimeline.Interval> solar=SampleTimeline.intervals(powerSamples(from,end,"solar","all"),from,end,false);
+        List<SampleTimeline.Interval> solar=SampleTimeline.energyIntervals(powerSamples(from,end,"solar","all"),from,end,false);
         List<SampleTimeline.Interval> battery=batteryIntervals(from,end,"all",null);
         java.time.ZoneId zone=java.time.ZoneId.systemDefault();
         java.time.LocalDate day=java.time.Instant.ofEpochMilli(from).atZone(zone).toLocalDate();
@@ -279,7 +279,7 @@ final class HistoryDb extends SQLiteOpenHelper {
             }
             EnergyIntegral.Result result=EnergyIntegral.flowIntervals(clipIntervals(solar,start,next),clipIntervals(battery,start,next),start,next,solarFrom,solarTo).consumption;
             days.put(new JSONObject().put("day",day.toString()).put("last",result.wh==null?JSONObject.NULL:result.wh)
-                    .put("coverage",result.coverage(start,next)).put("coveredMillis",result.coveredMillis).put("from",start).put("to",next));
+                    .put("coverage",result.coverage(start,next)).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",start).put("to",next));
             day=day.plusDays(1);
         }
         return new JSONObject().put("days",days);
@@ -292,8 +292,8 @@ final class HistoryDb extends SQLiteOpenHelper {
         java.time.ZoneId zone;try{zone=java.time.ZoneId.of(weather.optString("timezone",java.time.ZoneId.systemDefault().getId()));}catch(Exception e){zone=java.time.ZoneId.systemDefault();}
         java.time.LocalDate day=java.time.Instant.ofEpochMilli(from).atZone(zone).toLocalDate();
         List<EnergyIntegral.Sample> solarSamples=planningSamples(from,to,"solar",solarDevice);
-        List<SampleTimeline.Interval> solar=SampleTimeline.intervals(solarSamples,from,to,false);
-        List<SampleTimeline.Interval> battery=EnergyIntegral.powerIntervals(planningSamples(from,to,"batteryPower",shuntDevice),planningSamples(from,to,"batteryVoltage",shuntDevice),planningSamples(from,to,"batteryCurrent",shuntDevice),from,to);
+        List<SampleTimeline.Interval> solar=SampleTimeline.energyIntervals(solarSamples,from,to,false,false);
+        List<SampleTimeline.Interval> battery=EnergyIntegral.powerIntervals(planningSamples(from,to,"batteryPower",shuntDevice),planningSamples(from,to,"batteryVoltage",shuntDevice),planningSamples(from,to,"batteryCurrent",shuntDevice),from,to,false);
         List<SampleTimeline.Interval> states=SampleTimeline.intervals(planningSamples(from,to,"state",solarDevice),from,to,false);
         List<SampleTimeline.Interval> volts=SampleTimeline.intervals(planningSamples(from,to,"solarVoltage",solarDevice),from,to,false);
         List<SampleTimeline.Interval> amps=SampleTimeline.intervals(planningSamples(from,to,"solarCurrent",solarDevice),from,to,true);
@@ -346,7 +346,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         for(SampleTimeline.Interval x:intervals){
             if(x.to<=from)continue;if(x.from>=to)break;
             long start=Math.max(from,x.from),end=Math.min(to,x.to);
-            if(end>start)clipped.add(new SampleTimeline.Interval(start,end,x.value(start),x.value(end)));
+            if(end>start)clipped.add(new SampleTimeline.Interval(start,end,x.value(start),x.value(end),x.interpolated));
         }
         return clipped;
     }
@@ -356,7 +356,7 @@ final class HistoryDb extends SQLiteOpenHelper {
     JSONObject energyFlow(long from,long to,long solarFrom,long solarTo,String source) throws Exception {
         to=Math.min(to,System.currentTimeMillis());
         solarFrom=Math.max(from,solarFrom);
-        EnergyIntegral.Flow flow=to>from?EnergyIntegral.flowIntervals(SampleTimeline.intervals(powerSamples(from,to,"solar",source),from,to,false),batteryIntervals(from,to,source,null),from,to,solarFrom,solarTo):null;
+        EnergyIntegral.Flow flow=to>from?EnergyIntegral.flowIntervals(SampleTimeline.energyIntervals(powerSamples(from,to,"solar",source),from,to,false),batteryIntervals(from,to,source,null),from,to,solarFrom,solarTo):null;
         JSONObject out=new JSONObject();String[] kinds={"solar","consumption","balance"};
         EnergyIntegral.Result[] results=flow==null?new EnergyIntegral.Result[]{new EnergyIntegral.Result(),new EnergyIntegral.Result(),new EnergyIntegral.Result()}:new EnergyIntegral.Result[]{flow.solar,flow.consumption,flow.balance};
         for(int i=0;i<kinds.length;i++)out.put(kinds[i],energyJson(results[i],i==0&&flow!=null?flow.solarFrom:from,i==0&&flow!=null?flow.solarTo:to,kinds[i]));
@@ -387,7 +387,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         JSONArray points=new JSONArray();
         for(EnergyIntegral.Point p:result.points)points.put(new JSONObject().put("t",p.time).put("last",p.time).put("v",p.wh).put("min",p.wh).put("max",p.wh).put("n",1).put("gap",p.gap).put("kind",kind).put("device","calculated-"+kind).put("origin","calculated"));
         Object total=result.wh==null?JSONObject.NULL:result.wh;
-        JSONObject summary=new JSONObject().put("last",total).put("min",result.wh==null?JSONObject.NULL:result.minimumWh).put("max",result.wh==null?JSONObject.NULL:result.maximumWh).put("n",result.points.size()).put("coverage",result.coverage(from,to)).put("coveredMillis",result.coveredMillis).put("from",from).put("to",to);
+        JSONObject summary=new JSONObject().put("last",total).put("min",result.wh==null?JSONObject.NULL:result.minimumWh).put("max",result.wh==null?JSONObject.NULL:result.maximumWh).put("n",result.points.size()).put("coverage",result.coverage(from,to)).put("measuredCoverage",result.measuredCoverage(from,to)).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",from).put("to",to);
         return new JSONObject().put("points",points).put("summary",summary);
     }
 

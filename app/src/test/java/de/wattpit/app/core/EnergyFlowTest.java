@@ -5,6 +5,13 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class EnergyFlowTest {
+    @Test public void aSharedShortInterpolationCountsOnceAndKeepsTheEnergyEquation(){
+        List<EnergyIntegral.Sample> solar=Arrays.asList(sample(0,120,10,"live"),sample(20,120,10,"live"));
+        List<EnergyIntegral.Sample> battery=Arrays.asList(sample(0,-60,10,"live"),sample(20,-60,10,"live"));
+        EnergyIntegral.Flow f=EnergyIntegral.flow(solar,battery,0,20000);
+        totals(f,2.0/3,1,-1.0/3,20000);
+        for(EnergyIntegral.Result r:Arrays.asList(f.solar,f.consumption,f.balance))assertEquals(20000,r.interpolatedMillis);
+    }
     private EnergyIntegral.Sample sample(long seconds,double watts,int period,String origin){return new EnergyIntegral.Sample(seconds*1000,watts,period,"device",origin);}
     private List<EnergyIntegral.Sample> constant(double watts){return Arrays.asList(sample(0,watts,3600,"archive"),sample(3600,watts,3600,"archive"));}
     private void totals(EnergyIntegral.Flow f,double solar,double consumption,double balance,long covered){
