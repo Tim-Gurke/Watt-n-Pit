@@ -15,6 +15,20 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   assert.equal(await page.locator('#overviewBlocks > div').first().getAttribute('data-overview-block'),'roller');
   await page.evaluate(()=>dashboard.rollerEditor());await page.evaluate(()=>{document.getElementById('rollerBlockWidth').value='8';document.getElementById('rollerBlockHeight').value='360';});await page.locator('#saveRollerLayout').click();
   assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.compact),{width:8,height:360});assert.equal(await page.locator('#rollerPanel').evaluate(e=>Math.round(e.getBoundingClientRect().height)),360);
+
+  // Scroll inside the roller first, then continue scrolling the overview at its edge.
+  await page.evaluate(()=>{dashboard.editing=false;dashboard.config.blockOrder=['roller','tiles','history','record'];dashboard.config.rollerLayout.compact={width:12,height:250};dashboard.commit();});
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  await page.locator('#rollerPanel').scrollIntoViewIfNeeded();
+  await page.locator('#rollerPanel').evaluate(e=>{e.scrollTop=0;});
+  await page.locator('#rollerPanel').hover();
+  await page.mouse.wheel(0,120);await page.waitForTimeout(250);
+  assert.ok(await page.locator('#rollerPanel').evaluate(e=>e.scrollTop>0),'roller content must scroll');
+  await page.locator('#rollerPanel').evaluate(e=>{e.scrollTop=e.scrollHeight;});
+  const edgeScroll=await page.evaluate(()=>scrollY);
+  await page.mouse.wheel(0,120);await page.waitForTimeout(250);
+  assert.ok(await page.evaluate(()=>scrollY)>edgeScroll+20,'roller bottom must pass scrolling to overview');
+  assert.equal(await page.locator('#rollerPanel').evaluate(e=>getComputedStyle(e).overscrollBehaviorY),'auto');
   await page.setViewportSize({width:900,height:420});await page.waitForTimeout(100);assert.equal(await page.evaluate(()=>dashboard.profile),'wide');assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.wide),{width:12,height:650});
   await page.reload();assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.compact),{width:8,height:360});assert.equal(await page.locator('#overviewBlocks > div').first().getAttribute('data-overview-block'),'roller');
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{dashboard.reset();});await page.locator('#confirmDashboardReset').click();
