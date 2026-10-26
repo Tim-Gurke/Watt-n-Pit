@@ -19,7 +19,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   await page.reload();assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.compact),{width:8,height:360});assert.equal(await page.locator('#overviewBlocks > div').first().getAttribute('data-overview-block'),'roller');
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{dashboard.reset();});await page.locator('#confirmDashboardReset').click();
   assert.deepEqual(await page.evaluate(()=>dashboard.config.tiles[0].layouts.compact),{x:0,y:0,w:4,h:5});assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.compact),{width:12,height:650});
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   await page.evaluate(()=>{dashboard.editing=false;snapshot.devices=[{mac:'AA:BB:CC:DD:EE:FF',kind:'shunt'}];window.pullCount=0;pullReload.a.reload=()=>window.pullCount++;scrollTo(0,0);});
+  await page.waitForFunction(()=>window.scrollY<=1&&pullReload.a.canStart());
   const gesture=async(dy=100,dx=0,cancel=false)=>page.evaluate(({dy,dx,cancel})=>{const el=document.getElementById('overviewHeader'),touch=(type,x,y)=>{const e=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(e,'touches',{value:type==='touchend'||type==='touchcancel'?[]:[{clientX:x,clientY:y}]});el.dispatchEvent(e);};touch('touchstart',100,100);touch('touchmove',100+dx,100+dy);touch(cancel?'touchcancel':'touchend',100+dx,100+dy);},{dy,dx,cancel});
   await gesture();assert.equal(await page.evaluate(()=>pullCount),1);await gesture(30);await gesture(100,200);await gesture(100,0,true);assert.equal(await page.evaluate(()=>pullCount),1);
   await page.evaluate(()=>lifecycle.busy=true);await gesture();assert.equal(await page.evaluate(()=>pullCount),1);await page.evaluate(()=>lifecycle.busy=false);
