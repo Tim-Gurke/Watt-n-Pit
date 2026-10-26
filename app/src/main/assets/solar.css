@@ -5,3 +5,5 @@
 @media(min-width:700px){.type-weather .solar-day{flex:0 0 var(--solar-day-width,116px)}.solar-bearing{grid-template-columns:110px minmax(0,1fr)}.solar-dial{margin:auto}}
 
 #weatherNote[role=button]{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}#weatherNote[role=button]:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+
+.solar-table td small{display:block;white-space:normal;font-size:10px;line-height:1.4;margin-top:4px;max-width:12rem}
