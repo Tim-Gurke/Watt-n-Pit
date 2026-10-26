@@ -380,11 +380,11 @@ const numRaw = value => Math.round(value*100)/100;
 const pointers=new Map();let gesture=null, dragDistance=0;
 $('historyChart').addEventListener('pointerdown',event=>{
   const c=$('historyChart');c.setPointerCapture(event.pointerId);pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});dragDistance=0;
-  const list=[...pointers.values()];gesture={from:viewFrom,to:viewTo,x:event.clientX,distance:list.length>1?Math.hypot(list[1].x-list[0].x,list[1].y-list[0].y):0,anchor:list.length>1?Math.min(1,Math.max(0,((list[0].x+list[1].x)/2-c.getBoundingClientRect().left-(scale?.left||43))/(scale?.plotW||250))):.5};
+  const list=[...pointers.values()];gesture={from:viewFrom,to:viewTo,x:event.clientX,y:event.clientY,distance:list.length>1?Math.hypot(list[1].x-list[0].x,list[1].y-list[0].y):0,anchor:list.length>1?Math.min(1,Math.max(0,((list[0].x+list[1].x)/2-c.getBoundingClientRect().left-(scale?.left||43))/(scale?.plotW||250))):.5};
 });
 $('historyChart').addEventListener('pointermove',event=>{
   if(!pointers.has(event.pointerId)||!gesture)return;pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
-  const list=[...pointers.values()];dragDistance=Math.max(dragDistance,Math.abs(event.clientX-gesture.x));
+  const list=[...pointers.values()];if(event.pointerType==='touch'&&list.length===1&&Math.abs(event.clientY-gesture.y)>Math.abs(event.clientX-gesture.x)){dragDistance=100;return;}dragDistance=Math.max(dragDistance,Math.abs(event.clientX-gesture.x));
   if(list.length>1 && gesture.distance>0){const distance=Math.hypot(list[1].x-list[0].x,list[1].y-list[0].y);const span=(gesture.to-gesture.from)*gesture.distance/Math.max(distance,5),center=gesture.from+(gesture.to-gesture.from)*gesture.anchor;dragDistance=100;clampView(center-span*gesture.anchor,center+span*(1-gesture.anchor));}
   else if(list.length===1){const delta=(event.clientX-gesture.x)/(scale?.plotW||250)*(gesture.to-gesture.from);clampView(gesture.from-delta,gesture.to-delta);}
 });

@@ -257,7 +257,9 @@
         else this.pickTimer=setTimeout(()=>{if(this.gesture&&!this.gesture.moved&&this.pointers.size===1){this.gesture.selecting=true;this.pick(e.clientX);}},350);
       };
       canvas.onpointermove=e=>{
-        if(!this.pointers.has(e.pointerId)||!this.gesture||!this.plot)return;e.preventDefault();this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});const points=[...this.pointers.values()],g=this.gesture;
+        if(!this.pointers.has(e.pointerId)||!this.gesture||!this.plot)return;this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});const points=[...this.pointers.values()],g=this.gesture;
+        if(e.pointerType==='touch'&&points.length===1&&Math.abs(points[0].y-g.points[0].y)>Math.abs(points[0].x-g.points[0].x)){clearTimeout(this.pickTimer);g.moved=true;return;}
+        e.preventDefault();
         if(points.length===1&&g.selecting){this.pick(points[0].x);return;}
         if(points.length===1){const dx=points[0].x-g.points[0].x;if(Math.abs(dx)>3){g.moved=true;clearTimeout(this.pickTimer);}this.view=panView(g.view,this.base,-dx/this.plot.plot*(g.view.to-g.view.from));}
         else if(g.points.length>1){
@@ -268,7 +270,7 @@
       };
       const end=e=>{clearTimeout(this.pickTimer);if(!this.pointers.has(e.pointerId))return;const tap=this.pointers.size===1&&!this.gesture?.moved;this.pointers.delete(e.pointerId);if((tap||this.gesture?.selecting)&&e.type!=='pointercancel')this.pick(e.clientX);if(this.pointers.size)start();else this.gesture=null;};
       canvas.onpointerup=end;canvas.onpointercancel=end;
-      canvas.addEventListener('wheel',e=>{e.preventDefault();const rect=canvas.getBoundingClientRect();this.zoom(Math.exp(C.clamp(e.deltaY,-400,400)*.003),C.clamp((e.clientX-rect.left-this.plot.left)/this.plot.plot,0,1));},{passive:false});
+      canvas.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();const rect=canvas.getBoundingClientRect();this.zoom(Math.exp(C.clamp(e.deltaY,-400,400)*.003),C.clamp((e.clientX-rect.left-this.plot.left)/this.plot.plot,0,1));},{passive:false});
     }
   }
   return {periodWindow,clampView,zoomView,panView,seriesPoints,WattTileDetail};

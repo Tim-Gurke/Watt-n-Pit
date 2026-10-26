@@ -36,7 +36,7 @@ const path=require('node:path');
  const view=()=>page.evaluate(()=>({...dashboard.detail.view}));const full=await view();await page.locator('#detailZoomIn').click();assert.equal((await view()).to-(await view()).from,(full.to-full.from)/2);
  await page.locator('#detailCanvas').scrollIntoViewIfNeeded();let box=await page.locator('#detailCanvas').boundingBox(),before=await view();
  await page.mouse.move(box.x+box.width*.5,box.y+50);await page.mouse.down();await page.mouse.move(box.x+box.width*.7,box.y+50,{steps:8});await page.mouse.up();assert.ok((await view()).from<before.from,'drag did not pan');
- before=await view();await page.mouse.wheel(0,-160);await page.waitForTimeout(100);assert.ok((await view()).to-(await view()).from<before.to-before.from,'wheel did not zoom');
+ before=await view();await page.keyboard.down('Control');await page.mouse.wheel(0,-160);await page.keyboard.up('Control');await page.waitForTimeout(100);assert.ok((await view()).to-(await view()).from<before.to-before.from,'wheel did not zoom');
  const cdp=await page.context().newCDPSession(page);box=await page.locator('#detailCanvas').boundingBox();const y=Math.round(box.y+65),cx=Math.round(box.x+box.width/2);before=await view();
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cx-30,y,id:1},{x:cx+30,y,id:2}]});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:cx-60,y,id:1},{x:cx+60,y,id:2}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.ok((await view()).to-(await view()).from<before.to-before.from,'pinch did not zoom');

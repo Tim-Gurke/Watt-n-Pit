@@ -2,7 +2,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
 (async()=>{
  const browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.WATTPIT_CHROMIUM?{executablePath:process.env.WATTPIT_CHROMIUM}:{})});
  try{
-  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
   await page.evaluate(()=>{localStorage.setItem('wattpit-roller',JSON.stringify({mac:'AA:BB:CC:DD:EE:FF'}));roller.render();dashboard.editing=true;dashboard.config.tiles[0].layouts.compact.y=40;dashboard.commit();});
   const tile=page.locator('[data-tile="default-soc"]');await tile.scrollIntoViewIfNeeded();const before=await page.evaluate(()=>scrollY);assert.ok(before>300);
@@ -29,10 +29,25 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   await page.mouse.wheel(0,120);await page.waitForTimeout(250);
   assert.ok(await page.evaluate(()=>scrollY)>edgeScroll+20,'roller bottom must pass scrolling to overview');
   assert.equal(await page.locator('#rollerPanel').evaluate(e=>getComputedStyle(e).overscrollBehaviorY),'auto');
+  await page.evaluate(()=>{dashboard.config.rollerLayout.compact={width:8,height:360};dashboard.commit();});
   await page.setViewportSize({width:900,height:420});await page.waitForTimeout(100);assert.equal(await page.evaluate(()=>dashboard.profile),'wide');assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.wide),{width:12,height:650});
   await page.reload();assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.compact),{width:8,height:360});assert.equal(await page.locator('#overviewBlocks > div').first().getAttribute('data-overview-block'),'roller');
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{dashboard.reset();});await page.locator('#confirmDashboardReset').click();
   assert.deepEqual(await page.evaluate(()=>dashboard.config.tiles[0].layouts.compact),{x:0,y:0,w:4,h:5});assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.compact),{width:12,height:650});
+
+  // Real touch input must move the page even when it starts over a chart.
+  const cdp=await page.context().newCDPSession(page);
+  const swipe=async(selector)=>{
+   await page.locator(selector).scrollIntoViewIfNeeded();
+   const box=await page.locator(selector).boundingBox(),x=Math.round(box.x+box.width/2),y=Math.round(Math.min(650,box.y+box.height*.7));
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});
+   for(let i=1;i<=6;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-i*20,id:1}]});await page.waitForTimeout(25);}
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.waitForTimeout(250);
+  };
+  await page.evaluate(()=>{showPage('history');document.getElementById('history').style.minHeight='2000px';});
+  await page.locator('#historyChart').scrollIntoViewIfNeeded();const chartScroll=await page.evaluate(()=>scrollY);
+  await swipe('#historyChart');assert.ok(await page.evaluate(()=>scrollY)>chartScroll+20,'history chart trapped vertical touch scrolling');
+  await page.evaluate(()=>showPage('overview'));
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   await page.evaluate(()=>{dashboard.editing=false;snapshot.devices=[{mac:'AA:BB:CC:DD:EE:FF',kind:'shunt'}];window.pullCount=0;pullReload.a.reload=()=>window.pullCount++;scrollTo(0,0);});
   await page.waitForFunction(()=>window.scrollY<=1&&pullReload.a.canStart());
