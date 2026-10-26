@@ -188,7 +188,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         JSONArray result=new JSONArray();
         for(Map.Entry<String,List<SampleTimeline.Sample>> entry:devices.entrySet()){
             List<SampleTimeline.Interval> intervals=kinds.get(entry.getKey()).equals("shunt")&&(metric.equals("power")||metric.equals("batteryPower"))?
-                    batteryIntervals(from,to,source,entry.getKey()):SampleTimeline.intervals(entry.getValue(),from,to,true);
+                    EnergyIntegral.powerIntervals(fieldSamples(from,to,"batteryPower",source,entry.getKey()),fieldSamples(from,to,"batteryVoltage",source,entry.getKey()),fieldSamples(from,to,"batteryCurrent",source,entry.getKey()),from,to,false):SampleTimeline.intervals(entry.getValue(),from,to,true);
             for(SampleTimeline.PlotPoint point:SampleTimeline.plot(entry.getValue(),intervals,from,to)){
                 result.put(new JSONObject().put("t",point.time).put("last",point.time).put("device",entry.getKey()).put("kind",kinds.get(entry.getKey()))
                 .put("origin",source.equals("all")?"merged":source).put("v",point.value).put("min",point.value).put("max",point.value).put("n",1).put("period",0).put("gap",point.gap));
