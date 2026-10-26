@@ -260,10 +260,11 @@ public final class ArchiveStorageProof {
             }
             JSONObject backup=new JSONObject().put("format","wattnpit-settings").put("version",1)
                 .put("settings",new JSONObject().put("theme","dark").put("palette","classic").put("miniRange","month").put("capacity",100).put("sampleSeconds",10))
-                .put("dashboard",new JSONObject().put("version",1).put("blockOrder",new JSONArray("[\"tiles\",\"history\",\"record\"]")).put("tiles",new JSONArray()).put("historyHeight",new JSONObject().put("compact",460).put("wide",640)))
+                .put("dashboard",new JSONObject().put("version",1).put("blockOrder",new JSONArray("[\"tiles\",\"history\",\"record\"]")).put("tiles",new JSONArray()).put("rollerLayout",new JSONObject().put("compact",new JSONObject().put("width",8.5).put("height",360)).put("wide",new JSONObject().put("width",6).put("height",800))).put("historyHeight",new JSONObject().put("compact",460).put("wide",640)))
                 .put("equipment",new JSONObject().put("version",1).put("groups",new JSONArray()));
             repo.importConfiguration(backup.toString());
             require(new JSONObject(repo.prefs.getString("dashboard-v1","{}")).getJSONObject("historyHeight").getInt("wide")==640,"native backup import preserves the separate history heights");
+            require(new JSONObject(repo.prefs.getString("dashboard-v1","{}")).getJSONObject("rollerLayout").getJSONObject("compact").getDouble("width")==8.5,"native backup import preserves the scalable roller block");
             backup.getJSONObject("dashboard").getJSONObject("historyHeight").put("compact",1).put("wide",5000);
             JSONObject heights=ConfigurationBackup.normalize(backup.toString()).getJSONObject("dashboard").getJSONObject("historyHeight");
             require(heights.getInt("compact")==300&&heights.getInt("wide")==1000,"native backup import clamps history height to safe bounds");

@@ -270,3 +270,20 @@ Die Wh-Spanne eines Vorschautags ist das geschätzte **Gesamtpotenzial aller akt
 Nach dem heutigen Sonnenuntergang zeigt die Akkuvorschau den zeitlich nächsten gespeicherten SmartShunt-Messwert innerhalb von 15 Minuten vor oder nach Sonnenuntergang. Messzeit und Quelle stehen in der Tagesansicht. Es werden weder Zwischenwerte erfunden noch heutige Livewerte rückwirkend eingesetzt. Fehlt ein passender Originalwert, bleibt die Anzeige unbekannt und erklärt den Grund. Die Reserve beim nächsten Sonnenaufgang wird weiterhin ab dem aktuellen Ladezustand prognostiziert.
 
 © 2026 Tim Weißbach und Mitwirkende · Watt’n’Pit
+
+
+## Roller und Ladeplanung ab 1.5.0
+
+1. **Einstellungen → Roller einrichten**: tatsächliche Akkudaten und BMS-Adresse eintragen oder ein gekoppeltes Gerät wählen. Watt’n’Pit-Aufzeichnung starten.
+2. Für den Ladeweg Wohnwagen → Wechselrichter → Netzladegerät → Roller im Rollerbereich **Ladeaufzeichnung starten** wählen und nach dem Laden beenden. Die App schaltet keine Hardware. Wh im Roller sind aus erfassten BMS-Abschnitten berechnet; der Wohnwagenanteil ist mit dem vorläufigen Verlustprofil geschätzt. Fehlende Messzeiten bleiben offen.
+3. Ladeziel und optional Strecke, Wh/km, Fahrpuffer und Abfahrts-/Rückkehrzeit hinterlegen. Mit **Ladung ab jetzt in der Akkuprognose einplanen** den noch benötigten Ladebedarf berücksichtigen. Verbrauch und Verluste sind vorläufige Planungswerte, keine Ladegarantie.
+4. Auf demselben Telefon kann ScootPit ab der BMS-Schnittstelle in **1.6.13-test.1** seine Grunddaten lokal liefern. Beide Apps aktualisieren und dasselbe BMS verwenden. Bei Übernahme erscheint **BMS über ScootPit · lokale Datenübernahme**. Mit älteren ScootPit-Versionen bzw. Overkill ist diese Übergabe nicht möglich. Kein Austausch zwischen unterschiedlichen Telefonen.
+5. Unter **Anordnen** den Rollerblock über die Pfeile nach oben setzen. **Größe ändern** oder der ↘-Griff passen Breite und Höhe an. Maße werden getrennt für schmale und breite Ansicht gespeichert. Kleine Bereiche lassen sich innen scrollen.
+
+## Hintergrundabruf und Herunterziehen ab 1.5.0
+
+Neue Archivabrufe laufen standardmäßig im Hintergrund. Die Statusanzeige oben zeigt Fortschritt und vorläufige Daten; Antippen öffnet Details und die Abbruchmöglichkeit. Nach Abschluss werden Daten und Kurven aktualisiert. Auf der Übersicht kann am oberen Seitenrand auch durch deutliches Herunterziehen und Loslassen nachgeladen werden. Der Button bleibt erhalten. Beim Kachel-Anordnen, in Dialogen, über Diagrammen oder während eines Abrufs löst die Geste keinen weiteren Import aus.
+
+## Vollständige Standardübersicht
+
+**Einstellungen → Ansicht → Standardübersicht wiederherstellen** ersetzt nach Bestätigung sämtliche Kacheln einschließlich Größen, Positionen, Kachelfarben, Reihenfolge der Blöcke und Höhen von Verlauf und Rollerbereich. Beide Ansichten werden zurückgesetzt. Messdaten, Geräte und Rollerprofil werden nicht gelöscht. Eigene Layouts vorher über **Einstellungen exportieren** sichern. Die Rollergröße und Blockreihenfolge sind darin enthalten; BMS-Adresse und Ladejournal gehören zum lokalen Diagnoseexport.

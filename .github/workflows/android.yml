@@ -62,6 +62,7 @@ jobs:
           node tools/background-sync-smoke.cjs
           node tools/solar-planning-smoke.cjs
           node tools/roller-smoke.cjs
+          node tools/dashboard-usability-smoke.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: Watt-n-Pit-CI-release

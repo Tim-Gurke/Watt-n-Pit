@@ -177,21 +177,24 @@ function toggleRecord() {
   setTimeout(poll,400);
 }
 function reloadMissingData(){
-  if(demo||!snapshot.devices.length||lifecycle?.busy||snapshot.archiveBusy)return;
+  if(demo||!snapshot.devices.length||lifecycle?.busy||snapshot.archiveBusy||Date.now()<archiveRequestedUntil)return;
   if(!native?.importMissingArchive){toast('Daten nachladen ist in der Android-App verfügbar.');return;}
   archiveRequestedUntil=Date.now()+1500;renderOverview();native.importMissingArchive();setTimeout(poll,250);
 }
+let modalReturnScroll=0;
 function openModal(title,content) {
+  const sheet=$('modal').querySelector('.sheet'),keep=!$('modal').hidden&&$('modalTitle').textContent===title,position=keep?sheet.scrollTop:0;
+  if($('modal').hidden)modalReturnScroll=window.scrollY;
   document.dispatchEvent(new Event('watt-modal-close'));
   $('modalTitle').textContent = title; $('modalBody').innerHTML = content; $('modal').hidden = false;
   document.body.style.overflow = 'hidden';
-  $('closeModal').focus();
+  sheet.scrollTop=position;$('closeModal').focus({preventScroll:true});
 }
 function closeModal() {
   if (currentImport?.busy) return;
   if (currentImport && native) native.cancelImport();
   document.dispatchEvent(new Event('watt-modal-close'));
-  currentImport = null; $('modal').hidden = true; $('modalBody').innerHTML = ''; document.body.style.overflow = '';
+  currentImport = null; $('modal').hidden = true; $('modalBody').innerHTML = ''; document.body.style.overflow = '';window.scrollTo(0,modalReturnScroll);
 }
 window.handleBack = () => {
   if(lifecycle?.back())return true;
@@ -482,5 +485,6 @@ configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,d
 theme(!native?localStorage.getItem('wattpit-preview-theme')||'dark':'dark',false);
 selectRange('today');poll();renderSettings();
 if(new URLSearchParams(location.search).get('demo')==='1')setDemo(true);
+window.pullReload=new window.WattPullReload({element:$('overview'),canStart:()=>page==='overview'&&!demo&&!dashboard.editing&&!lifecycle.blocked&&!lifecycle.busy&&!snapshot.archiveBusy&&snapshot.devices.length>0&&Date.now()>=archiveRequestedUntil&&$('modal').hidden,reload:reloadMissingData});
 setInterval(poll,2000);setInterval(()=>{if(!lifecycle.blocked&&page==='history'&&snapshot.running&&!demo)loadHistory();},20000);
 window.addEventListener('resize',()=>{drawHistory();drawMini();});

@@ -4,7 +4,7 @@ const C=require('../app/src/main/assets/settings-backup.js');
 const D=require('../app/src/main/assets/dashboard-core.js');
 const sample=()=>C.create({settings:{theme:'light',palette:'green',capacity:150,sampleSeconds:30,miniRange:'sunrise',weatherPlace:{name:'Testort',latitude:48,longitude:8}}},D.defaults(),{version:1,groups:[{id:'test-group',label:'Testmodule',count:2,watts:90,placement:'fixed',controller:'Regler',measurement:'solar'}]});
 test('a JSON round trip preserves every portable setting, tile layout and source assignment',()=>{
-  const backup=sample();backup.dashboard.tiles.push(D.tile('dischargeEnergy','optional-discharge'));backup.dashboard.tiles[1].period.mode='sunrise';backup.dashboard.tiles[1].color='#123456';backup.dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign=true;backup.dashboard.blockOrder=['record','tiles','history'];
+  const backup=sample();backup.dashboard.tiles.push(D.tile('dischargeEnergy','optional-discharge'));backup.dashboard.tiles[1].period.mode='sunrise';backup.dashboard.tiles[1].color='#123456';backup.dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign=true;backup.dashboard.blockOrder=['record','tiles','history','roller'];
   assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(backup))),backup);
 });
 test('exports and imports cannot transfer connection secrets, identities or measurements',()=>{
@@ -65,4 +65,8 @@ test('solar geometry, directions, shade and voluntary seasons transfer without a
 });
 test('old backups upgrade to an unknown current setup without inventing mounting angles or consumption',()=>{
  const backup=sample();delete backup.solarSetup;delete backup.equipment.groups[0].tilt;const clean=C.normalize(backup);assert.equal(clean.equipment.groups[0].tilt,null);assert.equal(clean.solarSetup.groups['test-group'].azimuth,null);assert.deepEqual(clean.solarSetup.manual,[null,null,null,null]);
+});
+test('roller block size and order round trip without including connection details',()=>{
+ const b=sample();b.dashboard.blockOrder=['roller','tiles','history','record'];b.dashboard.rollerLayout={compact:{width:9,height:450},wide:{width:6,height:800}};
+ const restored=C.normalize(JSON.parse(JSON.stringify(b)));assert.deepEqual(restored.dashboard.rollerLayout,b.dashboard.rollerLayout);assert.deepEqual(restored.dashboard.blockOrder,b.dashboard.blockOrder);assert.equal(JSON.stringify(restored).includes('AA:BB'),false);
 });

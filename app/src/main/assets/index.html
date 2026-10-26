@@ -21,10 +21,11 @@
 <div id="demoBar" class="demo-bar" hidden><span>DEMO · Beispieldaten</span><button id="exitDemo">Demo verlassen</button></div>
 <main>
 <section id="overview" class="page active">
+  <p id="pullReloadHint" class="pull-reload-hint" role="status" hidden></p>
   <div id="overviewHeader" class="pagehead"><div class="overview-summary"><p class="eyebrow" id="todayLabel"></p><h1>Energie im Blick.</h1></div><div class="status-chip" id="liveStatus"><i></i><span>Pausiert</span></div></div>
   <div id="welcome" class="welcome"><div><h2>Einmal einrichten. Alles im Blick.</h2><p>SmartShunt und SmartSolar liefern die Werte. Watt’n’Pit bringt sie zusammen.</p></div><div class="row"><button class="primary" id="setupFirst">Geräte einrichten</button><button class="quiet" id="demoFirst">Demo ansehen</button></div></div>
   <div id="dashboardToolbar" class="dashboard-toolbar"><div><button class="add-tile" id="addTile"><span>+</span> Kachel</button><span id="layoutProfile" class="muted"></span></div><button class="textbutton" id="editDashboard" aria-pressed="false">Anordnen</button></div>
-  <p id="layoutHelp" class="layout-help" hidden>Kacheln verschieben, an der Ecke vergrößern oder über ··· anpassen. Die Verlaufskachel unten am ↕-Griff in der Höhe ändern. Überlappungen sind möglich.</p>
+  <p id="layoutHelp" class="layout-help" hidden>Kacheln verschieben, an der Ecke vergrößern oder über ··· anpassen. Verlauf und Rollerbereich an den Griffen skalieren. Blöcke über die Pfeile nach oben oder unten verschieben. Überlappungen sind möglich.</p>
   <div id="overviewOrder" class="overview-order" hidden aria-label="Reihenfolge der Übersichtsblöcke"></div>
   <div id="overviewBlocks">
   <div data-overview-block="tiles">
@@ -39,9 +40,10 @@
   <div class="info-note"><span class="info-symbol">i</span><p id="equipmentNote">Ohne eigenen Messwert ist die Leistung einzelner Solarkreise nicht separat sichtbar. Deine Solaranlage lässt sich in den Einstellungen anpassen.</p></div>
   <div class="record-actions"><button class="record-button" id="overviewRecord" aria-label="Aufzeichnung starten" title="Aufzeichnung starten"><span id="recordIcon"></span><span id="recordText" class="sr-only">Aufzeichnung starten</span></button><button class="secondary reload-button" id="reloadArchive"><span aria-hidden="true">↻</span><span id="reloadArchiveText">Daten nachladen</span></button></div>
   </div>
+  <div data-overview-block="roller">  <article class="card roller-panel" id="rollerPanel" hidden><div class="roller-heading"><div><p class="eyebrow">ZUSATZSPEICHER</p><h2 id="rollerName">Roller</h2></div><button class="quiet" id="rollerConfigure">Einrichten</button></div><button class="quiet" id="rollerLayoutSettings" hidden>Größe ändern</button><p id="rollerState" class="muted"></p><div class="roller-values"><div><strong id="rollerSoc">— %</strong><span>Ladezustand · BMS</span></div><div><strong id="rollerPower">— W</strong><span>Batterieleistung · BMS</span></div><div><strong id="rollerCharged">— Wh</strong><span>Geladen · gemessene Abschnitte</span></div><div><strong id="rollerInput">— Wh</strong><span>Wohnwagenanteil · geschätzt</span></div></div><p id="rollerLiveNote" class="muted"></p><button class="primary" id="rollerSession">Ladeaufzeichnung starten</button><p id="rollerGaps" class="muted"></p><button id="rollerJournal" class="quiet">Ladejournal</button><p id="rollerPlan"></p><p class="muted">Zuordnung innerhalb des Shuntverbrauchs. Keine zusätzliche Belastung der Gesamtbilanz.</p><button id="rollerResize" class="roller-resize" aria-label="Rollerbereich skalieren" title="Breite und Höhe ziehen" hidden>↘</button></article></div>
   </div>
   <div id="weatherDock" hidden><div id="weatherStrip" class="weather-strip" hidden><div class="weather-heading"><span id="weatherPlaceName" class="weather-name"></span><span id="weatherPeriod" class="weather-period">14 Tage · Solar</span><button id="solarMobileToggle" class="textbutton solar-mobile-button" hidden>Mobil aus</button><button id="solarSetupButton" class="textbutton" aria-label="Aufstellung ändern" title="Aufstellung ändern"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="6"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg></button><button id="weatherRefresh" class="textbutton" aria-label="Wetter aktualisieren">↻</button></div><div id="weatherDays" class="weather-days" tabindex="0" aria-label="14 Tage Solarvorschau, seitlich wischbar; Tag für Details antippen"></div><p class="weather-credit"><span id="weatherNote"></span><span class="weather-attribution">Open-Meteo · CC BY 4.0</span></p></div></div>
-  <article class="card roller-panel" id="rollerPanel" hidden><div class="roller-heading"><div><p class="eyebrow">ZUSATZSPEICHER</p><h2 id="rollerName">Roller</h2></div><button class="quiet" id="rollerConfigure">Einrichten</button></div><p id="rollerState" class="muted"></p><div class="roller-values"><div><strong id="rollerSoc">— %</strong><span>Ladezustand · BMS</span></div><div><strong id="rollerPower">— W</strong><span>Batterieleistung · BMS</span></div><div><strong id="rollerCharged">— Wh</strong><span>Geladen · gemessene Abschnitte</span></div><div><strong id="rollerInput">— Wh</strong><span>Wohnwagenanteil · geschätzt</span></div></div><p id="rollerLiveNote" class="muted"></p><button class="primary" id="rollerSession">Ladeaufzeichnung starten</button><p id="rollerGaps" class="muted"></p><button id="rollerJournal" class="quiet">Ladejournal</button><p id="rollerPlan"></p><p class="muted">Zuordnung innerhalb des Shuntverbrauchs. Keine zusätzliche Belastung der Gesamtbilanz.</p></article>
+
 </section>
 <section id="history" class="page">
   <div class="pagehead"><div><p class="eyebrow">DEINE DATEN BLEIBEN BEI DIR</p><h1>Der Verlauf.</h1></div><button class="iconbutton" id="historyImport" aria-label="CSV importieren"></button></div>
@@ -92,11 +94,11 @@
   </section>
   <section id="syncWaiting" class="activity-card" role="dialog" aria-modal="true" aria-labelledby="syncTitle" aria-describedby="syncExplanation" hidden>
     <div class="activity-spinner" aria-hidden="true"></div><p class="eyebrow">GERÄTEARCHIV</p><h2 id="syncTitle">Synchronisation läuft</h2>
-    <p id="syncExplanation">Gerätedaten werden ergänzt. Du kannst warten oder die App während dieses Abrufs weiter benutzen.</p>
+    <p id="syncExplanation">Gerätedaten werden ergänzt. Der Abruf läuft im Hintergrund. Hier kannst du Fortschritt und Details prüfen.</p>
     <div role="status" aria-live="polite"><p id="syncDevice" class="activity-device"></p><p id="syncPhase" class="muted"></p></div>
     <progress id="syncWaitingProgress" aria-label="Fortschritt am aktuellen Gerät"></progress><p id="syncProgressLabel" class="muted"></p>
     <p class="muted">Beim Abbrechen bleiben gespeicherte Daten erhalten. Fehlende Daten kannst du auf der Übersicht über „Daten nachladen“ erneut ergänzen.</p>
-    <p class="muted">„Im Hintergrund synchronisieren“ gibt die Bedienung für diesen Durchlauf frei. Die angezeigten Werte werden noch ergänzt. Beim nächsten Abruf entscheidest du erneut.</p><p id="syncChoiceError" class="form-error" role="alert" hidden></p><button id="syncBackground" class="primary" hidden>Im Hintergrund synchronisieren</button>
+    <p class="muted">„Im Hintergrund synchronisieren“ gibt die Bedienung für diesen Durchlauf frei. Die angezeigten Werte werden noch ergänzt. Neue Abrufe laufen standardmäßig im Hintergrund. Details lassen sich jederzeit über die Statusanzeige oben öffnen.</p><p id="syncChoiceError" class="form-error" role="alert" hidden></p><button id="syncBackground" class="primary" hidden>Im Hintergrund synchronisieren</button>
     <button id="syncCancel" class="secondary">Synchronisation abbrechen</button>
     <div id="syncCancelChoice" hidden><p>Synchronisation wirklich abbrechen? Bereits gespeicherte Daten bleiben erhalten.</p><button id="syncContinue" class="primary">Weiter synchronisieren</button><button id="syncCancelConfirm" class="secondary">Abbruch bestätigen</button></div>
   </section>
@@ -116,6 +118,7 @@
 <script src="read-bridge.js"></script>
 <script src="roller-core.js"></script>
 <script src="roller-ui.js"></script>
+<script src="pull-reload.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

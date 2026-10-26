@@ -39,7 +39,7 @@
     weather:      {label:'Wetter · 14 Tage',group:'Wetter',kind:'weather',units:[''],min:0,max:1,digits:0,color:'#e8bb57',widget:true}
   };
   const PHASES = {0:'Aus',1:'Wenig Leistung',2:'Fehler',3:'Bulk',4:'Absorption',5:'Float',6:'Storage',7:'Ausgleich',9:'Invertieren',11:'Stromversorgung',245:'Start',247:'Auto-Ausgleich',252:'Extern gesteuert'};
-  const BLOCK_ORDER=['tiles','history','record'];
+  const BLOCK_ORDER=['tiles','history','record','roller'];
   const finite = x => x !== null && x !== '' && Number.isFinite(Number(x));
   const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
   const numeric = (x,fallback,a,b) => finite(x) ? clamp(Number(x),a,b) : fallback;
@@ -220,7 +220,7 @@
       compact:[[0,0,4,5],[4,0,4,7],[8,7,4,5.5],[8,0,4,7],[0,7.5,4,2.5],[0,10,4,2.5],[0,12.5,12,5],[4,7,4,5.5],[4,17.5,4,3.5],[0,5,4,2.5]],
       wide:[[0,0,2,4],[2,0,2,8],[7,0,3,8],[4,0,3,8],[0,4,2,2],[0,6,2,2],[0,8,12,4],[10,0,2,8],[0,12,4,3],[0,15,4,4]]
     };
-    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,historyHeight:historyHeight(),blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
+    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,historyHeight:historyHeight(),rollerLayout:rollerLayout(),blockOrder:[...BLOCK_ORDER],tiles:ids.map((id,i)=>{
       const t=tile(id,'default-'+id);
       for(const profile of ['compact','wide']){const [x,y,w,h]=layouts[profile][i];t.layouts[profile]={x,y,w,h};}
       if(id==='soc'){t.fontSize=20;t.scaleMode='auto';}
@@ -229,6 +229,9 @@
       if(id==='power')t.title='Aktuell';
       return t;
     })};
+  }
+  function rollerLayout(input={}){
+    return Object.fromEntries(['compact','wide'].map(profile=>[profile,{width:Math.round(numeric(input?.[profile]?.width,12,4,12)*2)/2,height:Math.round(numeric(input?.[profile]?.height,650,250,1600))}]));
   }
   function historyHeight(input={}) {
     return Object.fromEntries(['compact','wide'].map(profile=>[profile,finite(input?.[profile])?Math.round(clamp(Number(input[profile]),300,1000)):profile==='wide'?380:465]));
@@ -254,7 +257,7 @@
       const sunrise=t.metric==='solarEnergy'&&energyPeriod.mode==='today'&&(migrating||t.period.mode==='sunrise');
       t.period={...energyPeriod,mode:sunrise?'sunrise':energyPeriod.mode};
     }
-    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,historyHeight:historyHeight(input.historyHeight),blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles};
+    return {version:1,dischargeSignVersion:1,energyFlowVersion:1,energyPeriod,historyHeight:historyHeight(input.historyHeight),rollerLayout:rollerLayout(input.rollerLayout),blockOrder:[...new Set([...order,...BLOCK_ORDER])],tiles};
   }
   function windowFor(t,now=Date.now(),weather={}) {
     if(CATALOG[t.metric].widget||CATALOG[t.metric].liveOnly)return null;

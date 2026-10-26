@@ -237,9 +237,9 @@ test('calculated energy is a historical total and cannot pretend to be live',()=
   }
 });
 test('overview block order preserves all blocks once and migrates old dashboards',()=>{
-  const input=C.defaults();delete input.blockOrder;assert.deepEqual(C.normalize(input).blockOrder,['tiles','history','record']);
-  input.blockOrder=['record','history','record','invalid','weather'];assert.deepEqual(C.normalize(input).blockOrder,['record','history','tiles']);
-  assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(C.normalize(input)))).blockOrder,['record','history','tiles']);
+  const input=C.defaults();delete input.blockOrder;assert.deepEqual(C.normalize(input).blockOrder,['tiles','history','record','roller']);
+  input.blockOrder=['record','history','record','invalid','weather'];assert.deepEqual(C.normalize(input).blockOrder,['record','history','tiles','roller']);
+  assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(C.normalize(input)))).blockOrder,['record','history','tiles','roller']);
 });
 test('sunrise range uses the selected location date and falls back visibly for missing or future sunrise',()=>{
   const now=Date.parse('2026-10-17T10:00:00Z'),rise=Date.parse('2026-10-17T05:48:00Z'),weather={timezone:'Europe/Berlin',days:[{day:'2026-10-17',sunrise:rise}]};
@@ -271,7 +271,7 @@ test('the 1.4.3 standard portrait overview matches the approved taller preview a
   assert.equal(board.tiles[1].valueMode,'live');assert.equal(board.tiles[1].scaleMode,'auto');
 });
 test('sunrise tile periods survive reload without changing customized layouts or live selection',()=>{
-  const board=C.defaults();board.blockOrder=['history','tiles','record'];board.tiles[0].layouts.compact={x:2,y:17,w:8,h:6};
+  const board=C.defaults();board.blockOrder=['history','tiles','record','roller'];board.tiles[0].layouts.compact={x:2,y:17,w:8,h:6};
   for(const tile of board.tiles.filter(t=>['solar','solarEnergy','dischargeEnergy'].includes(t.metric)))tile.period.mode='sunrise';
   const saved=C.normalize(JSON.parse(JSON.stringify(board)));
   assert.deepEqual(saved,board);
@@ -320,7 +320,7 @@ test('legacy weather blocks become one compact tile without moving existing layo
   const before=structuredClone(board.tiles),migrated=C.normalize(board),weather=migrated.tiles.at(-1);
   assert.deepEqual(migrated.tiles.slice(0,-1),before);assert.equal(weather.metric,'weather');
   assert.deepEqual(weather.layouts.compact,{x:0,y:27,w:12,h:4});assert.deepEqual(weather.layouts.wide,{x:0,y:8,w:12,h:4});
-  assert.deepEqual(migrated.blockOrder,['record','tiles','history']);assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(migrated))),migrated);
+  assert.deepEqual(migrated.blockOrder,['record','tiles','history','roller']);assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(migrated))),migrated);
   assert.equal(C.windowFor(weather),null);
 });
 test('weather removal remains intentional and duplicate widgets or undersized layouts cannot break the board',()=>{
@@ -437,4 +437,10 @@ test('overview height preserves independent profiles and safely migrates older l
   migrated.historyHeight={compact:456,wide:712};assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(migrated))).historyHeight,migrated.historyHeight);
   migrated.historyHeight={compact:-100,wide:100000};assert.deepEqual(C.normalize(migrated).historyHeight,{compact:300,wide:1000});
   migrated.historyHeight={compact:'url(secret)',wide:null};assert.deepEqual(C.normalize(migrated).historyHeight,{compact:465,wide:380});
+});
+test('roller block migrates without moving tiles and keeps independent dimensions in both profiles',()=>{
+ const old=C.defaults();old.blockOrder=['history','tiles','record'];delete old.rollerLayout;const layouts=structuredClone(old.tiles.map(t=>t.layouts)),m=C.normalize(old);
+ assert.deepEqual(m.tiles.map(t=>t.layouts),layouts);assert.deepEqual(m.blockOrder,['history','tiles','record','roller']);
+ m.blockOrder=['roller','tiles','history','record'];m.rollerLayout={compact:{width:8.5,height:310},wide:{width:5,height:890}};assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(m))),m);
+ m.rollerLayout.compact={width:100,height:-5};assert.deepEqual(C.normalize(m).rollerLayout.compact,{width:12,height:250});
 });

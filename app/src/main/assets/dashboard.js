@@ -17,6 +17,9 @@
       let stored;
       try { stored=JSON.parse(adapter.native?.dashboard?adapter.native.dashboard():localStorage.getItem('wattpit-dashboard-v1') || '{}'); } catch (_) { stored={}; }
       this.config=C.normalize(stored);this.saved=copy(this.config);this.history=$('miniHistory');
+      $('rollerLayoutSettings').onclick=()=>this.rollerEditor();
+      const rollerHandle=$('rollerResize');
+      rollerHandle.onpointerdown=e=>this.rollerPointerDown(e);rollerHandle.onpointermove=e=>this.rollerPointerMove(e);rollerHandle.onpointerup=e=>this.rollerPointerEnd(e,false);rollerHandle.onpointercancel=e=>this.rollerPointerEnd(e,true);rollerHandle.onlostpointercapture=e=>this.rollerPointerEnd(e,true);
       const handle=$('miniHistoryResize');
       handle.onpointerdown=event=>this.historyPointerDown(event);
       handle.onpointermove=event=>this.historyPointerMove(event);
@@ -25,7 +28,7 @@
       handle.onlostpointercapture=event=>this.historyPointerEnd(event,true);
       handle.onkeydown=event=>{
         if(!this.editing||!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;
-        event.preventDefault();this.config.historyHeight[this.profile]=event.key==='Home'?300:event.key==='End'?1000:C.clamp(this.config.historyHeight[this.profile]+(event.key==='ArrowUp'?-20:20),300,1000);this.commit();handle.focus();
+        event.preventDefault();this.config.historyHeight[this.profile]=event.key==='Home'?300:event.key==='End'?1000:C.clamp(this.config.historyHeight[this.profile]+(event.key==='ArrowUp'?-20:20),300,1000);this.commit();handle.focus({preventScroll:true});
       };
       $('addTile').onclick=()=>this.picker();
       $('editDashboard').onclick=()=>{if(this.historyDrag)this.historyPointerEnd({pointerId:this.historyDrag.pointer},true);this.editing=!this.editing;this.render();};
@@ -34,13 +37,14 @@
       this.render();
     }
     commit() {
+      const scrollX=window.scrollX,scrollY=window.scrollY;const restore=()=>window.scrollTo(scrollX,scrollY);
       this.config=C.normalize(this.config);
       try {
         const json=JSON.stringify(this.config);
         if(this.a.native?.saveDashboard) {const error=this.a.native.saveDashboard(json);if(error)throw new Error(error);}
         else localStorage.setItem('wattpit-dashboard-v1',json);
-        this.saved=copy(this.config);this.render();return true;
-      } catch(error) {this.config=copy(this.saved);this.render();this.a.toast(error.message || 'Die Übersicht konnte nicht gespeichert werden.');return false;}
+        this.saved=copy(this.config);this.render();restore();requestAnimationFrame(restore);return true;
+      } catch(error) {this.config=copy(this.saved);this.render();restore();this.a.toast(error.message || 'Die Übersicht konnte nicht gespeichert werden.');return false;}
     }
     clearCache() {this.cache.clear();this.update();}
     render() {
@@ -67,7 +71,7 @@
           if(e.target!==el)return;
           if(e.key==='Enter' || e.key===' '){e.preventDefault();this.editing?this.editor(t.id):this.choose(t.id);}
           if(this.editing && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
-            e.preventDefault();const p=t.layouts[this.profile];p.x=C.clamp(p.x+(e.key==='ArrowLeft'?-.5:e.key==='ArrowRight'?.5:0),0,12-p.w);p.y=Math.max(0,p.y+(e.key==='ArrowUp'?-.5:e.key==='ArrowDown'?.5:0));this.commit();this.elements.get(t.id)?.focus();
+            e.preventDefault();const p=t.layouts[this.profile];p.x=C.clamp(p.x+(e.key==='ArrowLeft'?-.5:e.key==='ArrowRight'?.5:0),0,12-p.w);p.y=Math.max(0,p.y+(e.key==='ArrowUp'?-.5:e.key==='ArrowDown'?.5:0));this.commit();this.elements.get(t.id)?.focus({preventScroll:true});
           }
         };
         el.addEventListener('pointerdown',e=>this.pointerDown(e,t));
@@ -80,16 +84,16 @@
       this.layout();this.update();
     }
     renderBlockOrder() {
-      const container=$('overviewBlocks'),controls=$('overviewOrder'),labels={tiles:'Kacheln mit Wetter',history:'Verlauf',record:'Start / Pause'};
+      const container=$('overviewBlocks'),controls=$('overviewOrder'),labels={roller:'Roller',tiles:'Kacheln mit Wetter',history:'Verlauf',record:'Start / Pause'};
       for(const key of this.config.blockOrder){const block=container.querySelector(`[data-overview-block="${key}"]`);if(block)container.append(block);}
       controls.hidden=!this.editing;
       controls.innerHTML='<p>Reihenfolge der Blöcke</p>'+this.config.blockOrder.map((key,i)=>`<div class="overview-order-row"><span>${labels[key]}</span><button class="quiet" data-block="${key}" data-move="-1" aria-label="${labels[key]} nach oben" ${i===0?'disabled':''}>↑</button><button class="quiet" data-block="${key}" data-move="1" aria-label="${labels[key]} nach unten" ${i===this.config.blockOrder.length-1?'disabled':''}>↓</button></div>`).join('');
-      controls.querySelectorAll('button').forEach(button=>button.onclick=()=>{const i=this.config.blockOrder.indexOf(button.dataset.block),next=i+Number(button.dataset.move);if(next<0||next>=this.config.blockOrder.length)return;[this.config.blockOrder[i],this.config.blockOrder[next]]=[this.config.blockOrder[next],this.config.blockOrder[i]];this.commit();controls.querySelector(`[data-block="${button.dataset.block}"][data-move="${button.dataset.move}"]`)?.focus();});
+      controls.querySelectorAll('button').forEach(button=>button.onclick=()=>{const i=this.config.blockOrder.indexOf(button.dataset.block),next=i+Number(button.dataset.move);if(next<0||next>=this.config.blockOrder.length)return;[this.config.blockOrder[i],this.config.blockOrder[next]]=[this.config.blockOrder[next],this.config.blockOrder[i]];this.commit();controls.querySelector(`[data-block="${button.dataset.block}"][data-move="${button.dataset.move}"]`)?.focus({preventScroll:true});});
     }
     layout() {
       const profile=this.board.clientWidth>=620?'wide':'compact';
       if(this.profile!==profile){if(this.historyDrag)this.historyPointerEnd({pointerId:this.historyDrag.pointer},true);this.profile=profile;this.render();return;}
-      this.layoutHistory();
+      this.layoutHistory();this.layoutRoller();
       this.row=this.profile==='wide'?30:26;
       const width=this.board.clientWidth;
       for(const t of this.config.tiles){const p=t.layouts[this.profile],el=this.elements.get(t.id);if(!el)continue;
@@ -101,6 +105,19 @@
       this.board.style.height=(visible.length?Math.max(...visible.map(t=>{const p=t.layouts[this.profile];return p.y+p.h;}))+(this.editing?2:0):0)*this.row+'px';
       this.fitNumbers();
     }
+    layoutRoller(){
+      const p=this.config.rollerLayout[this.profile],panel=$('rollerPanel');
+      panel.style.width=(p.width/12*100)+'%';panel.style.height=p.height+'px';
+      $('rollerLayoutSettings').hidden=!this.editing;$('rollerResize').hidden=!this.editing;panel.classList.toggle('is-editing',this.editing);
+    }
+    rollerEditor(){
+      const p={...this.config.rollerLayout[this.profile]};
+      this.a.openModal('Rollerbereich skalieren',`<p class="muted">Gilt für die ${this.profile==='wide'?'breite':'schmale'} Ansicht. Die Reihenfolge änderst du unter „Anordnen“. Inhalt bleibt bei kleiner Fläche scrollbar.</p>${field('Breite · von 12 Spalten',input('rollerBlockWidth',p.width,'type="range" min="4" max="12" step="0.5"'))}${field('Höhe · Pixel',input('rollerBlockHeight',p.height,'type="range" min="250" max="1600" step="10"'))}<button class="primary" id="saveRollerLayout">Übernehmen</button>`);
+      $('saveRollerLayout').onclick=()=>{this.config.rollerLayout[this.profile]={width:Number($('rollerBlockWidth').value),height:Number($('rollerBlockHeight').value)};if(this.commit())this.a.closeModal();};
+    }
+    rollerPointerDown(e){if(!this.editing||e.button!==0)return;e.preventDefault();this.rollerDrag={pointer:e.pointerId,x:e.clientX,y:e.clientY,origin:{...this.config.rollerLayout[this.profile]},profile:this.profile,width:$('overviewBlocks').clientWidth};e.currentTarget.setPointerCapture(e.pointerId);}
+    rollerPointerMove(e){const d=this.rollerDrag;if(!d||e.pointerId!==d.pointer)return;e.preventDefault();this.config.rollerLayout[d.profile]={width:C.clamp(Math.round((d.origin.width+(e.clientX-d.x)/d.width*12)*2)/2,4,12),height:C.clamp(Math.round(d.origin.height+e.clientY-d.y),250,1600)};this.layoutRoller();}
+    rollerPointerEnd(e,cancelled){const d=this.rollerDrag;if(!d||e.pointerId!==d.pointer)return;this.rollerDrag=null;const h=$('rollerResize');if(h.hasPointerCapture(d.pointer))h.releasePointerCapture(d.pointer);if(cancelled){this.config.rollerLayout[d.profile]=d.origin;this.layoutRoller();}else this.commit();}
     layoutHistory() {
       const height=this.config.historyHeight[this.profile];
       this.history.style.height=height+'px';$('miniHistoryResize').setAttribute('aria-valuenow',String(height));$('miniHistoryResize').setAttribute('aria-valuetext',height+' Pixel');$('miniHistorySize').textContent=height+' px · Höhe ziehen';
@@ -414,7 +431,7 @@
     }
     shortInput(n){return Math.round(n*1e6)/1e6;}
     reset() {
-      this.a.openModal('Standardübersicht wiederherstellen?',`<p class="muted">Die Kachelanordnung wird durch die schlanke Standardübersicht ersetzt. Geräte und Messdaten bleiben erhalten.</p><div class="form-actions"><button class="quiet" id="keepDashboard">Behalten</button><button class="primary" id="confirmDashboardReset">Wiederherstellen</button></div>`);
+      this.a.openModal('Standardübersicht wiederherstellen?',`<p class="muted">Alle Kacheln, Größen, Positionen, Kachelfarben und Blockreihenfolgen werden für Hoch- und Queransicht auf die Standardübersicht zurückgesetzt. Auch Verlaufshöhe und Rollergröße werden zurückgesetzt. Geräte, Rollerprofil und Messdaten bleiben erhalten.</p><div class="form-actions"><button class="quiet" id="keepDashboard">Behalten</button><button class="primary" id="confirmDashboardReset">Wiederherstellen</button></div>`);
       $('keepDashboard').onclick=()=>this.a.closeModal();$('confirmDashboardReset').onclick=()=>{this.config=C.defaults();if(this.commit())this.a.closeModal();};
     }
   }

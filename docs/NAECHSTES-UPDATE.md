@@ -1,5 +1,11 @@
 # Planung und umgesetzte Änderungen
 
+## Mit 1.5.0 umgesetzt
+
+Roller-BMS und Ladeplanung, lokale ScootPit-Kopplung, verschiebbarer und skalierbarer Rollerblock, erhaltene Scrollposition, standardmäßiger Hintergrundabruf, Herunterziehen zum Nachladen und vollständiger Dashboard-Reset. Siehe [1.5.0](releases/1.5.0.md). Die frühere Wahlpflicht für jeden Abruf aus 1.2.6 ist damit abgelöst.
+
+Weiter offen: automatische Auswertung abgeschlossener ScootPit-Fahrten, vermessener Rückspeiseweg und vollständige Verlustkurve.
+
 ## Vorgemerkt: 100-%-Referenz des SmartShunts
 
 Wunsch vom 26. Oktober 2026: Die 100-%-Referenz bei tatsächlich erreichter Vollladung prüfen und die automatische Synchronisierung des SmartShunts passend abstimmen. Dazu die aktuell verwendeten Einstellungen von Solarregler und SmartShunt gemeinsam mit einer vollständigen Ladung auswerten. Die Anzeige soll eine nachgewiesene Vollladung zuverlässig übernehmen.

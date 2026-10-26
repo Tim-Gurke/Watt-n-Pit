@@ -32,13 +32,18 @@ final class ConfigurationBackup {
             tiles.put(tile);
         }
         JSONArray order=board.getJSONArray("blockOrder");Set<String> blocks=new HashSet<>();
-        if(order.length()!=3&&order.length()!=4)throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
-        for(int i=0;i<order.length();i++)if(!Arrays.asList("tiles","weather","history","record").contains(order.getString(i))||!blocks.add(order.getString(i)))throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
+        if(order.length()!=3&&order.length()!=4&&order.length()!=5)throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
+        for(int i=0;i<order.length();i++)if(!Arrays.asList("tiles","weather","history","record","roller").contains(order.getString(i))||!blocks.add(order.getString(i)))throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
         if(!blocks.containsAll(Arrays.asList("tiles","history","record")))throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
         JSONObject dashboard=new JSONObject().put("version",1).put("blockOrder",order).put("tiles",tiles);
         if(board.optInt("dischargeSignVersion")==1)dashboard.put("dischargeSignVersion",1);
         if(board.optInt("energyFlowVersion")==1)dashboard.put("energyFlowVersion",1);
         if(board.has("energyPeriod"))dashboard.put("energyPeriod",pick(board.getJSONObject("energyPeriod"),"mode","amount","unit","aggregate","resetAt","from","to"));
+        if(board.has("rollerLayout")){
+            JSONObject given=board.getJSONObject("rollerLayout"),clean=new JSONObject();
+            for(String profile:new String[]{"compact","wide"}){JSONObject row=given.optJSONObject(profile);double width=row==null?12:row.optDouble("width",12),height=row==null?650:row.optDouble("height",650);if(!Double.isFinite(width)||!Double.isFinite(height))throw new IllegalArgumentException("Ungültige Rollergröße");clean.put(profile,new JSONObject().put("width",Math.round(Math.max(4,Math.min(12,width))*2)/2.0).put("height",Math.round(Math.max(250,Math.min(1600,height)))));}
+            dashboard.put("rollerLayout",clean);
+        }
         if(board.has("historyHeight")){
             JSONObject heights=board.getJSONObject("historyHeight"),clean=new JSONObject();
             for(String profile:new String[]{"compact","wide"}){
