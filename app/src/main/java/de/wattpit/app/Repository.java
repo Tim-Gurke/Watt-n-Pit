@@ -198,6 +198,35 @@ final class Repository {
             prefs.edit().putString("archiveClock."+mac,saved.toString()).apply();
         }catch(JSONException ignored){}
     }
+    private static JSONObject archiveClockEvidence(ArchiveCodec.Clock clock)throws JSONException{
+        JSONArray anchors=new JSONArray(),boots=new JSONArray();byte[] a=clock.anchorBytes(),b=clock.rebootBytes();
+        for(int i=0;i+8<=a.length;i+=8)anchors.put(new JSONArray().put(ArchiveCodec.u(a,i,4)).put(ArchiveCodec.u(a,i+4,4)));
+        for(int i=0;i+4<=b.length;i+=4)boots.put(ArchiveCodec.u(b,i,4));
+        return new JSONObject().put("anchors",anchors).put("boots",boots)
+            .put("anchorsComplete",clock.historyComplete(0xec63)).put("bootsComplete",clock.historyComplete(0xec64));
+    }
+    /** Optional evidence only: the saved mapping, preflight and history are untouched. */
+    void saveArchiveTimeDiagnostic(String mac,ArchiveTimeReference read,ArchiveCodec.Clock clock,boolean complete,String planBefore){
+        try{
+            Long mapped=clock.millis(read.counter),difference=read.differenceMillis(mapped);
+            JSONObject before=new JSONObject(prefs.getString("archiveTimeDiagnostic."+mac,"{}"));
+            JSONObject previousReferences=complete&&before.optLong("wallBefore")==read.wallBefore&&before.optLong("deviceCounter")==read.counter
+                ?before.optJSONObject("referencesBeforeRead"):null;
+            if(previousReferences==null)previousReferences=archiveClockEvidence(clock);
+            JSONObject evidence=new JSONObject().put("version",1).put("referencesComplete",complete)
+                .put("deviceCounter",read.counter).put("wallBefore",read.wallBefore).put("wallAfter",read.wallAfter)
+                .put("observedAt",read.observedMillis).put("readDurationMs",read.roundTripMillis)
+                .put("wallElapsedMs",read.wallElapsedMillis).put("uncertaintyMs",read.uncertaintyMillis).put("trusted",read.trusted)
+                .put("mappedNow",mapped==null?JSONObject.NULL:mapped).put("phoneMinusArchiveMs",difference==null?JSONObject.NULL:difference)
+                .put("referencesBeforeRead",previousReferences).put("references",archiveClockEvidence(clock)).put("planBeforeRead",new JSONObject(planBefore));
+            prefs.edit().putString("archiveTimeDiagnostic."+mac,evidence.toString()).apply();
+        }catch(JSONException|IllegalArgumentException ignored){/* Diagnostics cannot interrupt an archive read. */}
+    }
+    JSONObject archiveTimeDiagnostic(String mac)throws JSONException{
+        return new JSONObject().put("lastRead",new JSONObject(prefs.getString("archiveTimeDiagnostic."+mac,"{}")))
+            .put("cachedClock",new JSONObject(prefs.getString("archiveClock."+mac,"{}")))
+            .put("cachedPlan",new JSONObject(prefs.getString("archivePlan."+mac,"{}")));
+    }
     synchronized void message(String text) { event = text; eventId++; }
 
     synchronized void saveDevice(JSONObject input) throws Exception {

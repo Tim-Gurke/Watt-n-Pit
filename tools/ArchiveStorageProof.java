@@ -208,6 +208,31 @@ public final class ArchiveStorageProof {
                 int requests=captureImport(history,peer);require(requests>0&&requests<100,"three missing captured hours use fewer than 100 block reads without replaying the older archive");captureValues(db,peer);
                 require(captureImport(history,peer)==0,"completed three-hour recovery causes no repeated transfer");System.out.println("RESULT captured_three_hour_reads="+requests);
             }
+        }else if(args[1].equals("clock_diagnostic_write")){
+            long observed=epoch+630000;ArchiveCodec.Clock saved=clock(epoch);
+            byte[] bootAnchor=new byte[8];System.arraycopy(ArchiveCodec.le(50,4),0,bootAnchor,0,4);System.arraycopy(ArchiveCodec.le(epoch/1000+50,4),0,bootAnchor,4,4);saved.anchors(bootAnchor);
+            saved.reboots(ArchiveCodec.le(50,4));snapshot(repo,"clock-proof","solar",100,observed,saved,0xec8a);
+            repo.saveArchiveClock("clock-proof",100,saved);
+            String plan=repo.prefs.getString("archivePlan.clock-proof",""),cached=repo.prefs.getString("archiveClock.clock-proof","");
+            Reading value=new Reading();value.timestamp=epoch+100000;value.device="clock-proof";value.kind="solar";value.origin="archive";value.period=30;value.solar=117.0;history.insert(value);
+            ArchiveTimeReference read=new ArchiveTimeReference(100,observed,observed+200,10,210);
+            repo.saveArchiveTimeDiagnostic("clock-proof",read,saved,false,plan);
+            byte[] freshAnchor=bootAnchor.clone();System.arraycopy(ArchiveCodec.le(90,4),0,freshAnchor,0,4);System.arraycopy(ArchiveCodec.le(epoch/1000+90,4),0,freshAnchor,4,4);saved.anchors(freshAnchor);
+            repo.saveArchiveTimeDiagnostic("clock-proof",read,saved,true,plan);
+            JSONObject exported=repo.archiveTimeDiagnostic("clock-proof"),evidence=exported.getJSONObject("lastRead");
+            require(evidence.getLong("phoneMinusArchiveMs")==530100&&evidence.getLong("uncertaintyMs")==1100&&evidence.getBoolean("trusted"),"native diagnostic records a bracketed positive phone-minus-archive offset with uncertainty");
+            require(evidence.getBoolean("referencesComplete")&&evidence.getJSONObject("references").getJSONArray("boots").getLong(0)==50,"native diagnostic includes boot boundaries and reference completion");
+            require(evidence.getJSONObject("referencesBeforeRead").getJSONArray("anchors").length()==2&&evidence.getJSONObject("references").getJSONArray("anchors").length()==3&&evidence.getJSONObject("planBeforeRead").toString().equals(new JSONObject(plan).toString()),"diagnostic retains the pre-read reference and the exact previous archive plan");
+            require(plan.equals(repo.prefs.getString("archivePlan.clock-proof",""))&&cached.equals(repo.prefs.getString("archiveClock.clock-proof","")),"diagnostic changes neither archive planning nor the clock cache");
+            try(Cursor r=db.rawQuery("SELECT ts,solar FROM readings WHERE device='clock-proof'",null)){
+                require(r.moveToFirst()&&r.getLong(0)==epoch+100000&&r.getDouble(1)==117.0&&!r.moveToNext(),"clock comparison leaves stored timestamps and measurements untouched");
+            }
+            repo.saveArchiveTimeDiagnostic("clock-jump",new ArchiveTimeReference(100,observed,observed+60000,10,210),saved,true,"{}");
+            require(repo.archiveTimeDiagnostic("clock-jump").getJSONObject("lastRead").isNull("phoneMinusArchiveMs"),"a phone-clock jump is exported as untrusted instead of a usable offset");
+        }else if(args[1].equals("clock_diagnostic_resume")){
+            JSONObject evidence=repo.archiveTimeDiagnostic("clock-proof").getJSONObject("lastRead");
+            require(evidence.getLong("phoneMinusArchiveMs")==530100&&evidence.getBoolean("referencesComplete"),"clock diagnostic survives a fresh JVM without reconnecting to hardware");
+            require(repo.archiveTimeDiagnostic("new-device").getJSONObject("lastRead").length()==0,"a device without a clock read remains explicitly unevaluated");
         }else if(args[1].equals("atomic_write")){
             history.archiveBlock("atomic","solar","solar",0xec8a,30,Arrays.asList(new long[]{epoch+10000,30}),Arrays.asList(10.0),Arrays.asList(new long[]{epoch+10000,epoch+10000}));
             db.execSQL("CREATE TRIGGER fail_ack BEFORE INSERT ON archive_coverage BEGIN SELECT RAISE(ABORT,'injected checkpoint failure'); END");

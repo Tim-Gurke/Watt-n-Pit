@@ -12,6 +12,7 @@ import de.wattpit.app.core.ArchiveDiagnostic;
 import de.wattpit.app.core.ArchiveLink;
 import de.wattpit.app.core.ArchiveSyncPlan;
 import de.wattpit.app.core.ArchiveTransferPlan;
+import de.wattpit.app.core.ArchiveTimeReference;
 import de.wattpit.app.core.VictronSettings;
 import org.json.*;
 import java.io.IOException;
@@ -257,10 +258,15 @@ public final class ArchiveService extends Service {
             connect(adapter.getRemoteDevice(mac));
             boolean settingsAvailable=readSettings();
             stage("Archivmetadaten lesen");
+            long clockWallBefore=System.currentTimeMillis(),clockElapsedBefore=SystemClock.elapsedRealtime();
             long currentUptime=ArchiveCodec.u(require(0xec5a),0,4);
+            long clockElapsedAfter=SystemClock.elapsedRealtime(),clockWallAfter=System.currentTimeMillis();
+            ArchiveTimeReference timeRead=new ArchiveTimeReference(currentUptime,clockWallBefore,clockWallAfter,clockElapsedBefore,clockElapsedAfter);
+            String planBeforeRead=repository.prefs.getString("archivePlan."+mac,"{}");
             long metadataAt=System.currentTimeMillis();
             byte[] ids=require(0xec5d);if(ids.length!=16)throw new IllegalArgumentException("Unbekannte Archivkanäle.");
             ArchiveCodec.Clock clock=repository.archiveClock(mac,currentUptime);
+            repository.saveArchiveTimeDiagnostic(mac,timeRead,clock,false,planBeforeRead);
             byte[] anchor=read(0xec5f);if(anchor!=null)clock.anchors(anchor);repository.saveArchiveClock(mac,currentUptime,clock);
             // Read historical anchors and boot boundaries, including paginated older entries.
             stage("Archivzeiten zuordnen");
@@ -279,6 +285,9 @@ public final class ArchiveService extends Service {
                 repository.saveArchiveClock(mac,currentUptime,clock);
             }
             if(anchor!=null)clock.anchors(anchor);repository.saveArchiveClock(mac,currentUptime,clock);
+            repository.saveArchiveTimeDiagnostic(mac,timeRead,clock,true,planBeforeRead);
+            Long clockDifference=timeRead.differenceMillis(clock.millis(currentUptime));
+            trace(clockDifference==null?"Archivzeit · Uhrvergleich noch nicht sicher zuordenbar":String.format(Locale.ROOT,"Archivzeit · Handy minus Archiv %.1f s · Messunsicherheit bis %.1f s",clockDifference/1000.0,timeRead.uncertaintyMillis/1000.0));
             stage("Archivkanäle lesen");
             int auxMode=-1;byte[] aux=read(0xeef8);if(aux!=null&&aux.length>0)auxMode=aux[0]&255;
             Map<Integer,List<ArchiveCodec.Level>> levels=new LinkedHashMap<>();Map<Integer,ArchiveCodec.Field> fields=new LinkedHashMap<>();Map<Integer,Integer> batches=new HashMap<>(),registers=new HashMap<>();
