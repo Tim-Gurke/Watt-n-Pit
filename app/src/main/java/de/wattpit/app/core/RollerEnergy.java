@@ -15,7 +15,7 @@ public final class RollerEnergy {
         private long gapFrom;
         public void start(long now){started=now;ended=lastAt=observedMillis=gapMillis=0;batteryWh=inputWh=lastPower=0;active=true;gapFrom=now;}
         public void sample(long now,double watts,double idle,double efficiency){
-            if(!active||now<started||!Double.isFinite(watts))return;
+            if(!active||now<started||!Double.isFinite(watts)||lastAt==0&&now<gapFrom)return;
             double p=Math.max(0,watts);
             if(lastAt>0){long dt=now-lastAt;if(dt<=0)return;
                 if(dt<=MAX_GAP_MS){batteryWh+=(lastPower+p)*.5*dt/3600000.0;
