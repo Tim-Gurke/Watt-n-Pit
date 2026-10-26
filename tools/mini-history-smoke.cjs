@@ -50,7 +50,11 @@ const path=require('node:path');
  await page.keyboard.press('Home');assert.equal(await card.evaluate(el=>el.offsetHeight),300);await page.keyboard.press('End');assert.equal(await card.evaluate(el=>el.offsetHeight),1000);
  await page.evaluate(()=>window.failSave=true);await page.keyboard.press('ArrowUp');assert.equal(await card.evaluate(el=>el.offsetHeight),1000,'failed storage must restore the saved height');await page.evaluate(()=>window.failSave=false);
  await page.locator('#editDashboard').click();assert.equal(await handle.isVisible(),false);
- await page.reload();assert.equal(await card.evaluate(el=>el.offsetHeight),1000);await page.setViewportSize({width:390,height:844});await page.locator('#layoutProfile').filter({hasText:'Schmale Ansicht'}).waitFor();assert.equal(await card.evaluate(el=>el.offsetHeight),before.height+110);
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('detail-board')).historyHeight.wide),1000,'the bridge must have persisted the wide height before navigation');
+ await page.reload();
+ // Reload can finish before the ResizeObserver has applied the restored profile.
+ await page.waitForFunction(()=>dashboard.profile==='wide'&&document.getElementById('miniHistory').offsetHeight===1000);
+ assert.equal(await card.evaluate(el=>el.offsetHeight),1000);await page.setViewportSize({width:390,height:844});await page.locator('#layoutProfile').filter({hasText:'Schmale Ansicht'}).waitFor();assert.equal(await card.evaluate(el=>el.offsetHeight),before.height+110);
  const layoutBounds=()=>page.evaluate(()=>{
   const bounds=document.getElementById('miniChart').getBoundingClientRect(),outer=document.getElementById('miniHistory').getBoundingClientRect();
   return {width:innerWidth,scrollWidth:document.body.scrollWidth,profile:dashboard.profile,boardWidth:dashboard.board.clientWidth,chart:{top:bounds.top,bottom:bounds.bottom,height:bounds.height},card:{top:outer.top,bottom:outer.bottom,height:outer.height}};
