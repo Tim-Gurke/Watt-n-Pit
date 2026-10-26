@@ -266,6 +266,7 @@ public final class ArchiveService extends Service {
             long metadataAt=System.currentTimeMillis();
             byte[] ids=require(0xec5d);if(ids.length!=16)throw new IllegalArgumentException("Unbekannte Archivkanäle.");
             ArchiveCodec.Clock clock=repository.archiveClock(mac,currentUptime);
+            ArchiveCodec.Clock cachedBefore=clock.copy();
             repository.saveArchiveTimeDiagnostic(mac,timeRead,clock,false,planBeforeRead);
             byte[] anchor=read(0xec5f);if(anchor!=null)clock.anchors(anchor);repository.saveArchiveClock(mac,currentUptime,clock);
             // Read historical anchors and boot boundaries, including paginated older entries.
@@ -288,6 +289,9 @@ public final class ArchiveService extends Service {
             repository.saveArchiveTimeDiagnostic(mac,timeRead,clock,true,planBeforeRead);
             Long clockDifference=timeRead.differenceMillis(clock.millis(currentUptime));
             trace(clockDifference==null?"Archivzeit · Uhrvergleich noch nicht sicher zuordenbar":String.format(Locale.ROOT,"Archivzeit · Handy minus Archiv %.1f s · Messunsicherheit bis %.1f s",clockDifference/1000.0,timeRead.uncertaintyMillis/1000.0));
+            stage("Archivzeiten berichtigen");
+            int retimed=repository.alignArchiveClock(mac,kind,timeRead,clock,planBeforeRead,cachedBefore,this::maintain);
+            trace("Archivzeiten · "+retimed+" gespeicherte Zeitpunkte berichtigt · Originalzeiten erhalten");
             stage("Archivkanäle lesen");
             int auxMode=-1;byte[] aux=read(0xeef8);if(aux!=null&&aux.length>0)auxMode=aux[0]&255;
             Map<Integer,List<ArchiveCodec.Level>> levels=new LinkedHashMap<>();Map<Integer,ArchiveCodec.Field> fields=new LinkedHashMap<>();Map<Integer,Integer> batches=new HashMap<>(),registers=new HashMap<>();
@@ -359,7 +363,7 @@ public final class ArchiveService extends Service {
                     if(block.values[i]==null){missing++;continue;}
                     long uptime=block.time-(long)i*block.period;Long time=clock.millis(uptime);
                     if(time==null||time<0||time>System.currentTimeMillis()+300000){unmappedValues++;continue;}
-                    times.add(new long[]{time,block.period});values.add(block.values[i]);
+                    times.add(new long[]{time,block.period,uptime});values.add(block.values[i]);
                 }
                 // Keep valid returned samples even when the device has changed archive tiers.
                 // Only the actual returned times are covered; the requested range stays pending.

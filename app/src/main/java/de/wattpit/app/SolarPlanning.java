@@ -199,7 +199,8 @@ final class SolarPlanning extends SQLiteOpenHelper {
         worker.execute(()->{JSONObject result=new JSONObject();try{
             if(repository.archiveBusy)return;long now=System.currentTimeMillis();String[] devices=devices();String source=source(devices());
             JSONObject weather=new JSONObject(repository.prefs.getString("weatherCache","{}"));SQLiteDatabase db=getWritableDatabase();long since=now-7L*86400000;
-            boolean rebuild=repository.prefs.getInt("planningEnergyVersion."+source,0)<1472;
+            String timeRevision=repository.db.archiveClockRevision();
+            boolean rebuild=repository.prefs.getInt("planningEnergyVersion."+source,0)<1474||!timeRevision.equals(repository.prefs.getString("planningArchiveTimeRevision."+source,""));
             if(rebuild){try(Cursor c=db.rawQuery("SELECT MIN(start) FROM observations WHERE source=?",new String[]{source})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(now-400L*86400000,Math.min(since,c.getLong(0)));}}
             else try(Cursor c=db.rawQuery("SELECT MAX(end) FROM observations WHERE source=? AND end<=?",new String[]{source,""+now})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(since,c.getLong(0)-2L*86400000);}
             NavigableMap<Long,ContextEntry> contexts=new TreeMap<>();List<Long> changes=new ArrayList<>();
@@ -214,7 +215,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
                 if(!annotate(row,contexts,profiles,weather,currentKey,solarKey,now))continue;
                 ContentValues v=new ContentValues();v.put("start",from);v.put("end",to);v.put("source",source);v.put("payload",row.toString());db.insertWithOnConflict("observations",null,v,SQLiteDatabase.CONFLICT_REPLACE);
             }db.delete("observations","end<?",new String[]{""+(now-400L*86400000)});db.delete("contexts","at<?",new String[]{""+(now-410L*86400000)});db.setTransactionSuccessful();}finally{db.endTransaction();}
-            if(observations.length()>0)repository.prefs.edit().putInt("planningEnergyVersion."+source,1472).apply();
+            if(observations.length()>0)repository.prefs.edit().putInt("planningEnergyVersion."+source,1474).putString("planningArchiveTimeRevision."+source,timeRevision).apply();
             JSONArray samples=new JSONArray(),forecasts=new JSONArray();
             try(Cursor c=db.rawQuery("SELECT payload FROM observations WHERE source=? ORDER BY start DESC LIMIT 1300",new String[]{source})){while(c.moveToNext()){JSONObject row=new JSONObject(c.getString(0));if(!row.has("solarKey")&&currentKey.equals(row.optString("key")))row.put("solarKey",solarKey);samples.put(row);}}
             // One original eligible prediction per interval keeps the bridge payload small.
@@ -226,7 +227,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
     }
     Future<JSONObject> diagnosticSnapshot(){return worker.submit(()->{
         long now=System.currentTimeMillis();String[] selected=devices();String currentSource=source(selected);SQLiteDatabase db=getReadableDatabase();
-        JSONObject result=new JSONObject().put("format","Watt-n-Pit-Diagnose").put("version",1).put("appVersion",BuildConfig.VERSION_NAME).put("learningAlgorithm",1472).put("at",now)
+        JSONObject result=new JSONObject().put("format","Watt-n-Pit-Diagnose").put("version",1).put("appVersion",BuildConfig.VERSION_NAME).put("learningAlgorithm",1474).put("at",now)
             .put("timezone",java.util.TimeZone.getDefault().getID()).put("source",currentSource).put("equipment",repository.equipment()).put("setup",setup())
             .put("weather",new JSONObject(repository.prefs.getString("weatherCache","{}"))).put("history",repository.db.stats())
             .put("capacity",repository.prefs.getFloat("capacity",100f)).put("sampleSeconds",repository.prefs.getInt("sampleSeconds",10));

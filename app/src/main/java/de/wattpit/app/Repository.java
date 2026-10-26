@@ -137,8 +137,8 @@ final class Repository {
         try{
             JSONObject saved=new JSONObject(prefs.getString("archivePlan."+mac,"{}"));
             if(!kind.equals(saved.optString("kind"))||!saved.has("at")||now<saved.getLong("at"))return true;
-            ArchiveCodec.Clock clock=new ArchiveCodec.Clock();
-            clock.anchors(Base64.getDecoder().decode(saved.getString("anchors")));clock.reboots(Base64.getDecoder().decode(saved.getString("reboots")));
+            if(saved.optInt("mappingVersion")!=2||saved.optLong("timeRevision")!=db.archiveClockState(mac).optLong("revision"))return true;
+            ArchiveCodec.Clock clock=decodeArchiveClock(saved);
             if(!clock.hasAnchors())return true;
             long deviceNow=saved.getLong("uptime")+(now-saved.getLong("at"))/1000;
             long before=now-Math.max(1,prefs.getInt("sampleSeconds",10))*1500L;
@@ -161,8 +161,8 @@ final class Repository {
             JSONArray tiers=new JSONArray();for(ArchiveCodec.Level level:levels.get(ch))tiers.put(new JSONArray().put(level.capacity).put(level.period).put(level.newest));
             channels.put(new JSONObject().put("field",fields.get(ch).name).put("register",registers.get(ch)).put("levels",tiers));
         }
-        JSONObject plan=new JSONObject().put("kind",kind).put("uptime",uptime).put("at",at).put("channels",channels)
-                .put("anchors",Base64.getEncoder().encodeToString(clock.anchorBytes())).put("reboots",Base64.getEncoder().encodeToString(clock.rebootBytes()));
+        JSONObject plan=encodeArchiveClock(clock).put("kind",kind).put("uptime",uptime).put("at",at).put("channels",channels).put("mappingVersion",2);
+        try{plan.put("timeRevision",db.archiveClockState(mac).optLong("revision"));}catch(Exception e){throw new IllegalStateException("Archivzeit konnte nicht gelesen werden.",e);}
         if(!prefs.edit().putString("archivePlan."+mac,plan.toString()).commit())throw new IllegalStateException("Archivplan konnte nicht gespeichert werden.");
     }
     void archiveAttemptStarted(String mac){
@@ -182,21 +182,40 @@ final class Repository {
     }
     ArchiveCodec.Clock archiveClock(String mac,long uptime){
         ArchiveCodec.Clock clock=new ArchiveCodec.Clock();
-        try{JSONObject saved=new JSONObject(prefs.getString("archiveClock."+mac,"{}"));
+        try{JSONObject saved=db.archiveClockState(mac);if(saved.length()==0)saved=new JSONObject(prefs.getString("archiveClock."+mac,"{}"));
             if(saved.has("uptime")&&uptime>=saved.getLong("uptime")){
-                clock=ArchiveCodec.Clock.restore(saved.getLong("uptime"),uptime,Base64.getDecoder().decode(saved.getString("anchors")),Base64.getDecoder().decode(saved.getString("reboots")));
-                if(saved.optBoolean("anchorsComplete"))clock.completeHistory(0xec63);
-                if(saved.optBoolean("rebootsComplete"))clock.completeHistory(0xec64);
-                return clock;
+                return decodeArchiveClock(saved);
             }
-        }catch(JSONException|IllegalArgumentException ignored){return new ArchiveCodec.Clock();}
+        }catch(Exception ignored){return new ArchiveCodec.Clock();}
         return clock;
     }
+    static ArchiveCodec.Clock decodeArchiveClock(JSONObject saved){
+        ArchiveCodec.Clock clock=new ArchiveCodec.Clock();clock.anchors(Base64.getDecoder().decode(saved.optString("anchors")));clock.reboots(Base64.getDecoder().decode(saved.optString("reboots")));
+        clock.localBytes(Base64.getDecoder().decode(saved.optString("localReferences")));
+        if(saved.optBoolean("anchorsComplete"))clock.completeHistory(0xec63);if(saved.optBoolean("rebootsComplete"))clock.completeHistory(0xec64);return clock;
+    }
+    private static JSONObject encodeArchiveClock(ArchiveCodec.Clock clock)throws JSONException{
+        return new JSONObject().put("anchors",Base64.getEncoder().encodeToString(clock.anchorBytes())).put("reboots",Base64.getEncoder().encodeToString(clock.rebootBytes()))
+            .put("localReferences",Base64.getEncoder().encodeToString(clock.localBytes())).put("anchorsComplete",clock.historyComplete(0xec63)).put("rebootsComplete",clock.historyComplete(0xec64));
+    }
     void saveArchiveClock(String mac,long uptime,ArchiveCodec.Clock clock){
-        try{JSONObject saved=new JSONObject().put("uptime",uptime).put("anchors",Base64.getEncoder().encodeToString(clock.anchorBytes())).put("reboots",Base64.getEncoder().encodeToString(clock.rebootBytes()))
-                .put("anchorsComplete",clock.historyComplete(0xec63)).put("rebootsComplete",clock.historyComplete(0xec64));
+        try{JSONObject saved=encodeArchiveClock(clock).put("uptime",uptime);
             prefs.edit().putString("archiveClock."+mac,saved.toString()).apply();
         }catch(JSONException ignored){}
+    }
+    int alignArchiveClock(String mac,String kind,ArchiveTimeReference read,ArchiveCodec.Clock clock,String planBefore,ArchiveCodec.Clock cachedBefore,HistoryDb.ArchiveCheck check)throws Exception{
+        JSONObject previous=db.archiveClockState(mac),stored=previous.length()>0?previous:new JSONObject(planBefore);
+        ArchiveCodec.Clock before=stored.has("anchors")?decodeArchiveClock(stored):cachedBefore;
+        boolean reset=stored.has("uptime")&&read.counter<stored.getLong("uptime");
+        Long oldTime=before.millis(read.counter);clock.observe(read);
+        JSONObject next=encodeArchiveClock(clock);boolean changed=previous.length()==0||reset;
+        for(String key:new String[]{"anchors","reboots","localReferences"})if(!next.optString(key).equals(previous.optString(key)))changed=true;
+        next.put("mappingVersion",2).put("uptime",read.counter).put("at",read.observedMillis).put("kind",kind)
+            .put("revision",previous.optLong("revision")+(changed?1:0)).put("counterReset",reset)
+            .put("phoneMinusArchiveBeforeMs",oldTime==null?JSONObject.NULL:read.observedMillis-oldTime)
+            .put("phoneMinusArchiveAfterMs",read.observedMillis-clock.millis(read.counter));
+        int moved=db.alignArchiveTimes(mac,before,clock,next,reset,changed,check);
+        saveArchiveClock(mac,read.counter,clock);if(changed)invalidateStats();return moved;
     }
     private static JSONObject archiveClockEvidence(ArchiveCodec.Clock clock)throws JSONException{
         JSONArray anchors=new JSONArray(),boots=new JSONArray();byte[] a=clock.anchorBytes(),b=clock.rebootBytes();
@@ -223,9 +242,10 @@ final class Repository {
         }catch(JSONException|IllegalArgumentException ignored){/* Diagnostics cannot interrupt an archive read. */}
     }
     JSONObject archiveTimeDiagnostic(String mac)throws JSONException{
-        return new JSONObject().put("lastRead",new JSONObject(prefs.getString("archiveTimeDiagnostic."+mac,"{}")))
+        JSONObject result=new JSONObject().put("lastRead",new JSONObject(prefs.getString("archiveTimeDiagnostic."+mac,"{}")))
             .put("cachedClock",new JSONObject(prefs.getString("archiveClock."+mac,"{}")))
             .put("cachedPlan",new JSONObject(prefs.getString("archivePlan."+mac,"{}")));
+        try{result.put("alignment",db.archiveClockState(mac));}catch(Exception e){result.put("alignmentError","Archivzeit gerade nicht verfügbar.");}return result;
     }
     synchronized void message(String text) { event = text; eventId++; }
 

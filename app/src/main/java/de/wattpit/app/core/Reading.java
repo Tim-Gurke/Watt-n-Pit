@@ -9,6 +9,7 @@ public final class Reading {
     public Double voltage, current, power, soc, solar, yieldWh, ttg, consumed, temperature, aux, load;
     public Double pvVoltage,auxRaw;
     public int period;
+    public Long archiveCounter,archiveOriginalTs;
     public Integer state, error, alarm;
 
     /** Also repairs native backups written before the Instant Readout NA fix. */

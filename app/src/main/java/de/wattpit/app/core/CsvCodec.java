@@ -8,8 +8,8 @@ import java.util.*;
 public final class CsvCodec {
     private CsvCodec() { }
     public static final String[] FIELDS = {"timestamp", "date", "clock", "voltage", "current", "power", "soc",
-            "solar", "yieldWh", "ttg", "consumed", "temperature", "aux", "load", "state", "error", "alarm", "kind", "device", "origin", "pvVoltage", "auxRaw", "period"};
-    public static final String EXPORT_HEADER = "timestamp;device;kind;origin;voltage;current;power;soc;solar;yieldWh;ttg;consumed;temperature;aux;load;state;error;alarm;pvVoltage;auxRaw;period";
+            "solar", "yieldWh", "ttg", "consumed", "temperature", "aux", "load", "state", "error", "alarm", "kind", "device", "origin", "pvVoltage", "auxRaw", "period", "archiveCounter", "archiveOriginalTs"};
+    public static final String EXPORT_HEADER = "timestamp;device;kind;origin;voltage;current;power;soc;solar;yieldWh;ttg;consumed;temperature;aux;load;state;error;alarm;pvVoltage;auxRaw;period;archiveCounter;archiveOriginalTs";
 
     public static final class Table {
         public final List<String> headers;
@@ -143,6 +143,11 @@ public final class CsvCodec {
         r.alarm = integer(table, row, map, "alarm");
         r.pvVoltage=number(table,row,map,"pvVoltage");r.auxRaw=number(table,row,map,"auxRaw");
         Integer period=integer(table,row,map,"period");r.period=period==null?0:Math.max(0,Math.min(86400,period));
+        if(r.origin.equals("archive")){
+            String counter=cell(row,map,"archiveCounter"),original=cell(row,map,"archiveOriginalTs");
+            if(!counter.isEmpty()){r.archiveCounter=Long.parseLong(counter);if(r.archiveCounter<0||r.archiveCounter>=ArchiveCodec.NA)throw new IllegalArgumentException("Ungültiger Archivzähler.");}
+            if(!original.isEmpty()){r.archiveOriginalTs=Long.parseLong(original);if(r.archiveOriginalTs<0)throw new IllegalArgumentException("Ungültige ursprüngliche Archivzeit.");}
+        }
         boolean unavailableCurrent = r.discardUnavailableCurrent();
         if (!unavailableCurrent) r.calculatePower();
         if (r.soc != null && (r.soc < 0 || r.soc > 100)) throw new IllegalArgumentException("SOC muss zwischen 0 und 100 liegen.");
@@ -204,7 +209,7 @@ public final class CsvCodec {
     public static String exportRow(Reading r) {
         Object[] values = {Instant.ofEpochMilli(r.timestamp).toString(), r.device, r.kind, r.origin,
                 r.voltage, r.current, r.power, r.soc, r.solar, r.yieldWh, r.ttg, r.consumed,
-                r.temperature, r.aux, r.load, r.state, r.error, r.alarm, r.pvVoltage, r.auxRaw, r.period};
+                r.temperature, r.aux, r.load, r.state, r.error, r.alarm, r.pvVoltage, r.auxRaw, r.period, r.archiveCounter, r.archiveOriginalTs};
         List<String> cells = new ArrayList<>();
         for (Object value : values) {
             String s = value == null ? "" : value.toString();

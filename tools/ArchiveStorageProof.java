@@ -124,9 +124,9 @@ public final class ArchiveStorageProof {
             db.execSQL("INSERT INTO device_settings VALUES('na-shunt',?,?,?)",new Object[]{start,end,"{\"values\":{\"test\":1}}"});
             double before=history.energyFlow(start,end,"all").getJSONObject("consumption").getJSONObject("summary").getDouble("last");
             require(before < -100,"legacy unavailable-current records reproduce a false consumption drop through actual HistoryDb");
-            db.execSQL("PRAGMA user_version=6");history.close();
+            db.execSQL("ALTER TABLE readings DROP COLUMN archiveCounter");db.execSQL("ALTER TABLE readings DROP COLUMN archiveOriginalTs");db.execSQL("PRAGMA user_version=6");history.close();
             history=new HistoryDb(null);db=history.getWritableDatabase();
-            try(Cursor c=db.rawQuery("PRAGMA user_version",null)){c.moveToFirst();require(c.getInt(0)==7,"opening a version-6 database automatically runs the current repair");}
+            try(Cursor c=db.rawQuery("PRAGMA user_version",null)){c.moveToFirst();require(c.getInt(0)==8,"opening a version-6 database automatically runs the current repair and timestamp metadata upgrade");}
             require(count(db,"readings","1=1")==15&&count(db,"readings","current=2097.151")==0,"repair keeps every sample and removes both unavailable currents");
             require(count(db,"readings","device='na-shunt' AND origin='live' AND current IS NULL AND power IS NULL AND alarm=0")==2,"repair clears unavailable current and derived power while retaining alarm data");
             require(count(db,"readings","ts="+(start+60000)+" AND voltage=13.4 AND soc=100 AND period=10")==1,"repair retains voltage, SOC and sample resolution from the affected row");
@@ -144,7 +144,9 @@ public final class ArchiveStorageProof {
         System.setProperty("wattpit.test.database",args[0]);Class.forName("org.sqlite.JDBC");
         Repository repo=Repository.get(new TestContext(Path.of(args[0]+".prefs")));HistoryDb history=repo.db;SQLiteDatabase db=history.getWritableDatabase();
         long epoch=1700000000000L;ArchiveCodec.Clock c=clock(epoch);
-        if(args[1].equals("unavailable_current")){
+        if(args[1].startsWith("clock_alignment_")){
+            ArchiveClockProof.run(repo,args[1]);
+        }else if(args[1].equals("unavailable_current")){
             unavailableCurrentRepair(args[0]+".unavailable");
         }else if(args[1].equals("weather_contract")){
             WeatherContractProof.run(Path.of(args[2]).getParent().getParent().resolve("weather"),Path.of(args[3]));

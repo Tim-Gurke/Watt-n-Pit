@@ -1,5 +1,11 @@
 # Planung und umgesetzte Änderungen
 
+## Vorgemerkt: 100-%-Referenz des SmartShunts
+
+Wunsch vom 26. Oktober 2026: Die 100-%-Referenz bei tatsächlich erreichter Vollladung prüfen und die automatische Synchronisierung des SmartShunts passend abstimmen. Dazu die aktuell verwendeten Einstellungen von Solarregler und SmartShunt gemeinsam mit einer vollständigen Ladung auswerten. Die Anzeige soll eine nachgewiesene Vollladung zuverlässig übernehmen.
+
+Status: als nächster eigener Prüfpunkt vorgemerkt.
+
 ## Mit 1.2.6 umgesetzt: Synchronisation auf Wunsch im Hintergrund
 
 Wunsch vom 19. Oktober 2026: Der laufende Geräteabruf soll wahlweise im Hintergrund weiterlaufen, während die App wieder bedienbar wird. Die Entscheidung gilt ausschließlich für den aktuellen Synchronisationslauf, einschließlich der nacheinander abgefragten Geräte.

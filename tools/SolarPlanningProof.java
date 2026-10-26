@@ -39,6 +39,17 @@ final class SolarPlanningProof {
             db.execSQL("INSERT INTO contexts(at,key,mobile_free,source) VALUES(?,?,1,?)",new Object[]{start-1,key,source.toString()});
             planning.request();JSONObject result=replies.poll(20,TimeUnit.SECONDS);check(result!=null&&!result.has("error"),"learning reads and writes finish asynchronously using a separate SQLite database");
             check(row(result.getJSONArray("observations"),start).getBoolean("mobileFree")&&row(result.getJSONArray("observations"),start).getString("key").equals(key),"observations keep their source and the setup valid at the measured time");
+            long oldStart=start-10*day;String rest=de.wattpit.app.core.HistorySchema.COLUMNS.substring(3);
+            repo.db.getWritableDatabase().execSQL("INSERT INTO readings("+de.wattpit.app.core.HistorySchema.COLUMNS+") SELECT ts-?,"+rest+" FROM readings WHERE device IN ('planning-solar','planning-shunt') AND ts>=? AND ts<=?",new Object[]{10*day,start,end});
+            weather.getJSONArray("days").put(new JSONObject().put("day",Instant.ofEpochMilli(oldStart).atZone(ZoneOffset.UTC).toLocalDate().toString()).put("sunrise",oldStart+7*hour).put("sunset",oldStart+18*hour));
+            repo.prefs.edit().putString("weatherCache",weather.toString()).commit();
+            db.execSQL("INSERT INTO contexts(at,key,mobile_free,source) VALUES(?,?,1,?)",new Object[]{oldStart-1,key,source.toString()});
+            JSONObject stale=new JSONObject(row(result.getJSONArray("observations"),start).toString()).put("from",oldStart).put("to",oldStart+11*hour).put("consumption",9999);
+            db.execSQL("INSERT INTO observations(start,end,source,payload) VALUES(?,?,?,?)",new Object[]{oldStart,oldStart+11*hour,source.toString(),stale.toString()});
+            result=ask(planning,replies);check(row(result.getJSONArray("observations"),oldStart).getDouble("consumption")==9999,"ordinary incremental learning does not silently rewrite an old observation");
+            repo.db.getWritableDatabase().execSQL("INSERT INTO archive_clock_state(device,payload) VALUES('clock-revision-proof','{\"revision\":1}')");
+            result=ask(planning,replies);check(Math.abs(row(result.getJSONArray("observations"),oldStart).getDouble("consumption")-132)<1e-8&&repo.prefs.getString("planningArchiveTimeRevision."+source,"").equals(repo.db.archiveClockRevision()),"a committed clock revision rebuilds older reconstructible learning observations exactly once");
+            repo.db.getWritableDatabase().execSQL("DELETE FROM archive_clock_state WHERE device='clock-revision-proof'");
             long issued=System.currentTimeMillis(),future=issued+day;planning.remember(new JSONArray().put(new JSONObject().put("key",key).put("from",future).put("to",future+5*hour).put("issued",issued).put("wh",321)).toString());planning.request();result=replies.poll(20,TimeUnit.SECONDS);
             check(result!=null&&result.getJSONArray("forecasts").length()==1&&result.getJSONArray("forecasts").getJSONObject(0).getDouble("wh")==321,"original issue time and predicted Wh survive native forecast storage");
             repo.prefs.edit().putString("diagnostic-private-test","DIAGNOSTIC-SECRET-SENTINEL").commit();

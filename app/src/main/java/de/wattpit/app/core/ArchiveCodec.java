@@ -93,22 +93,73 @@ public final class ArchiveCodec {
         }
     }
     public static final class Clock {
-        private final TreeMap<Long,Long> anchors=new TreeMap<>();private final TreeSet<Long> reboots=new TreeSet<>();
+        private final TreeMap<Long,Long> anchors=new TreeMap<>(),local=new TreeMap<>();private final TreeSet<Long> reboots=new TreeSet<>();
         private boolean anchorHistoryComplete,rebootHistoryComplete;
         public boolean historyComplete(int reg){if(reg==0xec63)return anchorHistoryComplete;if(reg==0xec64)return rebootHistoryComplete;throw new IllegalArgumentException("Unbekannte Zeitreferenz.");}
         public void completeHistory(int reg){if(reg==0xec63)anchorHistoryComplete=true;else if(reg==0xec64)rebootHistoryComplete=true;else throw new IllegalArgumentException("Unbekannte Zeitreferenz.");}
         public static Clock restore(long savedUptime,long currentUptime,byte[] anchors,byte[] reboots){Clock clock=new Clock();if(savedUptime<0||currentUptime<savedUptime)return clock;clock.anchors(anchors);clock.reboots(reboots);return clock;}
         public int anchors(byte[] b){if(b.length%8!=0)throw new IllegalArgumentException("Ungültige Archivzeit.");int added=0;for(int i=0;i<b.length;i+=8){long u=u(b,i,4),t=u(b,i+4,4);if(u!=NA&&t!=NA&&t>946684800L){Long old=anchors.put(u,t);if(old==null||old!=t)added++;}}return added;}
         public int reboots(byte[] b){if(b.length%4!=0)throw new IllegalArgumentException("Ungültige Neustartliste.");int added=0;for(int i=0;i<b.length;i+=4){long t=u(b,i,4);if(t!=NA&&reboots.add(t))added++;}return added;}
-        public boolean hasAnchors(){return !anchors.isEmpty();}
+        public boolean hasAnchors(){return !anchors.isEmpty()||!local.isEmpty();}
         public long oldestStoredAnchor(){return anchors.isEmpty()?NA:anchors.firstKey();}
         public long oldestStoredReboot(){return reboots.isEmpty()?NA:reboots.first();}
         public byte[] anchorBytes(){ByteArrayOutputStream b=new ByteArrayOutputStream();for(Map.Entry<Long,Long> a:anchors.entrySet()){byte[] u=le(a.getKey(),4),t=le(a.getValue(),4);b.write(u,0,4);b.write(t,0,4);}return b.toByteArray();}
         public byte[] rebootBytes(){ByteArrayOutputStream b=new ByteArrayOutputStream();for(long t:reboots){byte[] bytes=le(t,4);b.write(bytes,0,4);}return b.toByteArray();}
-        public Long millis(long time){Long low=reboots.floor(time),high=reboots.higher(time);long from=low==null?0:low,to=high==null?NA:high;
+        private Long originalMillis(long time){Long low=reboots.floor(time),high=reboots.higher(time);long from=low==null?0:low,to=high==null?NA:high;
             Map.Entry<Long,Long> a=anchors.floorEntry(time);if(a==null||a.getKey()<from)a=anchors.ceilingEntry(from);
             return a==null||a.getKey()>=to?null:(a.getValue()+time-a.getKey())*1000;
         }
+        public void localBytes(byte[] bytes){
+            if(bytes.length%12!=0)throw new IllegalArgumentException("Ungültige lokale Archivzeit.");
+            for(int i=0;i<bytes.length;i+=12){long c=u(bytes,i,4),at=u(bytes,i+4,4)|(u(bytes,i+8,4)<<32);if(c>=NA||at<=946684800000L)throw new IllegalArgumentException("Ungültige lokale Archivzeit.");local.put(c,at);}
+        }
+        public byte[] localBytes(){ByteArrayOutputStream out=new ByteArrayOutputStream();for(Map.Entry<Long,Long> e:local.entrySet()){byte[] c=le(e.getKey(),4),at=le(e.getValue(),8);out.write(c,0,4);out.write(at,0,8);}return out.toByteArray();}
+        public Clock copy(){Clock c=new Clock();c.anchors.putAll(anchors);c.reboots.addAll(reboots);c.local.putAll(local);c.anchorHistoryComplete=anchorHistoryComplete;c.rebootHistoryComplete=rebootHistoryComplete;return c;}
+        private Map.Entry<Long,Long> localFor(long time){Long low=reboots.floor(time),high=reboots.higher(time);long from=low==null?0:low,to=high==null?NA:high;Map.Entry<Long,Long> e=local.lowerEntry(to);return e!=null&&e.getKey()>=from?e:null;}
+        private Map.Entry<Long,Long> driftBase(Map.Entry<Long,Long> ref){
+            Long boot=reboots.floor(ref.getKey());long start=boot==null?0:boot;
+            Map.Entry<Long,Long> saved=local.lowerEntry(ref.getKey());if(saved!=null&&saved.getKey()>=start&&driftPair(saved,ref))return saved;
+            for(Map.Entry<Long,Long> a=anchors.lowerEntry(ref.getKey());a!=null&&a.getKey()>=start;a=anchors.lowerEntry(a.getKey())){
+                Map.Entry<Long,Long> candidate=new AbstractMap.SimpleImmutableEntry<>(a.getKey(),a.getValue()*1000);
+                if(driftPair(candidate,ref))return candidate;
+            }return null;
+        }
+        private boolean driftPair(Map.Entry<Long,Long> base,Map.Entry<Long,Long> ref){long seconds=ref.getKey()-base.getKey();if(seconds<86400)return false;double rate=(ref.getValue()-base.getValue())/(seconds*1000.0);return rate>=0.998&&rate<=1.002;}
+        /** Local observations place their own boot only. Long, consistent references also
+         * account for clock drift between the device's original sync and the current read. */
+        public Long millis(long time){
+            if(time<0||time>=NA)return null;
+            Map.Entry<Long,Long> ref=localFor(time);if(ref==null)return originalMillis(time);
+            Map.Entry<Long,Long> base=driftBase(ref);
+            if(base!=null){
+                return Math.round(base.getValue()+(time-base.getKey())*(double)(ref.getValue()-base.getValue())/(ref.getKey()-base.getKey()));
+            }
+            return ref.getValue()+(time-ref.getKey())*1000;
+        }
+        /** Avoid replacing a reference for sub-second counter jitter on every import. */
+        public boolean observe(ArchiveTimeReference read){
+            if(!read.trusted)throw new IllegalArgumentException("Geräteuhr konnte nicht sicher mit der Handyzeit verglichen werden. Bitte erneut nachladen.");
+            Map.Entry<Long,Long> previous=localFor(read.counter);Long mapped=millis(read.counter);
+            if(previous!=null&&read.observedMillis>=previous.getValue()&&read.observedMillis-previous.getValue()<6*3600000L&&mapped!=null&&Math.abs(mapped-read.observedMillis)<=2500)return false;
+            Long boot=reboots.floor(read.counter),next=reboots.higher(read.counter);long from=boot==null?0:boot,to=next==null?NA:next;
+            Map.Entry<Long,Long> ref=new AbstractMap.SimpleImmutableEntry<>(read.counter,read.observedMillis),base=previous==null?null:driftBase(previous);
+            if(base==null&&previous!=null&&driftPair(previous,ref))base=previous;
+            if(base==null)base=driftBase(ref);
+            local.subMap(from,true,to,false).clear();if(base!=null)local.put(base.getKey(),base.getValue());local.put(read.counter,read.observedMillis);return true;
+        }
+        /** Exact inverse used only to recover a missing raw counter from its saved mapping.
+         * Ambiguous or foreign timestamps stay unknown; no rounded guess is returned. */
+        public Long counter(long millis){
+            Set<Long> candidates=new HashSet<>();
+            for(Map.Entry<Long,Long> a:anchors.entrySet())candidate(candidates,millis,a.getKey()+(millis-a.getValue()*1000)/1000);
+            for(Map.Entry<Long,Long> ref:local.entrySet()){
+                Map.Entry<Long,Long> base=driftBase(ref);
+                double guess=base==null?ref.getKey()+(millis-ref.getValue())/1000.0:base.getKey()+(millis-base.getValue())*(double)(ref.getKey()-base.getKey())/(ref.getValue()-base.getValue());
+                long rounded=Math.round(guess);for(long c=rounded-1;c<=rounded+1;c++)candidate(candidates,millis,c);
+            }
+            return candidates.size()==1?candidates.iterator().next():null;
+        }
+        private void candidate(Set<Long> found,long millis,long counter){Long mapped=millis(counter);if(mapped!=null&&mapped==millis)found.add(counter);}
         public long oldestAnchor(byte[] b){long min=NA;for(int i=0;i+8<=b.length;i+=8)if(u(b,i,4)!=NA&&u(b,i+4,4)!=NA)min=Math.min(min,u(b,i,4));return min;}
     }
     public static final class Level {

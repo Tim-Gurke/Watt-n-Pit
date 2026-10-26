@@ -22,9 +22,10 @@ import java.util.*;
 
 final class HistoryDb extends SQLiteOpenHelper {
     private static final String[] NUMBERS = {"voltage","current","power","soc","solar","yieldWh","ttg","consumed","temperature","aux","load","state","error","alarm","pvVoltage","auxRaw"};
-    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 7); setWriteAheadLoggingEnabled(true); }
+    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 8); setWriteAheadLoggingEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL(HistorySchema.CREATE);
+        createArchiveTimes(db);
         db.execSQL("CREATE INDEX history_window ON readings(ts,kind,origin)");
         db.execSQL("CREATE INDEX history_device ON readings(device,ts)");
         createDaily(db);
@@ -38,6 +39,51 @@ final class HistoryDb extends SQLiteOpenHelper {
         if(oldVersion<5)for(String sql:HistorySchema.MIGRATE)db.execSQL(sql);
         if(oldVersion<6)createDeviceSettings(db);
         if(oldVersion<7)db.execSQL(HistorySchema.REPAIR_UNAVAILABLE_SHUNT_CURRENT);
+        if(oldVersion<8&&newVersion>=8)createArchiveTimes(db);
+    }
+
+    private static void createArchiveTimes(SQLiteDatabase db){
+        db.execSQL("ALTER TABLE readings ADD COLUMN archiveCounter INTEGER");
+        db.execSQL("ALTER TABLE readings ADD COLUMN archiveOriginalTs INTEGER");
+        db.execSQL("CREATE TABLE IF NOT EXISTS archive_clock_state(device TEXT PRIMARY KEY,payload TEXT NOT NULL)");
+    }
+    JSONObject archiveClockState(String device)throws Exception{
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM archive_clock_state WHERE device=?",new String[]{device})){return c.moveToFirst()?new JSONObject(c.getString(0)):new JSONObject();}
+    }
+    String archiveClockRevision()throws Exception{
+        StringBuilder out=new StringBuilder();try(Cursor c=getReadableDatabase().rawQuery("SELECT device,payload FROM archive_clock_state ORDER BY device",null)){
+            while(c.moveToNext())out.append(c.getString(0)).append(':').append(new JSONObject(c.getString(1)).optLong("revision")).append(';');
+        }return out.toString();
+    }
+    /** Counter recovery, timestamp changes, acknowledgements and the mapping commit together.
+     * Original UTC timestamps and all measurement fields remain available. */
+    synchronized int alignArchiveTimes(String device,ArchiveCodec.Clock before,ArchiveCodec.Clock after,JSONObject state,boolean counterReset,boolean remap,ArchiveCheck check)throws Exception{
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();int moved=0;
+        try{
+            db.execSQL("CREATE TEMP TABLE IF NOT EXISTS archive_time_repair(id INTEGER PRIMARY KEY,old_ts INTEGER,new_ts INTEGER,counter INTEGER,period INTEGER,UNIQUE(new_ts,period))");
+            db.execSQL("DELETE FROM archive_time_repair");
+            if(remap)try(Cursor c=db.rawQuery("SELECT rowid,ts,period,archiveCounter FROM readings WHERE device=? AND origin='archive' ORDER BY ts",new String[]{device})){
+                int rows=0;while(c.moveToNext()){
+                    long id=c.getLong(0),old=c.getLong(1);Long counter=c.isNull(3)?before.counter(old):c.getLong(3);
+                    if(counter==null){if(counterReset)continue;throw new IllegalStateException("Eine alte Archivzeit ist nicht eindeutig zuordenbar. Messwerte bleiben erhalten; bitte Diagnoseexport senden.");}
+                    // A reset device counter may reuse old counter values. Never move the previous generation.
+                    if(!c.isNull(3)&&!Objects.equals(before.millis(counter),old))continue;
+                    Long time=counterReset?old:after.millis(counter);if(time==null)continue;
+                    if(time<0||time>state.getLong("at")+300000)throw new IllegalStateException("Berichtigte Archivzeit liegt außerhalb des sicheren Bereichs.");
+                    if(time!=old||c.isNull(3)){
+                        ContentValues v=new ContentValues();v.put("id",id);v.put("old_ts",old);v.put("new_ts",time);v.put("counter",counter);v.put("period",c.getInt(2));db.insertOrThrow("archive_time_repair",null,v);
+                        if(time!=old)moved++;
+                    }
+                    if(++rows%256==0)check.run();
+                }
+            }
+            // Negative temporary keys prevent a shifted row colliding with its next old neighbour.
+            db.execSQL("UPDATE readings SET ts=-rowid-1,archiveOriginalTs=COALESCE(archiveOriginalTs,ts) WHERE rowid IN (SELECT id FROM archive_time_repair WHERE new_ts!=old_ts)");
+            db.execSQL("UPDATE readings SET ts=(SELECT new_ts FROM archive_time_repair WHERE id=readings.rowid),archiveCounter=(SELECT counter FROM archive_time_repair WHERE id=readings.rowid) WHERE rowid IN (SELECT id FROM archive_time_repair)");
+            if(remap||counterReset)db.delete("archive_coverage","device=?",new String[]{device});
+            state.put("movedRows",moved);ContentValues saved=new ContentValues();saved.put("device",device);saved.put("payload",state.toString());db.insertWithOnConflict("archive_clock_state",null,saved,SQLiteDatabase.CONFLICT_REPLACE);
+            db.execSQL("DELETE FROM archive_time_repair");db.setTransactionSuccessful();return moved;
+        }finally{db.endTransaction();}
     }
 
     private static void createDeviceSettings(SQLiteDatabase db){db.execSQL("CREATE TABLE device_settings(device TEXT NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(device,start))");}
@@ -108,14 +154,15 @@ final class HistoryDb extends SQLiteOpenHelper {
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();int changed=0;
         try {for(int i=0;i<times.size();i++){
             long[] t=times.get(i);Double value=numbers.get(i);if(value==null)continue;
-            ContentValues v=new ContentValues();v.put(field,value);
+            ContentValues v=new ContentValues();v.put(field,value);if(t.length>2)v.put("archiveCounter",t[2]);
             String[] key={String.valueOf(t[0]),device,String.valueOf(t[1])};
             boolean exists;Double old=null;
-            try(Cursor c=db.rawQuery("SELECT period,"+field+" FROM readings WHERE ts=? AND device=? AND period=? AND origin='archive'",key)){
-                exists=c.moveToFirst();if(exists&&!c.isNull(1))old=c.getDouble(1);
+            Long oldCounter=null;
+            try(Cursor c=db.rawQuery("SELECT period,"+field+",archiveCounter FROM readings WHERE ts=? AND device=? AND period=? AND origin='archive'",key)){
+                exists=c.moveToFirst();if(exists&&!c.isNull(1))old=c.getDouble(1);if(exists&&!c.isNull(2))oldCounter=c.getLong(2);
             }
             if(exists){
-                if(old!=null&&Double.compare(old,value)==0)continue;
+                if(old!=null&&Double.compare(old,value)==0&&(t.length<3||Objects.equals(oldCounter,t[2])))continue;
                 v.put("period",t[1]);db.update("readings",v,"ts=? AND device=? AND period=? AND origin='archive'",key);
             } else {v.put("ts",t[0]);v.put("device",device);v.put("kind",kind);v.put("origin","archive");v.put("period",t[1]);db.insertOrThrow("readings",null,v);}
             changed++;
@@ -158,6 +205,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         r.discardUnavailableCurrent();
         ContentValues v = new ContentValues();
         v.put("ts", r.timestamp); v.put("device", r.device); v.put("kind", r.kind); v.put("origin", r.origin);v.put("period",r.period);
+        if(r.origin.equals("archive")){if(r.archiveCounter!=null)v.put("archiveCounter",r.archiveCounter);if(r.archiveOriginalTs!=null)v.put("archiveOriginalTs",r.archiveOriginalTs);}
         Object[] values = values(r);
         for (int i = 0; i < NUMBERS.length; i++) {
             Object value = values[i];
@@ -467,6 +515,8 @@ final class HistoryDb extends SQLiteOpenHelper {
         r.temperature = number(c,"temperature"); r.aux = number(c,"aux"); r.load = number(c,"load");
         r.state = integer(c,"state"); r.error = integer(c,"error"); r.alarm = integer(c,"alarm");
         r.pvVoltage=number(c,"pvVoltage");r.auxRaw=number(c,"auxRaw");r.period=c.getInt(c.getColumnIndexOrThrow("period"));
+        int counter=c.getColumnIndexOrThrow("archiveCounter"),original=c.getColumnIndexOrThrow("archiveOriginalTs");
+        if(!c.isNull(counter))r.archiveCounter=c.getLong(counter);if(!c.isNull(original))r.archiveOriginalTs=c.getLong(original);
         return r;
     }
     private static Double number(Cursor c, String name) { int i = c.getColumnIndexOrThrow(name); return c.isNull(i) ? null : c.getDouble(i); }
