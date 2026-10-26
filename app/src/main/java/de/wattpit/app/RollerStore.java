@@ -40,8 +40,9 @@ final class RollerStore {
     synchronized String mac(){return profile.optString("mac");}
     synchronized void status(String value){status=value;}
     synchronized void disconnected(){live=new JSONObject();session.interrupt(System.currentTimeMillis());saveSession();}
-    synchronized void accept(BmsPacket p,long now){try{
-        live=new JSONObject().put("at",now).put("voltage",p.voltage).put("current",p.current).put("power",p.voltage*p.current).put("soc",p.soc<0?JSONObject.NULL:p.soc).put("remainingAh",p.remainingAh).put("fullAh",p.fullAh).put("chargeEnabled",p.chargeEnabled).put("dischargeEnabled",p.dischargeEnabled);
+    synchronized void accept(BmsPacket p,long now){accept(p,now,"Direkt");}
+    synchronized void accept(BmsPacket p,long now,String source){try{
+        live=new JSONObject().put("source",source).put("at",now).put("voltage",p.voltage).put("current",p.current).put("power",p.voltage*p.current).put("soc",p.soc<0?JSONObject.NULL:p.soc).put("remainingAh",p.remainingAh).put("fullAh",p.fullAh).put("chargeEnabled",p.chargeEnabled).put("dischargeEnabled",p.dischargeEnabled);
         status="BMS verbunden";session.sample(now,p.voltage*p.current,profile.optDouble("idleWatts"),profile.optDouble("conversionEfficiency"));saveSession();
     }catch(JSONException ignored){}}
     synchronized void toggle(boolean start){

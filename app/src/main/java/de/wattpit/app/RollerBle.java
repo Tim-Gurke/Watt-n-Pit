@@ -6,6 +6,7 @@ import android.os.*;
 import android.content.Context;
 import java.util.*;
 import de.wattpit.app.core.BmsPacket;
+import de.wattpit.app.core.SharedBmsData;
 
 /** JBD/Overkill basic-info reads only. No MOS, configuration or firmware writes. */
 @SuppressLint("MissingPermission")
@@ -15,6 +16,9 @@ final class RollerBle {
     private static final byte[] REQUEST={(byte)0xdd,(byte)0xa5,3,0,(byte)0xff,(byte)0xfd,0x77};
     private final Context context;
     private final RollerStore store;
+    private final ScootLink scoot;
+    private long lastSharedAt;
+    private boolean shared;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private BluetoothGatt gatt;
     private BluetoothGattCharacteristic write;
@@ -22,16 +26,28 @@ final class RollerBle {
     private byte[] pending=new byte[0];
     private boolean running,ready,busy;
     private long connectedAt,lastPacket;
-    RollerBle(Context c){context=c;store=RollerStore.get(c);}
+    RollerBle(Context c){context=c;store=RollerStore.get(c);scoot=new ScootLink(c);}
     void start(){if(running)return;running=true;handler.post(tick);}
-    void stop(){running=false;handler.removeCallbacksAndMessages(null);store.toggle(false);close();store.status("Aufzeichnung pausiert");}
+    void stop(){running=false;handler.removeCallbacksAndMessages(null);store.toggle(false);close();scoot.release();store.status("Aufzeichnung pausiert");}
     private void close(){BluetoothGatt previous=gatt;gatt=null;ready=busy=false;write=null;pending=new byte[0];lastPacket=0;store.disconnected();if(previous!=null){try{previous.disconnect();previous.close();}catch(SecurityException ignored){}}}
     private final Runnable tick=new Runnable(){public void run(){
         if(!running)return;
         try{
-            String mac=store.mac();if(!mac.equals(address)){close();address=mac;}
+            String mac=store.mac();if(!mac.equals(address)){close();scoot.release();lastSharedAt=0;shared=false;address=mac;}
             long now=SystemClock.elapsedRealtime();
             if(!mac.isEmpty()){
+                ScootLink.State remote=scoot.read(mac);
+                if(remote.failed){if(gatt!=null)close();scoot.release();store.disconnected();store.status("Lokale ScootPit-Verbindung unterbrochen · warte auf Freigabe");handler.postDelayed(this,2000);return;}
+                if(remote.supported&&remote.internal){
+                    if(!shared){close();lastSharedAt=0;shared=true;}
+                    scoot.release();
+                    BmsPacket packet=SharedBmsData.validate(mac,remote.mac,remote.frame,remote.at,remote.elapsed,System.currentTimeMillis(),SystemClock.elapsedRealtime());
+                    if(packet!=null){if(remote.at>lastSharedAt){store.accept(packet,remote.at,"ScootPit");lastSharedAt=remote.at;}store.status("BMS über ScootPit · lokale Datenübernahme");}
+                    else {store.disconnected();store.status("ScootPit übernimmt · warte auf passende BMS-Werte");}
+                    handler.postDelayed(this,2000);return;
+                }
+                if(shared){shared=false;lastSharedAt=0;store.disconnected();}
+                if(remote.supported&&!scoot.acquire(mac)){if(gatt!=null)close();store.status("Warte auf Freigabe der BMS-Verbindung");handler.postDelayed(this,2000);return;}
                 BluetoothManager manager=context.getSystemService(BluetoothManager.class);BluetoothAdapter adapter=manager==null?null:manager.getAdapter();
                 if(adapter==null||!adapter.isEnabled()){close();store.status("Bluetooth ausgeschaltet");}
                 else if(gatt==null){store.status("Verbinde Roller-BMS …");connectedAt=now;gatt=adapter.getRemoteDevice(mac).connectGatt(context,false,callback,BluetoothDevice.TRANSPORT_LE);}
