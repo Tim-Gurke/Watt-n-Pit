@@ -92,9 +92,9 @@ public class SyncPipelineTest {
         EnergyIntegral.Result result=EnergyIntegral.calculate(data,EPOCH,EPOCH+120000,false);assertEquals(30000,result.coveredMillis);assertEquals(.5,result.wh,1e-9);
     }
     @Test public void aSmallRealGapDoesNotBlankTheRestOfItsPlotBucket(){
-        List<EnergyIntegral.Sample> data=Arrays.asList(new EnergyIntegral.Sample(EPOCH,60,10,"A","live"),new EnergyIntegral.Sample(EPOCH+10000,60,10,"A","live"),new EnergyIntegral.Sample(EPOCH+30000,60,10,"A","live"),new EnergyIntegral.Sample(EPOCH+40000,60,10,"A","live"));
+        List<EnergyIntegral.Sample> data=Arrays.asList(new EnergyIntegral.Sample(EPOCH,60,10,"A","live"),new EnergyIntegral.Sample(EPOCH+10000,60,10,"A","live"),new EnergyIntegral.Sample(EPOCH+50000,60,10,"A","live"),new EnergyIntegral.Sample(EPOCH+60000,60,10,"A","live"));
         long to=EPOCH+86400000;EnergyIntegral.Result energy=EnergyIntegral.calculate(data,EPOCH,to,false);assertEquals(20000,energy.coveredMillis);
-        assertEquals(Arrays.asList(EPOCH,EPOCH+10000,EPOCH+30000,EPOCH+40000),energy.points.stream().map(p->p.time).collect(java.util.stream.Collectors.toList()));
+        assertEquals(Arrays.asList(EPOCH,EPOCH+10000,EPOCH+50000,EPOCH+60000),energy.points.stream().map(p->p.time).collect(java.util.stream.Collectors.toList()));
         assertFalse(energy.points.get(1).gap);assertTrue(energy.points.get(2).gap);assertFalse(energy.points.get(3).gap);
     }
     @Test public void complementaryShuntChannelsAtDifferentResolutionsProduceTheSameCoveredPower(){
