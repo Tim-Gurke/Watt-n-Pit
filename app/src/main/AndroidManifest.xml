@@ -33,5 +33,6 @@
         <service android:name=".MonitorService" android:exported="false" android:foregroundServiceType="connectedDevice|location" />
         <service android:name=".LanService" android:exported="false" android:foregroundServiceType="connectedDevice" />
         <activity android:name="com.journeyapps.barcodescanner.CaptureActivity" android:exported="false" android:screenOrientation="fullSensor" tools:replace="android:screenOrientation" />
+        <activity android:name=".LanScanActivity" android:exported="false" android:screenOrientation="fullSensor" android:stateNotNeeded="true" android:theme="@style/zxing_CaptureTheme" android:windowSoftInputMode="stateAlwaysHidden" />
     </application>
 </manifest>

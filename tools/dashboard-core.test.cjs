@@ -2,6 +2,18 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const C=require('../app/src/main/assets/dashboard-core.js');
 
+test('the plant banner migrates once into a movable singleton without shifting existing tiles',()=>{
+  const old=C.defaults();old.tiles=old.tiles.filter(t=>t.metric!=='lan');delete old.lanTileVersion;
+  old.tiles[0].layouts.compact={x:2,y:33,w:5,h:7};const before=structuredClone(old.tiles),upgraded=C.normalize(old);
+  assert.deepEqual(upgraded.tiles.slice(0,-1),before);const lan=upgraded.tiles.at(-1);assert.equal(lan.metric,'lan');assert.equal(lan.type,'lan');assert.equal(lan.layouts.compact.y,40);assert.equal(C.windowFor(lan),null);
+  lan.layouts.compact={x:4,y:6,w:8,h:5};assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(upgraded))),upgraded);
+  upgraded.tiles=upgraded.tiles.filter(t=>t.metric!=='lan');assert.equal(C.normalize(upgraded).tiles.some(t=>t.metric==='lan'),false);
+});
+test('a plant widget cannot be duplicated or shrunk until its controls become inaccessible',()=>{
+  const board=C.defaults(),lan=board.tiles.find(t=>t.metric==='lan');lan.layouts.compact={x:10,y:3,w:2,h:2};board.tiles.push({...lan,id:'duplicate-lan'});
+  const tiles=C.normalize(board).tiles.filter(t=>t.metric==='lan');assert.equal(tiles.length,1);assert.deepEqual(tiles[0].layouts.compact,{x:8,y:3,w:4,h:4});
+});
+
 test('automatic battery time starts in the observed direction and uses the Shunt runtime independently of charge inputs',()=>{
   const t=1000000,r={device:'a',t,current:10,soc:70,ttg:480};
   const charging=new C.BatteryTimeEstimator().update(r,100,t);assert.equal(charging.minutes,180);assert.equal(charging.mode,'charge');assert.equal(C.tileLabel(C.tile('chargeTime'),charging),'Restladezeit');
@@ -264,8 +276,8 @@ test('readable numbers handle shorthand white, custom dark surfaces and transpar
 });
 test('the 1.4.3 standard portrait overview matches the approved taller preview and preserves wide positions',()=>{
   const board=C.defaults();assert.equal(board.tiles.find(t=>t.metric==='solar').period.amount,3);
-  assert.deepEqual(board.tiles.map(t=>t.metric),['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy','state','chargeTime']);
-  assert.deepEqual(board.tiles.map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:5},{x:4,y:0,w:4,h:7},{x:8,y:7,w:4,h:5.5},{x:8,y:0,w:4,h:7},{x:0,y:7.5,w:4,h:2.5},{x:0,y:10,w:4,h:2.5},{x:0,y:12.5,w:12,h:5},{x:4,y:7,w:4,h:5.5},{x:4,y:17.5,w:4,h:3.5},{x:0,y:5,w:4,h:2.5}]);
+  assert.deepEqual(board.tiles.slice(0,10).map(t=>t.metric),['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy','state','chargeTime']);
+  assert.deepEqual(board.tiles.slice(0,10).map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:5},{x:4,y:0,w:4,h:7},{x:8,y:7,w:4,h:5.5},{x:8,y:0,w:4,h:7},{x:0,y:7.5,w:4,h:2.5},{x:0,y:10,w:4,h:2.5},{x:0,y:12.5,w:12,h:5},{x:4,y:7,w:4,h:5.5},{x:4,y:17.5,w:4,h:3.5},{x:0,y:5,w:4,h:2.5}]);
   assert.deepEqual(board.tiles.slice(0,8).map(t=>t.layouts.wide),[{x:0,y:0,w:2,h:4},{x:2,y:0,w:2,h:8},{x:7,y:0,w:3,h:8},{x:4,y:0,w:3,h:8},{x:0,y:4,w:2,h:2},{x:0,y:6,w:2,h:2},{x:0,y:8,w:12,h:4},{x:10,y:0,w:2,h:8}]);
   assert.deepEqual(board.historyHeight,{compact:465,wide:380});
   assert.equal(board.tiles[1].valueMode,'live');assert.equal(board.tiles[1].scaleMode,'auto');
@@ -319,7 +331,7 @@ test('legacy weather blocks become one compact tile without moving existing layo
   const board=C.defaults();board.tiles=board.tiles.filter(t=>!['weather','state','chargeTime'].includes(t.metric));board.blockOrder=['record','weather','tiles','history'];board.tiles[0].layouts.compact={x:3,y:21,w:6,h:6};
   const before=structuredClone(board.tiles),migrated=C.normalize(board),weather=migrated.tiles.at(-1);
   assert.deepEqual(migrated.tiles.slice(0,-1),before);assert.equal(weather.metric,'weather');
-  assert.deepEqual(weather.layouts.compact,{x:0,y:27,w:12,h:4});assert.deepEqual(weather.layouts.wide,{x:0,y:8,w:12,h:4});
+  assert.deepEqual(weather.layouts.compact,{x:0,y:27,w:12,h:4});assert.deepEqual(weather.layouts.wide,{x:0,y:23,w:12,h:4});
   assert.deepEqual(migrated.blockOrder,['record','tiles','history','roller']);assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(migrated))),migrated);
   assert.equal(C.windowFor(weather),null);
 });

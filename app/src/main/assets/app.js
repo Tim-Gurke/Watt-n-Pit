@@ -477,7 +477,7 @@ $('exportPlanningDiagnostics').onclick=()=>{if(native?.choosePlanningDiagnostics
 $('saveSettings').onclick=()=>{const settings={capacity:Number($('capacitySetting').value),sampleSeconds:Number($('sampleSetting').value)};if(!settings.capacity||settings.capacity<=0||settings.capacity>10000){toast('Bitte eine Kapazität zwischen 1 und 10.000 Ah eingeben.');return;}const error=native?native.settings(JSON.stringify(settings)):'';if(error){toast(error);return;}Object.assign(snapshot.settings,settings);settingsDirty=false;toast('Einstellungen gespeichert.');renderOverview();};
 $('miniRange').onchange=()=>{const miniRange=$('miniRange').value,error=native?native.settings(JSON.stringify({miniRange})):'';if(error){toast(error);loadMini(true);return;}snapshot.settings.miniRange=miniRange;if(!native)localStorage.setItem('wattpit-mini-range',miniRange);loadMini(true);};
 $('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus');
-for(const [id,name] of [['navOverview','overview'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
+for(const [id,name] of [['navOverview','overview'],['navStorage','battery'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
 lifecycle=new window.WattLifecycle({native,toast,poll,stateChanged:state=>reads?.state(state),completed:()=>{lastHistoryRevision=-1;lastMiniLoad=0;dashboard?.cache.clear();}});
 lifecycle.poll();
 dashboard = new window.WattDashboard({native,resizeMini:drawMini,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});

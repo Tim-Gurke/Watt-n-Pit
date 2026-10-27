@@ -291,6 +291,16 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String rollerSnapshot(){if(lan.viewer())return lan.part("roller");try{return RollerStore.get(MainActivity.this).snapshot().toString();}catch(Exception e){return "{}";}}
         @JavascriptInterface public String saveRoller(String json){if(lan.viewer())return LanSync.READ_ONLY;try{RollerStore.get(MainActivity.this).configure(json);return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public String rollerSession(boolean start){if(lan.viewer())return LanSync.READ_ONLY;try{RollerStore.get(MainActivity.this).toggle(start);repository.invalidateStats();solarPlanning.request();return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public void requestRollerSession(boolean start,long expectedRevision){Object plant=lan.identity();files.execute(()->{
+            JSONObject result=new JSONObject();try{
+                if(plant!=lan.identity())throw new IllegalArgumentException("Anlage wurde gewechselt. Bitte den Ladestatus erneut prüfen.");
+                JSONObject roller;
+                if(lan.viewer())roller=lan.rollerSession(start,expectedRevision);
+                else{RollerStore store=RollerStore.get(MainActivity.this);store.command(start,expectedRevision,de.wattpit.app.core.LanWire.random(16));repository.invalidateStats();solarPlanning.request();roller=store.snapshot();}
+                result.put("ok",true).put("roller",roller);
+            }catch(Exception e){try{result.put("error",e instanceof IllegalArgumentException?e.getMessage():"Keine Bestätigung vom Hauptgerät. Der Ladestatus wird bei der nächsten Verbindung erneut abgefragt.");}catch(JSONException ignored){}}
+            call("onRollerResult",result);
+        });}
         @SuppressLint("MissingPermission") @JavascriptInterface public String rollerDevices(){try{JSONArray result=new JSONArray();android.bluetooth.BluetoothManager manager=getSystemService(android.bluetooth.BluetoothManager.class);android.bluetooth.BluetoothAdapter adapter=manager==null?null:manager.getAdapter();if(adapter!=null)for(android.bluetooth.BluetoothDevice device:adapter.getBondedDevices())result.put(new JSONObject().put("mac",device.getAddress()).put("name",device.getName()));return result.toString();}catch(Exception e){return "[]";}}
         @JavascriptInterface public String appVersion(){return BuildConfig.VERSION_NAME;}
         @JavascriptInterface public void openMonitorNotifications(){runOnUiThread(()->{

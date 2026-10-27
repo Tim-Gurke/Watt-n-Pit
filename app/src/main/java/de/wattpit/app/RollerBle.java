@@ -28,7 +28,7 @@ final class RollerBle {
     private long connectedAt,lastPacket;
     RollerBle(Context c){context=c;store=RollerStore.get(c);scoot=new ScootLink(c);}
     void start(){if(running)return;running=true;handler.post(tick);}
-    void stop(){running=false;handler.removeCallbacksAndMessages(null);store.toggle(false);close();scoot.release();store.status("Aufzeichnung pausiert");}
+    void stop(){running=false;handler.removeCallbacksAndMessages(null);store.pause();close();scoot.release();store.status("Aufzeichnung pausiert");}
     private void close(){BluetoothGatt previous=gatt;gatt=null;ready=busy=false;write=null;pending=new byte[0];lastPacket=0;store.disconnected();if(previous!=null){try{previous.disconnect();previous.close();}catch(SecurityException ignored){}}}
     private final Runnable tick=new Runnable(){public void run(){
         if(!running)return;

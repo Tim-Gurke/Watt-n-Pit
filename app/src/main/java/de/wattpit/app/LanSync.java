@@ -13,7 +13,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-/** Optional, read-only plant display in the local WLAN. Never merges independent databases. */
+/** Local plant data and the scoped, acknowledged roller-session command. Never merges databases. */
 final class LanSync {
     private static LanSync instance;
     static synchronized LanSync get(Context context){if(instance==null)instance=new LanSync(context.getApplicationContext());return instance;}
@@ -128,6 +128,9 @@ final class LanSync {
     }
     private synchronized void accept(JSONObject bundle,JSONObject expected){
         if(expected!=config||!viewer())return;
+        // A slower background poll must not undo a newer, acknowledged charge command.
+        JSONObject oldRoller=remote.optJSONObject("roller"),newRoller=bundle.optJSONObject("roller");
+        if(oldRoller!=null&&newRoller!=null&&oldRoller.optLong("sessionRevision")>newRoller.optLong("sessionRevision"))try{bundle.put("roller",oldRoller);}catch(JSONException ignored){}
         remote=bundle;receivedAt=System.currentTimeMillis();receivedElapsed=SystemClock.elapsedRealtime();error="";
         // A cached display never becomes live merely because the Activity or process restarts.
         // Live refreshes stay in memory; avoid rewriting the full weather/learning bundle
@@ -138,19 +141,30 @@ final class LanSync {
     JSONObject query(String method,JSONArray args)throws Exception{
         if(!viewer())throw new IllegalStateException();JSONObject active=config;JSONObject result=rpc(active,method,args);if(active!=config)throw new IOException("Anlage wurde gewechselt.");return result;
     }
+    JSONObject rollerSession(boolean start)throws Exception{
+        JSONObject roller=remote.optJSONObject("roller");return rollerSession(start,roller==null?-1:roller.optLong("sessionRevision",-1));
+    }
+    Object identity(){return config;}
+    JSONObject rollerSession(boolean start,long expectedRevision)throws Exception{
+        if(!viewer())throw new IllegalStateException();JSONObject active=config,roller=remote.optJSONObject("roller");
+        if(roller==null||!roller.has("sessionRevision"))throw new IllegalArgumentException("Bitte auch das Hauptgerät auf Version 1.6.2 oder neuer aktualisieren.");
+        JSONObject bundle=rpc(active,"rollerSession",new JSONArray().put(start).put(expectedRevision).put(LanWire.random(16)));
+        validateBundle(bundle);if(active!=config)throw new IOException("Anlage wurde gewechselt.");accept(bundle,active);return bundle.getJSONObject("roller");
+    }
     private JSONObject rpc(JSONObject target,String method,JSONArray args)throws Exception{
         List<String> hosts=new ArrayList<>();int port=target.getInt("port");
         if(target==config&&LanWire.localAddress(resolvedHost)){hosts.add(resolvedHost);if(resolvedPort>0)port=resolvedPort;}
         JSONArray listed=target.getJSONArray("addresses");for(int i=0;i<listed.length();i++)if(!hosts.contains(listed.getString(i)))hosts.add(listed.getString(i));
-        for(String host:hosts){if(!LanWire.localAddress(host))continue;try(Socket socket=new Socket()){
-            socket.connect(new InetSocketAddress(host,port),1800);socket.setSoTimeout(10000);
+        long deadline=SystemClock.elapsedRealtime()+10000;
+        for(String host:hosts){if(method.equals("rollerSession")&&SystemClock.elapsedRealtime()>deadline)break;if(!LanWire.localAddress(host))continue;try(Socket socket=new Socket()){
+            socket.connect(new InetSocketAddress(host,port),1800);socket.setSoTimeout(method.equals("rollerSession")?4000:10000);
             String nonce=LanWire.random(18);JSONObject request=new JSONObject().put("group",target.getString("id")).put("nonce",nonce).put("at",System.currentTimeMillis())
                 .put("peer",prefs.getString("deviceId","")).put("name",Build.MODEL).put("method",method).put("args",args);
             byte[] key=LanWire.key(target.getString("key"));LanWire.write(socket.getOutputStream(),key,request.toString(),LanWire.MAX_REQUEST);
             JSONObject response=new JSONObject(LanWire.read(socket.getInputStream(),key,LanWire.MAX_RESPONSE));
-            if(!nonce.equals(response.optString("nonce")))throw new IOException("Falsche Antwort.");if(response.has("error"))throw new IOException(response.getString("error"));
+            if(!nonce.equals(response.optString("nonce")))throw new IOException("Falsche Antwort.");if(response.has("error")){if(method.equals("rollerSession"))throw new IllegalArgumentException(response.getString("error"));throw new IOException(response.getString("error"));}
             if(target==config){resolvedHost=host;resolvedPort=port;}return response.getJSONObject("data");
-        }catch(Exception ignored){/* Try another local interface from the same invitation. */}}
+        }catch(IllegalArgumentException e){throw e;}catch(Exception ignored){/* Try another local interface from the same invitation. */}}
         throw new IOException("Hauptgerät nicht erreichbar oder Verbindungscode ungültig.");
     }
     synchronized void startHost()throws Exception{
@@ -170,13 +184,20 @@ final class LanSync {
             JSONObject request=new JSONObject(LanWire.read(open.getInputStream(),key,LanWire.MAX_REQUEST));String nonce=request.getString("nonce");
             if(!host()||!active.getString("id").equals(request.optString("group"))||!nonce.matches("[A-Za-z0-9_-]{24}")||Math.abs(System.currentTimeMillis()-request.optLong("at"))>120000)return;
             synchronized(requests){if(requests.containsKey(nonce))return;requests.put(nonce,true);if(requests.size()>512)requests.remove(requests.keySet().iterator().next());}
-            JSONObject response=new JSONObject().put("nonce",nonce);try{response.put("data",read(request.getString("method"),request.getJSONArray("args")));}catch(Exception e){response.put("error","Daten konnten gerade nicht gelesen werden.");}
+            JSONObject response=new JSONObject().put("nonce",nonce);try{
+                if(request.optString("method").equals("rollerSession")){synchronized(this){if(active!=config||!host())return;response.put("data",read("rollerSession",request.getJSONArray("args")));}}
+                else response.put("data",read(request.getString("method"),request.getJSONArray("args")));
+            }catch(Exception e){response.put("error",request.optString("method").equals("rollerSession")&&e instanceof IllegalArgumentException?e.getMessage():"Daten konnten gerade nicht gelesen werden.");}
             if(!host()||active!=config)return;
             LanWire.write(open.getOutputStream(),key,response.toString(),LanWire.MAX_RESPONSE);
             if(peers.size()<20||peers.containsKey(request.optString("peer")))peers.put(request.optString("peer"),new JSONObject().put("name",request.optString("name").substring(0,Math.min(60,request.optString("name").length()))).put("seen",SystemClock.elapsedRealtime()));
         }catch(Exception ignored){/* Authentication errors never reveal data or key material. */}
     }
     private JSONObject read(String method,JSONArray args)throws Exception{
+        if(method.equals("rollerSession")){
+            if(args.length()!=3||!(args.get(0) instanceof Boolean))throw new IllegalArgumentException("Ungültige Ladeanfrage.");
+            RollerStore.get(context).command(args.getBoolean(0),args.getLong(1),args.getString(2));repository.invalidateStats();planning.request();return read("bundle",new JSONArray());
+        }
         if(method.equals("bundle")){
             long now=System.currentTimeMillis();if(!repository.archiveBusy&&now-lastPlanRequest>30000){lastPlanRequest=now;planning.request();}
             JSONObject snapshot=repository.archiveBusy?new JSONObject(repository.backgroundSnapshot()):repository.snapshot();snapshot.put("found",new JSONArray()).remove("archiveDiagnostics");snapshot.remove("event");snapshot.remove("eventId");

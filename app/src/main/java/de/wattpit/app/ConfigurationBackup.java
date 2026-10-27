@@ -36,6 +36,7 @@ final class ConfigurationBackup {
         for(int i=0;i<order.length();i++)if(!Arrays.asList("tiles","weather","history","record","roller").contains(order.getString(i))||!blocks.add(order.getString(i)))throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
         if(!blocks.containsAll(Arrays.asList("tiles","history","record")))throw new IllegalArgumentException("Ungültige Blockreihenfolge.");
         JSONObject dashboard=new JSONObject().put("version",1).put("blockOrder",order).put("tiles",tiles);
+        if(board.optInt("lanTileVersion")==1)dashboard.put("lanTileVersion",1);
         if(board.optInt("dischargeSignVersion")==1)dashboard.put("dischargeSignVersion",1);
         if(board.optInt("energyFlowVersion")==1)dashboard.put("energyFlowVersion",1);
         if(board.has("energyPeriod"))dashboard.put("energyPeriod",pick(board.getJSONObject("energyPeriod"),"mode","amount","unit","aggregate","resetAt","from","to"));

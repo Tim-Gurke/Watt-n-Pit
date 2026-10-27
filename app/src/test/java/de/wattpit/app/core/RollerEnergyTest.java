@@ -2,6 +2,29 @@ package de.wattpit.app.core;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class RollerEnergyTest {
+    @Test public void automaticChargeNeedsSustainedFreshMeasuredPower(){
+        RollerEnergy.AutoCharge a=new RollerEnergy.AutoCharge();
+        assertEquals(0,a.sample(1000,96,false));assertEquals(0,a.sample(5000,96,false));assertEquals(1,a.sample(7000,96,false));assertEquals(1000,a.startAt);
+        assertEquals(0,a.sample(9000,0,true));assertEquals(0,a.sample(19000,0,true));assertEquals(0,a.sample(29000,0,true));assertEquals(0,a.sample(39000,0,true));assertEquals(0,a.sample(49000,0,true));assertEquals(0,a.sample(59000,0,true));assertEquals(-1,a.sample(69000,0,true));
+    }
+    @Test public void enabledChargerAndNoiseAreNotProofOfCharging(){
+        RollerEnergy.AutoCharge a=new RollerEnergy.AutoCharge();
+        for(long t=1000;t<100000;t+=2000){assertEquals(0,a.sample(t,2,false));}assertEquals(0,a.startAt);
+        assertEquals(0,a.sample(101000,96,false));assertEquals(0,a.sample(103000,-96,false));assertEquals(0,a.sample(109000,96,false));
+    }
+    @Test public void missingOrRepeatedPacketsCannotConfirmAnAutomaticTransition(){
+        RollerEnergy.AutoCharge a=new RollerEnergy.AutoCharge();assertEquals(0,a.sample(1000,96,false));assertEquals(0,a.sample(1000,96,false));assertEquals(0,a.sample(20000,96,false));assertEquals(0,a.sample(24000,96,false));assertEquals(1,a.sample(26000,96,false));
+        assertEquals(0,a.sample(28000,0,true));assertEquals(0,a.sample(100000,0,true));assertEquals(0,a.sample(108000,96,true));assertEquals(0,a.sample(110000,0,true));
+    }
+    @Test public void manualEndSuppressesRestartUntilAConfirmedPhysicalChargeEnd(){
+        RollerEnergy.AutoCharge a=new RollerEnergy.AutoCharge();a.suppress();
+        for(long t=1000;t<=61000;t+=2000)assertEquals(0,a.sample(t,96,false));assertTrue(a.suppressed);
+        for(long t=63000;t<=123000;t+=2000)assertEquals(0,a.sample(t,0,false));assertFalse(a.suppressed);
+        assertEquals(0,a.sample(125000,96,false));assertEquals(0,a.sample(129000,96,false));assertEquals(1,a.sample(131000,96,false));
+    }
+    @Test public void disconnectResetsConfirmationButPreservesManualSuppression(){
+        RollerEnergy.AutoCharge a=new RollerEnergy.AutoCharge();a.sample(1000,96,false);a.interrupt();assertEquals(0,a.sample(7000,96,false));a.suppress();a.sample(9000,0,false);a.interrupt();assertEquals(0,a.sample(70000,0,false));assertTrue(a.suppressed);
+    }
     @Test public void measuredCalibration(){assertEquals(138,RollerEnergy.inputWatts(96,21,96.0/117),1e-9);assertEquals(0,RollerEnergy.inputWatts(0,21,.8),0);}
     @Test public void noEnergyAcrossMissingTime(){RollerEnergy.Session s=new RollerEnergy.Session();s.start(1000);s.sample(1000,96,21,96.0/117);s.sample(11000,96,21,96.0/117);s.sample(31000,96,21,96.0/117);assertEquals(96.0/360,s.batteryWh,1e-9);assertEquals(138.0/360,s.inputWh,1e-9);assertEquals(20000,s.gapMillis);assertEquals(10000,s.observedMillis);}
     @Test public void disconnectDoesNotCountGapTwice(){RollerEnergy.Session s=new RollerEnergy.Session();s.start(1000);s.sample(1000,96,21,.8);s.sample(3000,96,21,.8);s.interrupt(4000);s.sample(9000,96,21,.8);s.sample(11000,96,21,.8);s.stop(12000);assertEquals(7000,s.gapMillis);assertEquals(4000,s.observedMillis);assertEquals(11000,s.gapMillis+s.observedMillis);}

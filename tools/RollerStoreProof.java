@@ -46,7 +46,7 @@ public final class RollerStoreProof {
   require(s.mac().equals("AA:BB:CC:DD:EE:FF"),"roller profile stored");
   boolean rejected=false;try{s.toggle(true);}catch(IllegalArgumentException e){rejected=true;}require(rejected,"no charge session without a fresh BMS");
   byte[] b=new byte[30];b[0]=(byte)0xdd;b[1]=3;b[3]=23;b[4]=0x13;b[5]=(byte)0xd6;b[7]=(byte)189;b[23]=70;int sum=0;for(int i=2;i<27;i++)sum+=b[i]&255;int checksum=(-sum)&65535;b[27]=(byte)(checksum>>8);b[28]=(byte)checksum;b[29]=0x77;BmsPacket packet=BmsPacket.decode(b);require(packet!=null,"valid production packet");
-  long now=System.currentTimeMillis();s.accept(packet,now);s.toggle(true);now=System.currentTimeMillis();s.accept(packet,now+1000);
+  long now=System.currentTimeMillis();s.accept(packet,now);s.toggle(true);Thread.sleep(5);now=System.currentTimeMillis();s.accept(packet,now);
   JSONObject live=s.snapshot();require(!live.getBoolean("fresh")||Math.abs(live.getDouble("estimatedInputWatts")-138)<.1,"calibrated power or stale BMS");
   rejected=false;try{s.configure(p.toString());}catch(IllegalArgumentException e){rejected=true;}require(rejected,"active session freezes its loss profile");
   s.toggle(false);s.toggle(false);require(s.snapshot().getJSONArray("journal").length()==1,"one completed session archived exactly once");
@@ -57,5 +57,30 @@ public final class RollerStoreProof {
   require(result.getJSONArray("journal").length()==2,"both sessions survive process restart");
   require(result.getJSONObject("live").length()==0,"restart never exposes old BMS readings as live");
   require(result.getJSONObject("profile").getString("mac").equals("AA:BB:CC:DD:EE:FF"),"profile survives restart");
+  field.set(null,null);TestContext automaticContext=new TestContext(Files.createDirectories(root.resolve("automatic")));RollerStore auto=RollerStore.get(automaticContext);
+  p.put("autoSpecialUse",true);auto.configure(p.toString());long at=System.currentTimeMillis()-300000;
+  for(int i=0;i<=3;i++)auto.accept(packet,at+i*2000);
+  require(auto.snapshot().getJSONObject("session").getBoolean("active")&&auto.snapshot().getJSONObject("session").getBoolean("automatic"),"fresh positive BMS samples automatically start the special-use session");
+  require(auto.snapshot().getJSONObject("session").getLong("started")==at&&auto.snapshot().getJSONObject("session").getDouble("batteryWh")>0,"confirmation retains the measured charge start and first energy interval");
+  double measured=auto.snapshot().getJSONObject("session").getDouble("batteryWh");auto.accept(packet,at+66000);
+  require(auto.snapshot().getJSONObject("session").getBoolean("active")&&auto.snapshot().getJSONObject("session").getDouble("batteryWh")==measured,"missing BMS time neither ends the charge nor fabricates energy");
+  auto.accept(packet,at+68000);
+  JSONArray spans=new JSONArray(automaticContext.getSharedPreferences("wattpit",0).getString("rollerChargeWindows","[]"));
+  boolean finite=true,noGap=true;for(int i=0;i<spans.length();i++){JSONObject span=spans.getJSONObject(i);finite&=span.getLong("to")>span.getLong("from");noGap&=!(span.getLong("from")<at+66000&&span.getLong("to")>at+6000);}
+  require(finite&&noGap&&spans.length()==2,"automatic learning exclusions cover observed charge intervals and leave reception gaps open");
+  byte[] idle=b.clone();idle[6]=idle[7]=0;sum=0;for(int i=2;i<27;i++)sum+=idle[i]&255;checksum=(-sum)&65535;idle[27]=(byte)(checksum>>8);idle[28]=(byte)checksum;BmsPacket zero=BmsPacket.decode(idle);
+  for(int i=0;i<=30;i++)auto.accept(zero,at+70000+i*2000);
+  require(!auto.snapshot().getJSONObject("session").getBoolean("active")&&auto.snapshot().getJSONArray("journal").length()==1,"confirmed BMS charge end closes and archives exactly one automatic session");
+  at=System.currentTimeMillis();auto.accept(packet,at);long rev=auto.snapshot().getLong("sessionRevision");String startId=java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[16]);auto.command(true,rev,startId);auto.command(true,rev,startId);
+  require(auto.snapshot().getJSONObject("session").getBoolean("active")&&auto.snapshot().getLong("sessionRevision")==rev+1,"a repeated remote start is acknowledged once without duplicating a session");
+  String stopId="B"+startId.substring(1);auto.command(false,rev+1,stopId);auto.command(false,rev+1,stopId);
+  rejected=false;try{auto.command(true,rev,"C"+startId.substring(1));}catch(IllegalArgumentException expected){rejected=true;}
+  require(rejected&&!auto.snapshot().getJSONObject("session").getBoolean("active"),"stale commands cannot restart an already completed charge");
+  for(int i=1;i<=5;i++)auto.accept(packet,at+i*2000);
+  require(!auto.snapshot().getJSONObject("session").getBoolean("active")&&auto.snapshot().getBoolean("autoSuppressed"),"manual stop is respected while the physical charger remains on");
+  for(int i=0;i<=30;i++)auto.accept(zero,at+12000+i*2000);
+  for(int i=0;i<=3;i++)auto.accept(packet,at+74000+i*2000);
+  require(auto.snapshot().getJSONObject("session").getBoolean("active")&&!auto.snapshot().getBoolean("autoSuppressed"),"the next physical charge starts automatically after a confirmed intervening end");
+
  }
 }

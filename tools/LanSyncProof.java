@@ -71,7 +71,20 @@ public final class LanSyncProof {
             check(history.length()>0&&history.getJSONObject(0).getDouble("v")==-12,"history queries use the same host database over actual TCP");
             check(own.db.last("AA:00:00:00:00:01").power==-999,"display and history reads preserve the viewer's own stored measurements");
             boolean rejected=false;try{viewer.query("saveEquipment",new JSONArray().put(now-60000).put(now));}catch(IOException expected){rejected=true;}
-            check(rejected,"network API rejects write commands");
+            check(rejected,"network API rejects unrelated plant-write commands");
+            RollerStore roller=RollerStore.get(main);JSONObject profile=RollerStore.checked(new JSONObject()).put("mac","AA:BB:CC:DD:EE:FF");roller.configure(profile.toString());
+            byte[] frame=new byte[30];frame[0]=(byte)0xdd;frame[1]=3;frame[3]=23;frame[4]=0x13;frame[5]=(byte)0xd6;frame[7]=(byte)189;frame[23]=70;int sum=0;for(int i=2;i<27;i++)sum+=frame[i]&255;int checksum=(-sum)&65535;frame[27]=(byte)(checksum>>8);frame[28]=(byte)checksum;frame[29]=0x77;
+            roller.accept(BmsPacket.decode(frame),System.currentTimeMillis());refresh.invoke(viewer);long initialRevision=roller.snapshot().getLong("sessionRevision");String command=LanWire.random(16);
+            JSONObject acknowledged=viewer.query("rollerSession",new JSONArray().put(true).put(initialRevision).put(command));
+            check(acknowledged.getJSONObject("roller").getJSONObject("session").getBoolean("active")&&roller.snapshot().getJSONObject("session").getBoolean("active"),"an authenticated viewer can start special use on the actual host and receives its confirmed state");
+            viewer.query("rollerSession",new JSONArray().put(true).put(initialRevision).put(command));
+            check(roller.snapshot().getLong("sessionRevision")==initialRevision+1,"a retried network command cannot create a second charge session");
+            refresh.invoke(viewer);acknowledged=viewer.rollerSession(false);
+            check(!acknowledged.getJSONObject("session").getBoolean("active")&&!roller.snapshot().getJSONObject("session").getBoolean("active"),"the viewer can stop the host charge through the production command path");
+            rejected=false;try{viewer.query("rollerSession",new JSONArray().put(true).put(initialRevision).put(LanWire.random(16)));}catch(IllegalArgumentException expected){rejected=expected.getMessage().contains("inzwischen");}
+            check(rejected&&!roller.snapshot().getJSONObject("session").getBoolean("active"),"a stale delayed start is rejected with a readable state-change explanation");
+            roller.disconnected();rejected=false;try{viewer.rollerSession(true);}catch(IllegalArgumentException expected){rejected=expected.getMessage().contains("BMS");}
+            check(rejected&&!roller.snapshot().getJSONObject("session").getBoolean("active"),"the host rejects a remote start without fresh BMS readings");
             TestContext rejectedContext=new TestContext(root.resolve("wrong-key"));repository(rejectedContext);wrong=sync(rejectedContext);JSONObject wrongCode=new JSONObject(invitation.toString()).put("key",LanWire.random(32));
             rejected=false;try{wrong.join("WNP1."+Base64.getUrlEncoder().withoutPadding().encodeToString(wrongCode.toString().getBytes(StandardCharsets.UTF_8)));}catch(IOException expected){rejected=true;}
             check(rejected&&!wrong.viewer(),"an invalid key cannot pair or replace the independent local data source");

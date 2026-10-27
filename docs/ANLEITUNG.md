@@ -281,7 +281,9 @@ Ladezustand und Restlaufzeit stammen vom SmartShunt. Temperatur und Zusatzspannu
 
 ## 10. Mehrere Handys
 
-Die App kann auf mehreren Handys eingerichtet werden. Geräte und Sofortanzeigeschlüssel werden auf jedem Handy separat hinterlegt. Einstellungen lassen sich per JSON, Messdaten per CSV übertragen. Messungen, aktuelle Aufstellung und Lernstand werden nicht automatisch zwischen Handys abgeglichen; importierte CSV-Daten bilden keine verlässlichen neuen Lernbeispiele.
+Mit dem optionalen **Anlagenverbund** stellt ein Hauptgerät Messwerte, Verläufe, Wetter und Lernstand verschlüsselt im selben WLAN bereit. Anzeigen brauchen keine eigenen Sofortanzeigeschlüssel. Kacheln und Farben bleiben pro Handy einstellbar. Unter **Zusatzspeicher** lassen sich Start und Ende der Sondernutzung nach Bestätigung am Hauptgerät fernbedienen. Weitere Anlagen- und Geräteeinstellungen änderst du am Hauptgerät.
+
+Ohne Anlagenverbund arbeiten die Handys mit eigenen Geräten und Daten. Einstellungen lassen sich dann per JSON, Messdaten per CSV übertragen; importierte CSV-Daten bilden keine verlässlichen neuen Lernbeispiele.
 
 Die Sofortanzeige empfängt ausgesendete Livewerte ohne feste Bluetooth-Verbindung. Der Gerätearchivabruf benötigt eine Verbindung: Laut Victron kann nur ein Handy zugleich mit demselben Gerät verbunden sein. Archive deshalb nacheinander ergänzen; eine offene VictronConnect-Verbindung kann den Abruf ebenfalls belegen. [Victron-Verbindungshinweise](https://www.victronenergy.com/media/pg/VictronConnect_app/en/troubleshooting.html).
 
@@ -298,11 +300,11 @@ Nach dem heutigen Sonnenuntergang zeigt die Akkuvorschau den zeitlich nächsten 
 
 ## Roller und Ladeplanung ab 1.5.0
 
-1. **Einstellungen → Roller einrichten**: tatsächliche Akkudaten und BMS-Adresse eintragen oder ein gekoppeltes Gerät wählen. Watt’n’Pit-Aufzeichnung starten.
+1. **Zusatzspeicher → Roller einrichten**: tatsächliche Akkudaten und BMS-Adresse eintragen oder ein gekoppeltes Gerät wählen. Watt’n’Pit-Aufzeichnung starten.
 2. Für den Ladeweg Wohnwagen → Wechselrichter → Netzladegerät → Roller im Rollerbereich **Ladung als Sondernutzung starten** wählen und nach dem Laden beenden. Die App schaltet keine Hardware. Wh im Roller sind aus erfassten BMS-Abschnitten berechnet; der Wohnwagenanteil ist mit dem vorläufigen Verlustprofil geschätzt. Fehlende Messzeiten bleiben offen.
 3. Ladeziel und optional Strecke, Wh/km, Fahrpuffer und Abfahrts-/Rückkehrzeit hinterlegen. Mit **Ladung ab jetzt in der Akkuprognose einplanen** den noch benötigten Ladebedarf berücksichtigen. Verbrauch und Verluste sind vorläufige Planungswerte, keine Ladegarantie.
 4. Auf demselben Telefon kann ScootPit ab der BMS-Schnittstelle in **1.6.13-test.1** seine Grunddaten lokal liefern. Beide Apps aktualisieren und dasselbe BMS verwenden. Bei Übernahme erscheint **BMS über ScootPit · lokale Datenübernahme**. Mit älteren ScootPit-Versionen bzw. Overkill ist diese Übergabe nicht möglich. Kein Austausch zwischen unterschiedlichen Telefonen.
-5. Unter **Anordnen** den Rollerblock über die Pfeile nach oben setzen. **Größe ändern** oder der ↘-Griff passen Breite und Höhe an. Maße werden getrennt für schmale und breite Ansicht gespeichert. Kleine Bereiche lassen sich innen scrollen.
+5. Ab 1.6.2 steht der Roller unter **Zusatzspeicher** in einem eigenen Menüpunkt. Die Seite scrollt mit ihrem gesamten Inhalt.
 
 ## Hintergrundabruf und Herunterziehen ab 1.5.0
 
@@ -310,4 +312,17 @@ Neue Archivabrufe laufen standardmäßig im Hintergrund. Die Statusanzeige oben 
 
 ## Vollständige Standardübersicht
 
-**Einstellungen → Ansicht → Standardübersicht wiederherstellen** ersetzt nach Bestätigung sämtliche Kacheln einschließlich Größen, Positionen, Kachelfarben, Reihenfolge der Blöcke und Höhen von Verlauf und Rollerbereich. Beide Ansichten werden zurückgesetzt. Messdaten, Geräte und Rollerprofil werden nicht gelöscht. Eigene Layouts vorher über **Einstellungen exportieren** sichern. Die Rollergröße und Blockreihenfolge sind darin enthalten; BMS-Adresse und Ladejournal gehören zum lokalen Diagnoseexport.
+**Einstellungen → Ansicht → Standardübersicht wiederherstellen** ersetzt nach Bestätigung sämtliche Kacheln einschließlich Größen, Positionen, Kachelfarben, Reihenfolge der Blöcke und Höhe des Verlaufs. Beide Ansichten werden zurückgesetzt. Messdaten, Geräte und Rollerprofil werden nicht gelöscht. Eigene Layouts vorher über **Einstellungen exportieren** sichern. Die Kachelanordnung und Blockreihenfolge sind darin enthalten; BMS-Adresse und Ladejournal gehören zum lokalen Diagnoseexport.
+
+
+## Zusatzspeicher und Verbundbedienung ab 1.6.2
+
+Die Navigation lautet **Übersicht · Zusatzspeicher · Verlauf · Geräte · Einstellungen**. Rollerwerte und Ladejournal stehen unter **Zusatzspeicher**. Das Profil bleibt auch über **Einstellungen → Roller einrichten** erreichbar.
+
+Für die automatische Zuordnung im Rollerprofil **Laden am Wohnwagen automatisch zuordnen** einmal einschalten. Positiver BMS-Ladestrom bestätigt den Ladestart; eine Minute ohne nennenswerten Ladestrom bestätigt das Ende. Die Aufzeichnung und BMS-Verbindung müssen am Hauptgerät laufen. Das BMS erkennt die Ladequelle nicht: Vor dem Laden an einer externen Steckdose die Automatik ausschalten. Manuelles Beenden pausiert sie bis zum bestätigten Ladeende. Empfangslücken bleiben ohne erfundene Ladeenergie; nur erfasste automatische Ladeabschnitte werden aus dem Lernen des normalen Tagesbedarfs herausgenommen.
+
+Die Sondernutzung lässt sich unter **Zusatzspeicher** auch am Anzeigegerät starten und beenden. Der Button wartet auf die Antwort des Hauptgeräts; danach erscheint **Bestätigt: Sondernutzung läuft/beendet**. Bei einem Fehler bleibt eine verständliche Meldung sichtbar. Für diese Funktion alle beteiligten Handys auf 1.6.2 aktualisieren. Die App schaltet das physische Ladegerät nicht.
+
+Nach erfolgreichem Beitritt zum Verbund erscheint **Verbindung hergestellt** mit Anlagenname und Empfangsstand. **Zur Übersicht** führt zur Verbundkachel. Diese ist unter **Anordnen** frei zwischen den Hauptkacheln verschiebbar und skalierbar; vorhandene Positionen werden beim Update erhalten. Entfernte Verbundkacheln lassen sich über **+ Kachel → Anlagenverbund** wieder hinzufügen. Die genaue neue Standardanordnung wird später festgelegt.
+
+Beim QR-Scan alle Ränder des Codes im Rahmen halten und etwas Abstand zum Bildschirm lassen. Nach fehlender Kameraberechtigung oder Zeitablauf erklärt die App den nächsten Schritt. Ein über die Kamera-App kopierter Textcode bleibt als Alternative verwendbar.

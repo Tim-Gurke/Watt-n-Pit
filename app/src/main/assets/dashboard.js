@@ -12,14 +12,11 @@
   const aggregateNames={avg:'Durchschnitt',min:'Minimum',max:'Maximum',last:'Letzter Wert'};
   class WattDashboard {
     constructor(adapter) {
-      this.a=adapter;this.board=$('dashboardBoard');this.weatherContent=$('weatherStrip');this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
+      this.a=adapter;this.board=$('dashboardBoard');this.weatherContent=$('weatherStrip');this.widgets={weather:{content:this.weatherContent,dock:$('weatherDock')},lan:{content:$('lanBanner'),dock:$('lanDock')}};this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
       this.chargeEstimator=new C.BatteryTimeEstimator();this.chargeDemo=null;this.chargeEstimate=null;
       let stored;
       try { stored=JSON.parse(adapter.native?.dashboard?adapter.native.dashboard():localStorage.getItem('wattpit-dashboard-v1') || '{}'); } catch (_) { stored={}; }
       this.config=C.normalize(stored);this.saved=copy(this.config);this.history=$('miniHistory');
-      $('rollerLayoutSettings').onclick=()=>this.rollerEditor();
-      const rollerHandle=$('rollerResize');
-      rollerHandle.onpointerdown=e=>this.rollerPointerDown(e);rollerHandle.onpointermove=e=>this.rollerPointerMove(e);rollerHandle.onpointerup=e=>this.rollerPointerEnd(e,false);rollerHandle.onpointercancel=e=>this.rollerPointerEnd(e,true);rollerHandle.onlostpointercapture=e=>this.rollerPointerEnd(e,true);
       const handle=$('miniHistoryResize');
       handle.onpointerdown=event=>this.historyPointerDown(event);
       handle.onpointermove=event=>this.historyPointerMove(event);
@@ -56,13 +53,14 @@
       $('layoutHelp').hidden=!this.editing;
       this.renderBlockOrder();
       $('layoutProfile').textContent=this.profile==='wide'?'Breite Ansicht':'Schmale Ansicht';
-      $('weatherDock').append(this.weatherContent);
+      for(const widget of Object.values(this.widgets))widget.dock.append(widget.content);
       this.board.innerHTML='';this.elements.clear();
       for (const t of this.config.tiles) {
         const m=C.CATALOG[t.metric],el=document.createElement('article');
         el.className='cockpit-tile type-'+t.type;el.dataset.tile=t.id;el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-label',(t.title || m.label)+' anpassen');
         el.innerHTML=`<div class="tile-head"><span class="tile-label">${esc(t.title || m.label)}</span><button class="tile-menu" aria-label="${esc(t.title || m.label)} bearbeiten">···</button></div><div class="tile-visual"></div><div class="tile-hint"></div><span class="tile-resize" aria-hidden="true"></span>`;
-        if(m.widget){this.weatherContent.dataset.title=t.title;this.weatherContent.querySelector('#weatherPlaceName').textContent=t.title||this.a.getSnapshot().settings.weatherPlace?.name||'Wetter';el.querySelector('.tile-visual').append(this.weatherContent);el.querySelector('.tile-visual').insertAdjacentHTML('beforeend','<span class="weather-disabled">Wetterort in den Einstellungen wählen.</span>');}
+        if(m.widget)el.querySelector('.tile-visual').append(this.widgets[m.widget].content);
+        if(t.metric==='weather'){this.weatherContent.dataset.title=t.title;this.weatherContent.querySelector('#weatherPlaceName').textContent=t.title||this.a.getSnapshot().settings.weatherPlace?.name||'Wetter';el.querySelector('.tile-visual').insertAdjacentHTML('beforeend','<span class="weather-disabled">Wetterort in den Einstellungen wählen.</span>');}
         el.style.setProperty('--tile-color',t.color);el.style.setProperty('--number-size',t.fontSize+'px');
         el.style.setProperty('--tile-bg',t.background==='auto'?`color-mix(in srgb,var(--panel) ${t.opacity}%,transparent)`:`${t.background}${Math.round(t.opacity*2.55).toString(16).padStart(2,'0')}`);
         el.querySelector('.tile-menu').onclick=e=>{e.stopPropagation();this.editor(t.id);};
@@ -84,16 +82,17 @@
       this.layout();this.update();
     }
     renderBlockOrder() {
-      const container=$('overviewBlocks'),controls=$('overviewOrder'),labels={roller:'Roller',tiles:'Kacheln mit Wetter',history:'Verlauf',record:'Start / Pause'};
+      const container=$('overviewBlocks'),controls=$('overviewOrder'),labels={tiles:'Kacheln',history:'Verlauf',record:'Start / Pause'};
       for(const key of this.config.blockOrder){const block=container.querySelector(`[data-overview-block="${key}"]`);if(block)container.append(block);}
       controls.hidden=!this.editing;
-      controls.innerHTML='<p>Reihenfolge der Blöcke</p>'+this.config.blockOrder.map((key,i)=>`<div class="overview-order-row"><span>${labels[key]}</span><button class="quiet" data-block="${key}" data-move="-1" aria-label="${labels[key]} nach oben" ${i===0?'disabled':''}>↑</button><button class="quiet" data-block="${key}" data-move="1" aria-label="${labels[key]} nach unten" ${i===this.config.blockOrder.length-1?'disabled':''}>↓</button></div>`).join('');
-      controls.querySelectorAll('button').forEach(button=>button.onclick=()=>{const i=this.config.blockOrder.indexOf(button.dataset.block),next=i+Number(button.dataset.move);if(next<0||next>=this.config.blockOrder.length)return;[this.config.blockOrder[i],this.config.blockOrder[next]]=[this.config.blockOrder[next],this.config.blockOrder[i]];this.commit();controls.querySelector(`[data-block="${button.dataset.block}"][data-move="${button.dataset.move}"]`)?.focus({preventScroll:true});});
+      const order=this.config.blockOrder.filter(key=>labels[key]);
+      controls.innerHTML='<p>Reihenfolge der Blöcke</p>'+order.map((key,i)=>`<div class="overview-order-row"><span>${labels[key]}</span><button class="quiet" data-block="${key}" data-move="-1" aria-label="${labels[key]} nach oben" ${i===0?'disabled':''}>↑</button><button class="quiet" data-block="${key}" data-move="1" aria-label="${labels[key]} nach unten" ${i===order.length-1?'disabled':''}>↓</button></div>`).join('');
+      controls.querySelectorAll('button').forEach(button=>button.onclick=()=>{const i=order.indexOf(button.dataset.block),next=i+Number(button.dataset.move);if(next<0||next>=order.length)return;const a=this.config.blockOrder.indexOf(order[i]),b=this.config.blockOrder.indexOf(order[next]);[this.config.blockOrder[a],this.config.blockOrder[b]]=[this.config.blockOrder[b],this.config.blockOrder[a]];this.commit();controls.querySelector(`[data-block="${button.dataset.block}"][data-move="${button.dataset.move}"]`)?.focus({preventScroll:true});});
     }
     layout() {
       const profile=this.board.clientWidth>=620?'wide':'compact';
       if(this.profile!==profile){if(this.historyDrag)this.historyPointerEnd({pointerId:this.historyDrag.pointer},true);this.profile=profile;this.render();return;}
-      this.layoutHistory();this.layoutRoller();
+      this.layoutHistory();
       this.row=this.profile==='wide'?30:26;
       const width=this.board.clientWidth;
       for(const t of this.config.tiles){const p=t.layouts[this.profile],el=this.elements.get(t.id);if(!el)continue;
@@ -105,19 +104,6 @@
       this.board.style.height=(visible.length?Math.max(...visible.map(t=>{const p=t.layouts[this.profile];return p.y+p.h;}))+(this.editing?2:0):0)*this.row+'px';
       this.fitNumbers();
     }
-    layoutRoller(){
-      const p=this.config.rollerLayout[this.profile],panel=$('rollerPanel');
-      panel.style.width=(p.width/12*100)+'%';panel.style.height=p.height+'px';
-      $('rollerLayoutSettings').hidden=!this.editing;$('rollerResize').hidden=!this.editing;panel.classList.toggle('is-editing',this.editing);
-    }
-    rollerEditor(){
-      const p={...this.config.rollerLayout[this.profile]};
-      this.a.openModal('Rollerbereich skalieren',`<p class="muted">Gilt für die ${this.profile==='wide'?'breite':'schmale'} Ansicht. Die Reihenfolge änderst du unter „Anordnen“. Inhalt bleibt bei kleiner Fläche scrollbar.</p>${field('Breite · von 12 Spalten',input('rollerBlockWidth',p.width,'type="range" min="4" max="12" step="0.5"'))}${field('Höhe · Pixel',input('rollerBlockHeight',p.height,'type="range" min="250" max="1600" step="10"'))}<button class="primary" id="saveRollerLayout">Übernehmen</button>`);
-      $('saveRollerLayout').onclick=()=>{this.config.rollerLayout[this.profile]={width:Number($('rollerBlockWidth').value),height:Number($('rollerBlockHeight').value)};if(this.commit())this.a.closeModal();};
-    }
-    rollerPointerDown(e){if(!this.editing||e.button!==0)return;e.preventDefault();this.rollerDrag={pointer:e.pointerId,x:e.clientX,y:e.clientY,origin:{...this.config.rollerLayout[this.profile]},profile:this.profile,width:$('overviewBlocks').clientWidth};e.currentTarget.setPointerCapture(e.pointerId);}
-    rollerPointerMove(e){const d=this.rollerDrag;if(!d||e.pointerId!==d.pointer)return;e.preventDefault();this.config.rollerLayout[d.profile]={width:C.clamp(Math.round((d.origin.width+(e.clientX-d.x)/d.width*12)*2)/2,4,12),height:C.clamp(Math.round(d.origin.height+e.clientY-d.y),250,1600)};this.layoutRoller();}
-    rollerPointerEnd(e,cancelled){const d=this.rollerDrag;if(!d||e.pointerId!==d.pointer)return;this.rollerDrag=null;const h=$('rollerResize');if(h.hasPointerCapture(d.pointer))h.releasePointerCapture(d.pointer);if(cancelled){this.config.rollerLayout[d.profile]=d.origin;this.layoutRoller();}else this.commit();}
     layoutHistory() {
       const height=this.config.historyHeight[this.profile];
       this.history.style.height=height+'px';$('miniHistoryResize').setAttribute('aria-valuenow',String(height));$('miniHistoryResize').setAttribute('aria-valuetext',height+' Pixel');$('miniHistorySize').textContent=height+' px · Höhe ziehen';
@@ -237,11 +223,12 @@
       let visibilityChanged=false;
       for(const t of this.config.tiles){
         const el=this.elements.get(t.id);if(!el)continue;
-        if(C.CATALOG[t.metric].widget){
+        if(t.metric==='weather'){
           const configured=!!snapshot.settings.weatherPlace?.name,hidden=!configured&&!this.editing;
           if(el.hidden!==hidden){el.hidden=hidden;visibilityChanged=true;}
           el.querySelector('.weather-disabled').hidden=configured;continue;
         }
+        if(C.CATALOG[t.metric].widget)continue;
         el.style.setProperty('--tile-color',this.paint(t.color,t,true));
         el.style.setProperty('--tile-muted',this.paint(getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),t,true));
         const m=C.CATALOG[t.metric];let window=C.windowFor(t,now,snapshot.weather);
@@ -330,6 +317,8 @@
     }
     choose(id) {
       const t=this.config.tiles.find(t=>t.id===id);if(!t)return;
+      if(t.metric==='lan'){$('lanOpen').click();return;}
+      if(t.metric==='weather'){this.editor(id);return;}
       this.a.openModal(C.tileLabel(t,this.chargeEstimate),`<div class="tile-actions"><button class="primary" id="tileActionDetail">Großansicht öffnen</button><button class="secondary" id="tileActionSettings">Kachel-Einstellungen</button></div>`);
       $('tileActionSettings').onclick=()=>this.editor(id);
       $('tileActionDetail').onclick=()=>{this.a.closeModal();if(!this.detail)this.detail=new window.WattTileDetail(this);this.detail.open(id);};
@@ -342,7 +331,7 @@
       document.querySelectorAll('.metric-option').forEach(el=>el.onclick=()=>this.add(el.dataset.metric));
     }
     add(metric,prototype) {
-      if(metric==='weather'&&this.config.tiles.some(t=>t.metric==='weather')){this.a.closeModal();this.a.toast('Die Wetterkachel ist bereits vorhanden. Über „Anordnen“ verschieben oder anpassen.');return;}
+      if(C.CATALOG[metric]?.widget&&this.config.tiles.some(t=>t.metric===metric)){this.a.closeModal();this.a.toast('Diese Kachel ist bereits vorhanden. Über „Anordnen“ verschieben oder anpassen.');return;}
       const t=prototype?{...copy(prototype),id:C.tile(metric).id}:C.tile(metric);
       for(const profile of ['compact','wide']){const y=this.config.tiles.length?Math.max(...this.config.tiles.map(t=>t.layouts[profile].y+t.layouts[profile].h)):0;t.layouts[profile]={...t.layouts[profile],x:0,y};}
       this.config.tiles.push(t);
@@ -351,7 +340,7 @@
     editor(id,unsaved) {
       const original=this.config.tiles.find(t=>t.id===id);if(!original)return;
       const t=copy(unsaved || original),m=C.CATALOG[t.metric],p=t.layouts[this.profile];let layer='keep';
-      if(m.widget){this.weatherEditor(t);return;}
+      if(m.widget){this.widgetEditor(t);return;}
       const types=m.status?[['number','Zahlenwert']]:[['number','Zahlenwert'],['gauge','Rundinstrument'],...(!m.liveOnly?[['chart','Verlauf']]:[])];
       const fields=`<div class="form-grid">${field('Messwert',select('tileMetric',Object.entries(C.CATALOG).map(([key,m])=>[key,m.label])))}${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60" placeholder="'+esc(m.label)+'"'))}${field('Darstellung',select('tileType',types))}${field('Einheit',select('tileUnit',m.units.map(u=>[u,u || 'Ohne Einheit'])))}</div><p class="muted tile-explanation">${esc(m.hint || (m.kind==='shunt'?'Messwert vom SmartShunt.':'Messwert vom SmartSolar.'))}</p>`;
       const period=`<details open><summary>Wert & Zeitraum</summary><div class="form-grid">${field('<span id="tilePeriodLabel">Zeitraum</span>',select('tilePeriod',m.liveOnly?[['live','Aktuell']]:[['live','Aktuell'],['last','Letzte …'],['today','Heute'],['sunrise','Seit Sonnenaufgang'],['reset','Seit Zurücksetzen'],['custom','Freier Zeitraum']]))}${field('<span id="tileAggregateLabel">Auswertung</span>',select('tileAggregate',m.status?[['last','Letzter Wert']]:Object.entries(aggregateNames)))}</div><p class="muted" id="tileLiveHint" hidden>Aktuell zeigt den Liveempfang. Ohne frischen Wert erscheint —; die gespeicherte Kurve bleibt sichtbar.</p><p class="muted" id="tileSunriseHint" hidden></p>${m.energy&&!m.flow?'<label class="check-field"><input type="checkbox" id="tileReverseSign"> Vorzeichen umkehren (+/−)</label>':''}${m.flow?'<p class="muted">Verbrauch und Bilanz verwenden denselben Zeitraum. Bei „Heute“ kann der Solarertrag ab Sonnenaufgang zählen; der nächtliche Verbrauch bleibt enthalten. Der Verbrauch berücksichtigt nur gemessene Einspeisungen; zusätzlicher PWM- oder Landstrom senkt den berechneten Wert.</p>':''}<div id="tileLastFields" class="form-grid">${field('Anzahl',input('tileAmount',t.period.amount,'type="number" min="1" max="10000"'))}${field('Zeiteinheit',select('tileTimeUnit',[['min','Minuten'],['h','Stunden'],['d','Tage']]))}</div><div id="tileCustomFields" class="form-grid">${field('Von',input('tileFrom',dateInput(t.period.from || Date.now()-86400000),'type="datetime-local"'))}${field('Bis',input('tileTo',dateInput(t.period.to || Date.now()),'type="datetime-local"'))}</div><div id="tileResetFields"><p class="muted" id="tileResetLabel"></p><button class="quiet" id="tileReset">Jetzt zurücksetzen</button></div></details>`;
@@ -422,16 +411,16 @@
         } catch(error){$('tileError').hidden=false;$('tileError').textContent=error.message;}
       };
     }
-    weatherEditor(t){
-      const p=t.layouts[this.profile];
-      this.a.openModal('Wetterkachel anpassen',`<div class="tile-editor"><p class="muted">14 Tage mit Wettersymbol und Sonnenstunden, seitlich wischbar. Unter „Anordnen“ frei zwischen deine Messkacheln verschieben.</p>${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60" placeholder="Wetterort"'))}<div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="4" max="12" step="0.5"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="4" max="18" step="0.5"'))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}</div><button id="tileWeatherSettings" class="quiet">Wetterort ändern</button><div class="form-actions"><button class="quiet" id="removeTile">Entfernen</button><button class="primary" id="saveTile">Übernehmen</button></div></div>`);
-      $('tileWeatherSettings').onclick=()=>{this.a.closeModal();document.querySelector('[data-page="settings"]').click();$('weatherQuery').focus();};
+    widgetEditor(t){
+      const p=t.layouts[this.profile],weather=t.metric==='weather',label=weather?'Wetterkachel':'Verbundkachel';
+      this.a.openModal(label+' anpassen',`<div class="tile-editor"><p class="muted">${weather?'14 Tage mit Wettersymbol und Sonnenstunden, seitlich wischbar.':'Name, Rolle und Verbindungsstand deines Anlagenverbunds.'} Unter „Anordnen“ frei zwischen deine Messkacheln verschieben.</p>${field('Eigene Beschriftung',input('tileTitle',t.title,'maxlength="60"'))}<div class="form-grid">${field('Breite',input('tileWidth',p.w,'type="range" min="4" max="12" step="0.5"'))}${field('Höhe',input('tileHeight',p.h,'type="range" min="4" max="18" step="0.5"'))}${field('Deckkraft der Fläche',input('tileOpacity',t.opacity,'type="range" min="0" max="100"'))}</div><button id="tileWidgetSettings" class="quiet">${weather?'Wetterort ändern':'Verbund öffnen'}</button><div class="form-actions"><button class="quiet" id="removeTile">Entfernen</button><button class="primary" id="saveTile">Übernehmen</button></div></div>`);
+      $('tileWidgetSettings').onclick=()=>{if(!weather){$('lanOpen').click();return;}this.a.closeModal();document.querySelector('[data-page="settings"]').click();$('weatherQuery').focus();};
       $('removeTile').onclick=()=>{this.config.tiles=this.config.tiles.filter(old=>old.id!==t.id);if(this.commit())this.a.closeModal();};
-      $('saveTile').onclick=()=>{t.title=$('tileTitle').value.trim();t.opacity=Number($('tileOpacity').value);t.layouts[this.profile]={...p,w:Number($('tileWidth').value),h:Number($('tileHeight').value)};t.layouts[this.profile].x=Math.min(p.x,12-t.layouts[this.profile].w);this.config.tiles=this.config.tiles.map(old=>old.id===t.id?t:old);if(this.commit()){this.a.closeModal();this.a.toast('Wetterkachel gespeichert.');}};
+      $('saveTile').onclick=()=>{t.title=$('tileTitle').value.trim();t.opacity=Number($('tileOpacity').value);t.layouts[this.profile]={...p,w:Number($('tileWidth').value),h:Number($('tileHeight').value)};t.layouts[this.profile].x=Math.min(p.x,12-t.layouts[this.profile].w);this.config.tiles=this.config.tiles.map(old=>old.id===t.id?t:old);if(this.commit()){this.a.closeModal();this.a.toast(label+' gespeichert.');}};
     }
     shortInput(n){return Math.round(n*1e6)/1e6;}
     reset() {
-      this.a.openModal('Standardübersicht wiederherstellen?',`<p class="muted">Alle Kacheln, Größen, Positionen, Kachelfarben und Blockreihenfolgen werden für Hoch- und Queransicht auf die Standardübersicht zurückgesetzt. Auch Verlaufshöhe und Rollergröße werden zurückgesetzt. Geräte, Rollerprofil und Messdaten bleiben erhalten.</p><div class="form-actions"><button class="quiet" id="keepDashboard">Behalten</button><button class="primary" id="confirmDashboardReset">Wiederherstellen</button></div>`);
+      this.a.openModal('Standardübersicht wiederherstellen?',`<p class="muted">Alle Kacheln, Größen, Positionen, Kachelfarben und Blockreihenfolgen werden für Hoch- und Queransicht auf die Standardübersicht zurückgesetzt. Auch die Verlaufshöhe wird zurückgesetzt. Geräte, Rollerprofil und Messdaten bleiben erhalten.</p><div class="form-actions"><button class="quiet" id="keepDashboard">Behalten</button><button class="primary" id="confirmDashboardReset">Wiederherstellen</button></div>`);
       $('keepDashboard').onclick=()=>this.a.closeModal();$('confirmDashboardReset').onclick=()=>{this.config=C.defaults();if(this.commit())this.a.closeModal();};
     }
   }

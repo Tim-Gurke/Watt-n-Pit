@@ -11,29 +11,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   const modalScroll=await page.locator('#modal .sheet').evaluate(e=>e.scrollTop);assert.ok(modalScroll>50);
   await page.evaluate(()=>{document.getElementById('tileMetric').value='current';document.getElementById('tileMetric').dispatchEvent(new Event('change'));});await page.waitForTimeout(60);
   assert.ok(Math.abs(await page.locator('#modal .sheet').evaluate(e=>e.scrollTop)-modalScroll)<4,'editor lost its scroll position');await page.locator('#closeModal').click();
-  await page.evaluate(()=>{dashboard.config.blockOrder=['roller','tiles','history','record'];dashboard.commit();});
-  assert.equal(await page.locator('#overviewBlocks > div').first().getAttribute('data-overview-block'),'roller');
-  await page.evaluate(()=>dashboard.rollerEditor());await page.evaluate(()=>{document.getElementById('rollerBlockWidth').value='8';document.getElementById('rollerBlockHeight').value='360';});await page.locator('#saveRollerLayout').click();
-  assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.compact),{width:8,height:360});assert.equal(await page.locator('#rollerPanel').evaluate(e=>Math.round(e.getBoundingClientRect().height)),360);
-
-  // Scroll inside the roller first, then continue scrolling the overview at its edge.
-  await page.evaluate(()=>{dashboard.editing=false;dashboard.config.blockOrder=['roller','tiles','history','record'];dashboard.config.rollerLayout.compact={width:12,height:250};dashboard.commit();});
-  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-  await page.locator('#rollerPanel').scrollIntoViewIfNeeded();
-  await page.locator('#rollerPanel').evaluate(e=>{e.scrollTop=0;});
-  await page.locator('#rollerPanel').hover();
-  await page.mouse.wheel(0,120);await page.waitForTimeout(250);
-  assert.ok(await page.locator('#rollerPanel').evaluate(e=>e.scrollTop>0),'roller content must scroll');
-  await page.locator('#rollerPanel').evaluate(e=>{e.scrollTop=e.scrollHeight;});
-  const edgeScroll=await page.evaluate(()=>scrollY);
-  await page.mouse.wheel(0,120);await page.waitForTimeout(250);
-  assert.ok(await page.evaluate(()=>scrollY)>edgeScroll+20,'roller bottom must pass scrolling to overview');
-  assert.equal(await page.locator('#rollerPanel').evaluate(e=>getComputedStyle(e).overscrollBehaviorY),'auto');
-  await page.evaluate(()=>{dashboard.config.rollerLayout.compact={width:8,height:360};dashboard.commit();});
-  await page.setViewportSize({width:900,height:420});await page.waitForTimeout(100);assert.equal(await page.evaluate(()=>dashboard.profile),'wide');assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.wide),{width:12,height:650});
-  await page.reload();assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.compact),{width:8,height:360});assert.equal(await page.locator('#overviewBlocks > div').first().getAttribute('data-overview-block'),'roller');
-  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{dashboard.reset();});await page.locator('#confirmDashboardReset').click();
-  assert.deepEqual(await page.evaluate(()=>dashboard.config.tiles[0].layouts.compact),{x:0,y:0,w:4,h:5});assert.deepEqual(await page.evaluate(()=>dashboard.config.rollerLayout.compact),{width:12,height:650});
+  await page.locator('[data-page="storage"]').click();assert.equal(await page.locator('#rollerPanel').isVisible(),true);assert.equal(await page.locator('#overview #rollerPanel').count(),0);
+  assert.equal(await page.locator('#rollerPanel').evaluate(e=>getComputedStyle(e).overflowY),'visible');
+  await page.locator('#rollerPanel').hover();const storageScroll=await page.evaluate(()=>scrollY);await page.mouse.wheel(0,180);await page.waitForTimeout(180);assert.ok(await page.evaluate(()=>scrollY)>=storageScroll,'storage page must scroll naturally');
+  await page.locator('[data-page="overview"]').click();await page.evaluate(()=>{dashboard.reset();});await page.locator('#confirmDashboardReset').click();
+  assert.deepEqual(await page.evaluate(()=>dashboard.config.tiles[0].layouts.compact),{x:0,y:0,w:4,h:5});
 
   // Real touch input must move the page even when it starts over a chart.
   const cdp=await page.context().newCDPSession(page);
@@ -55,7 +37,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   await gesture();assert.equal(await page.evaluate(()=>pullCount),1);await gesture(30);await gesture(100,200);await gesture(100,0,true);assert.equal(await page.evaluate(()=>pullCount),1);
   await page.evaluate(()=>lifecycle.busy=true);await gesture();assert.equal(await page.evaluate(()=>pullCount),1);await page.evaluate(()=>lifecycle.busy=false);
   assert.deepEqual(errors,[]);
-  if(process.env.WATTPIT_SCREENSHOT_DIR){await page.evaluate(()=>{roller.render();dashboard.config.blockOrder=['roller','tiles','history','record'];dashboard.commit();scrollTo(0,0);});await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'roller-positioned-390.png')});}
-  console.log('PASS dashboard usability: editor and document scroll, roller order/size/reload/orientations, complete reset, pull-to-refresh thresholds and guards');
+  if(process.env.WATTPIT_SCREENSHOT_DIR){await page.evaluate(()=>{roller.render();showPage('storage');scrollTo(0,0);});await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,'zusatzspeicher-390.png')});}
+  console.log('PASS dashboard usability: editor and document scroll, separate additional-storage navigation and natural scrolling, complete reset, pull-to-refresh thresholds and guards');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1);});
