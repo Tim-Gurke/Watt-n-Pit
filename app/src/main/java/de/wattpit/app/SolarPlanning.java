@@ -14,9 +14,11 @@ import de.wattpit.app.core.VictronSettings;
 
 /** Forecast history is separate from measurements. All history work runs off the UI/bridge thread. */
 final class SolarPlanning extends SQLiteOpenHelper {
+    static volatile String sharedKnowledge="{}";
     private final Repository repository;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final AtomicBoolean busy=new AtomicBoolean();
+    private final AtomicBoolean requestedAgain=new AtomicBoolean();
     private final Consumer<JSONObject> callback;
     private volatile boolean closed;
     SolarPlanning(Context context,Repository repository,Consumer<JSONObject> callback){
@@ -148,12 +150,11 @@ final class SolarPlanning extends SQLiteOpenHelper {
         JSONObject equipment=snapshot.getJSONObject("equipment"),plan=snapshot.getJSONObject("setup").getJSONObject("groups");JSONArray groups=equipment.getJSONArray("groups");
         for(int i=0;i<groups.length();i++){JSONObject g=groups.getJSONObject(i);if(plan.getJSONObject(g.getString("id")).optBoolean("active")&&!g.optString("measurement").equals("solar"))return true;}return false;
     }
-    private boolean rollerCharging(long from,long to)throws JSONException{
-        JSONArray windows=new JSONArray(repository.prefs.getString("rollerChargeWindows","[]"));
+    private static boolean rollerCharging(JSONArray windows,long from,long to)throws JSONException{
         for(int i=0;i<windows.length();i++){JSONObject w=windows.getJSONObject(i);long end=w.optLong("to");if(w.optLong("from")<to&&(end==0||end>from))return true;}return false;
     }
-    private boolean annotate(JSONObject row,NavigableMap<Long,ContextEntry> contexts,JSONArray profiles,JSONObject weather,String currentKey,String solarKey,long now)throws Exception{
-        JSONArray segments=row.getJSONArray("segments");double wh=0,estimatedWh=0;long duration=0,estimated=0,latest=0;boolean solarEligible=true,free=true;String rowKey="";
+    private boolean annotate(JSONObject row,NavigableMap<Long,ContextEntry> contexts,JSONArray profiles,JSONObject weather,String currentKey,String solarKey,long now,JSONArray specialUses)throws Exception{
+        JSONArray segments=row.getJSONArray("segments");double wh=0,estimatedWh=0;long duration=0,estimated=0,latest=0,excluded=0;boolean solarEligible=true,free=true;String rowKey="";
         JSONObject current=new JSONObject().put("equipment",repository.equipment()).put("setup",setup());
         for(int i=0;i<segments.length();i++){
             JSONObject segment=segments.getJSONObject(i);long from=segment.getLong("from"),to=segment.getLong("to");ContextEntry context=at(contexts,from);
@@ -176,7 +177,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
             for(int j=0;j<pieces.length();j++){
                 JSONObject part=pieces.getJSONObject(j);long a=part.getLong("from"),b=part.getLong("to");
                 // Deliberately assigned roller charging must not become normal household demand.
-                if(rollerCharging(a,b))continue;
+                if(rollerCharging(specialUses,a,b)){excluded+=b-a;continue;}
                 // Unknown intervals stay out; only their actually observed neighbours can teach usage.
                 if(!known&&part.optDouble("actualSolarCoverage",0)<.98)continue;
                 if(part.optDouble("coverage",0)<.98)continue;
@@ -198,30 +199,41 @@ final class SolarPlanning extends SQLiteOpenHelper {
         }
         row.remove("segments");row.put("key",rowKey).put("solarKey",solarKey).put("mobileFree",free&&!row.optBoolean("extraCharging"))
             .put("learningVersion",2).put("solarEligible",solarEligible&&row.getLong("to")<=now)
-            .put("usage",new JSONObject().put("wh",wh).put("duration",duration).put("estimatedDuration",estimated).put("estimatedWh",estimatedWh).put("measuredWh",wh-estimatedWh).put("latest",latest));return true;
+            .put("usage",new JSONObject().put("wh",wh).put("duration",duration).put("excludedRollerMillis",excluded).put("estimatedDuration",estimated).put("estimatedWh",estimatedWh).put("measuredWh",wh-estimatedWh).put("latest",latest));return true;
     }
     void request(){
-        if(closed||!busy.compareAndSet(false,true))return;
+        if(closed)return;if(!busy.compareAndSet(false,true)){requestedAgain.set(true);return;}
         worker.execute(()->{JSONObject result=new JSONObject();try{
             if(repository.archiveBusy)return;long now=System.currentTimeMillis();String[] devices=devices();String source=source(devices());
             JSONObject weather=new JSONObject(repository.prefs.getString("weatherCache","{}"));SQLiteDatabase db=getWritableDatabase();long since=now-7L*86400000;
             String timeRevision=repository.db.archiveClockRevision();
-            boolean rebuild=repository.prefs.getInt("planningEnergyVersion."+source,0)<1474||!timeRevision.equals(repository.prefs.getString("planningArchiveTimeRevision."+source,""));
+            boolean rebuild=repository.prefs.getInt("planningEnergyVersion."+source,0)<1600||!timeRevision.equals(repository.prefs.getString("planningArchiveTimeRevision."+source,""));
             if(rebuild){try(Cursor c=db.rawQuery("SELECT MIN(start) FROM observations WHERE source=?",new String[]{source})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(now-400L*86400000,Math.min(since,c.getLong(0)));}}
             else try(Cursor c=db.rawQuery("SELECT MAX(end) FROM observations WHERE source=? AND end<=?",new String[]{source,""+now})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(since,c.getLong(0)-2L*86400000);}
+            JSONArray specialUses=new JSONArray(repository.prefs.getString("rollerChargeWindows","[]")),previousUses=new JSONArray(repository.prefs.getString("planningSpecialUsage."+source,"[]"));
+            Map<Long,Long> previousWindows=new HashMap<>(),nextWindows=new HashMap<>();
+            for(int i=0;i<previousUses.length();i++){JSONObject use=previousUses.getJSONObject(i);previousWindows.put(use.getLong("from"),use.optLong("to"));}
+            for(int i=0;i<specialUses.length();i++){JSONObject use=specialUses.getJSONObject(i);nextWindows.put(use.getLong("from"),use.optLong("to"));}
+            long changedAt=now;Set<Long> starts=new HashSet<>(previousWindows.keySet());starts.addAll(nextWindows.keySet());
+            for(long at:starts)if(!Objects.equals(previousWindows.get(at),nextWindows.get(at)))changedAt=Math.min(changedAt,at);
+            if(changedAt<now){java.time.ZoneId zone;try{zone=java.time.ZoneId.of(weather.optString("timezone",java.time.ZoneId.systemDefault().getId()));}catch(Exception e){zone=java.time.ZoneId.systemDefault();}
+                long dayStart=java.time.Instant.ofEpochMilli(changedAt).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();since=Math.max(now-400L*86400000,Math.min(since,dayStart));}
             NavigableMap<Long,ContextEntry> contexts=new TreeMap<>();List<Long> changes=new ArrayList<>();
             try(Cursor c=db.rawQuery("SELECT at,key,mobile_free,solar_key,payload FROM contexts WHERE source=? ORDER BY at",new String[]{source})){while(c.moveToNext()){ContextEntry entry=new ContextEntry(c);contexts.put(entry.at,entry);changes.add(entry.at);}}
             ContextEntry latest=contexts.isEmpty()?null:contexts.lastEntry().getValue();String currentKey=latest==null?"":latest.key,solarKey=latest==null?"":latest.solarKey;
             JSONArray profiles=repository.db.deviceSettingsHistory(devices[0],since,now);
             for(int i=0;i<profiles.length();i++){JSONObject p=profiles.getJSONObject(i);changes.add(p.getLong("since"));changes.add(p.getLong("until"));changes.add(p.getLong("until")+VictronSettings.MAX_AGE);}
+            // Split at actual special-use boundaries; preserve ordinary household evidence
+            // immediately before/after charging rather than discarding the enclosing hour.
+            for(int i=0;i<specialUses.length();i++){JSONObject use=specialUses.getJSONObject(i);changes.add(use.getLong("from"));if(use.optLong("to")>0)changes.add(use.getLong("to"));}
             String signature=repository.prefs.getString("equipment-v1","{\"version\":1,\"groups\":[]}")+"|"+repository.prefs.getString("solar-setup-v1","{}");
             JSONArray observations=weather.optInt("version")>=4&&!signature.equals(weather.optString("signature"))?new JSONArray():repository.db.planningObservations(since,now,weather,devices[0],devices[1],changes);
             db.beginTransaction();try{for(int i=0;i<observations.length();i++){
                 JSONObject row=observations.getJSONObject(i);long from=row.getLong("from"),to=row.getLong("to");
-                if(!annotate(row,contexts,profiles,weather,currentKey,solarKey,now))continue;
+                if(!annotate(row,contexts,profiles,weather,currentKey,solarKey,now,specialUses))continue;
                 ContentValues v=new ContentValues();v.put("start",from);v.put("end",to);v.put("source",source);v.put("payload",row.toString());db.insertWithOnConflict("observations",null,v,SQLiteDatabase.CONFLICT_REPLACE);
             }db.delete("observations","end<?",new String[]{""+(now-400L*86400000)});db.delete("contexts","at<?",new String[]{""+(now-410L*86400000)});db.setTransactionSuccessful();}finally{db.endTransaction();}
-            if(observations.length()>0)repository.prefs.edit().putInt("planningEnergyVersion."+source,1474).putString("planningArchiveTimeRevision."+source,timeRevision).apply();
+            if(observations.length()>0)repository.prefs.edit().putInt("planningEnergyVersion."+source,1600).putString("planningArchiveTimeRevision."+source,timeRevision).putString("planningSpecialUsage."+source,specialUses.toString()).apply();
             JSONArray samples=new JSONArray(),forecasts=new JSONArray();
             try(Cursor c=db.rawQuery("SELECT payload FROM observations WHERE source=? ORDER BY start DESC LIMIT 1300",new String[]{source})){while(c.moveToNext()){JSONObject row=new JSONObject(c.getString(0));if(!row.has("solarKey")&&currentKey.equals(row.optString("key")))row.put("solarKey",solarKey);samples.put(row);}}
             // One original eligible prediction per interval keeps the bridge payload small.
@@ -229,7 +241,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
             try(Cursor c=db.rawQuery("SELECT payload,MIN(issued) FROM forecasts WHERE key IN (?,?) AND issued<=start-43200000 AND issued>=start-259200000 GROUP BY start,end ORDER BY start DESC LIMIT 200",new String[]{currentKey,solarKey})){while(c.moveToNext())forecasts.put(new JSONObject(c.getString(0)).put("key",solarKey));}
             result.put("source",source).put("observations",samples).put("forecasts",forecasts).put("updated",now);
         }catch(Exception e){try{result.put("error","Lerndaten gerade nicht verfügbar. Die Solarvorschau bleibt nutzbar.");}catch(JSONException ignored){}}
-        finally{busy.set(false);if(!closed&&result.length()>0)callback.accept(result);}});
+        finally{busy.set(false);if(!closed&&result.length()>0){if(!result.has("error"))sharedKnowledge=result.toString();callback.accept(result);}if(!closed&&requestedAgain.getAndSet(false))request();}});
     }
     Future<JSONObject> diagnosticSnapshot(){return worker.submit(()->{
         long now=System.currentTimeMillis();String[] selected=devices();String currentSource=source(selected);SQLiteDatabase db=getReadableDatabase();

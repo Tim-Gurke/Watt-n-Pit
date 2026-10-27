@@ -1,0 +1,10 @@
+.lan-banner{display:flex;align-items:center;gap:12px;justify-content:space-between;border:1px solid var(--border);border-radius:16px;padding:12px 16px;margin-bottom:16px;background:var(--panel)}
+.lan-banner[hidden]{display:none}
+.lan-banner>div{min-width:0;overflow-wrap:anywhere}
+.lan-banner strong{font-size:14px}
+.lan-banner p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.lan-banner button{flex-shrink:0}
+.lan-offline{border-color:var(--orange)}
+.lan-code,#lanInvitation{display:block;box-sizing:border-box;width:100%;max-width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--text);font:inherit;font-size:13px;overflow-wrap:anywhere;resize:vertical}
+.lan-code[hidden]{display:none}
+@media(max-width:360px){.lan-banner{padding:10px;gap:8px}.lan-banner button{padding:8px}}

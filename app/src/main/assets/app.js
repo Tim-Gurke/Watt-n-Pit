@@ -45,8 +45,8 @@ let snapshot = {running:false,status:'Aufzeichnung pausiert',devices:[],found:[]
 let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastMiniLoad = 0, miniPoints = [], miniWindow = null, miniKey = '', energyData = null;
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
-let currentImport = null, lastHistoryRevision=-1, historyPending=false, archiveRequestedUntil=0;
-let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null, solar = null, roller = null;
+let currentImport = null, lastHistoryRevision=-1, historyPending=false, archiveRequestedUntil=0, lastLanConnection;
+let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null, solar = null, roller = null, lanUi = null;
 const overviewLandscape = window.matchMedia('(orientation: landscape)');
 
 function syncOverviewHeader() {
@@ -155,7 +155,9 @@ function poll() {
       const result = JSON.parse(native.snapshot());
       if(result.syncing&&lifecycle?.poll())return;
       if (result.devices) snapshot = result;
-      if(snapshot.historyRevision!=null&&snapshot.historyRevision!==lastHistoryRevision){lastHistoryRevision=snapshot.historyRevision;dashboard?.clearCache();lastMiniLoad=0;if(page==='history'&&!demo)loadHistory();}
+      const lanChanged=snapshot.lan&&lastLanConnection!==snapshot.lan.connected;
+      if(lanChanged)lastLanConnection=snapshot.lan.connected;
+      if(lanChanged||snapshot.historyRevision!=null&&snapshot.historyRevision!==lastHistoryRevision){lastHistoryRevision=snapshot.historyRevision;if(deviceNative?.isLanViewer?.())reads?.invalidate();dashboard?.clearCache();lastMiniLoad=0;if(page==='history'&&!demo)loadHistory();}
       if (snapshot.eventId && snapshot.eventId !== lastEvent) { toast(snapshot.event); lastEvent = snapshot.eventId; }
       if (document.documentElement.dataset.theme !== snapshot.settings.theme) theme(snapshot.settings.theme,false);
     } catch (error) { console.error('Snapshot unavailable',error); }
@@ -170,13 +172,16 @@ function poll() {
     $('historyStats').innerHTML = `<span class="info-symbol">i</span><p>${demo?'Demo zeigt erfundene Beispieldaten.':count?`${num(count)} gespeicherte Messpunkte${snapshot.stats.archiveCount?` · ${num(snapshot.stats.archiveCount)} aus dem Gerätearchiv`:''}${snapshot.stats.from?` · ab ${date(snapshot.stats.from)}`:''}. Der Export enthält alle gespeicherten Daten.`:'Noch keine gespeicherten Messpunkte. Starte die Aufzeichnung oder ergänze das Gerätearchiv.'}</p>`;
   }
   repaintReads();
+  lanUi?.render();
 }
 function toggleRecord() {
+  if(deviceNative?.isLanViewer?.()){toast('Aufzeichnung am Hauptgerät verwalten.');return;}
   if (!native) { toast('Bluetooth-Empfang ist in der Android-App verfügbar.'); return; }
   if (snapshot.running) native.stop(); else native.start();
   setTimeout(poll,400);
 }
 function reloadMissingData(){
+  if(deviceNative?.isLanViewer?.()){deviceNative.refreshLan();return;}
   if(demo||!snapshot.devices.length||lifecycle?.busy||snapshot.archiveBusy||Date.now()<archiveRequestedUntil)return;
   if(!native?.importMissingArchive){toast('Daten nachladen ist in der Android-App verfügbar.');return;}
   archiveRequestedUntil=Date.now()+1500;renderOverview();native.importMissingArchive();setTimeout(poll,250);
@@ -486,6 +491,7 @@ configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,d
   theme(snapshot.settings.theme,false);extras.palette(snapshot.settings.palette||'classic',false);equipment.key='';equipment.render();dashboard.render();renderSettings();loadMini(true);
 }});
 theme(!native?localStorage.getItem('wattpit-preview-theme')||'dark':'dark',false);
+lanUi=new window.WattLan({native:deviceNative,toast,openModal,closeModal});
 selectRange('today');poll();renderSettings();
 if(new URLSearchParams(location.search).get('demo')==='1')setDemo(true);
 window.pullReload=new window.WattPullReload({element:$('overview'),canStart:()=>page==='overview'&&!demo&&!dashboard.editing&&!lifecycle.blocked&&!lifecycle.busy&&!snapshot.archiveBusy&&snapshot.devices.length>0&&Date.now()>=archiveRequestedUntil&&$('modal').hidden,reload:reloadMissingData});

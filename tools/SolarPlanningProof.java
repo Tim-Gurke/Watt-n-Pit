@@ -39,6 +39,14 @@ final class SolarPlanningProof {
             db.execSQL("INSERT INTO contexts(at,key,mobile_free,source) VALUES(?,?,1,?)",new Object[]{start-1,key,source.toString()});
             planning.request();JSONObject result=replies.poll(20,TimeUnit.SECONDS);check(result!=null&&!result.has("error"),"learning reads and writes finish asynchronously using a separate SQLite database");
             check(row(result.getJSONArray("observations"),start).getBoolean("mobileFree")&&row(result.getJSONArray("observations"),start).getString("key").equals(key),"observations keep their source and the setup valid at the measured time");
+            repo.prefs.edit().putString("rollerChargeWindows",new JSONArray().put(new JSONObject().put("type","roller-charge").put("from",start+2*hour+hour/4).put("to",start+2*hour+3*hour/4)).toString()).commit();
+            JSONObject special=row(ask(planning,replies).getJSONArray("observations"),start),usage=special.getJSONObject("usage");
+            check(usage.getLong("duration")==21*hour/2&&usage.getLong("excludedRollerMillis")==hour/2,"roller special use excludes exactly the half-hour charge and retains both ordinary parts of its hour");
+            check(Math.abs(usage.getDouble("wh")-126)<1e-8&&Math.abs(special.getDouble("consumption")-132)<1e-8,"roller charge stays in measured totals while the learned household rate remains 12 W");
+            repo.prefs.edit().putString("rollerChargeWindows",new JSONArray().put(new JSONObject().put("from",start+10*hour+hour/2).put("to",0)).toString()).commit();
+            special=row(ask(planning,replies).getJSONArray("observations"),start);
+            check(special.getJSONObject("usage").getLong("duration")==21*hour/2&&special.getJSONObject("usage").getLong("excludedRollerMillis")==hour/2,"an ongoing special use remains excluded through the open end of its charging window");
+            repo.prefs.edit().putString("rollerChargeWindows","[]").commit();result=ask(planning,replies);
             long oldStart=start-10*day;String rest=de.wattpit.app.core.HistorySchema.COLUMNS.substring(3);
             repo.db.getWritableDatabase().execSQL("INSERT INTO readings("+de.wattpit.app.core.HistorySchema.COLUMNS+") SELECT ts-?,"+rest+" FROM readings WHERE device IN ('planning-solar','planning-shunt') AND ts>=? AND ts<=?",new Object[]{10*day,start,end});
             weather.getJSONArray("days").put(new JSONObject().put("day",Instant.ofEpochMilli(oldStart).atZone(ZoneOffset.UTC).toLocalDate().toString()).put("sunrise",oldStart+7*hour).put("sunset",oldStart+18*hour));

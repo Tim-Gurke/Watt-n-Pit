@@ -8,6 +8,28 @@ Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe d
 
 Auch Firmware-Updates deiner Victron-Geräte führst du weiterhin über die offiziellen Victron-Apps durch, bei SmartShunt und SmartSolar über VictronConnect. Watt’n’Pit kann keine Geräteupdates durchführen.
 
+
+## Mehrere Handys: Anlagenverbund ab 1.6.0
+
+Alle beteiligten Handys auf 1.6.0 aktualisieren und im selben WLAN beziehungsweise Hotspot verbinden.
+
+1. Am Gerät bei der Anlage **Einstellungen → Anlagenverbund → Als Hauptgerät erstellen** wählen und einen Namen vergeben, z. B. „Mein Wohnwagen“. Die Bluetooth-Aufzeichnung auf diesem Gerät wie gewohnt starten.
+2. **Verbindungscode kopieren** wählen und den vollständigen Code auf das andere Handy übertragen.
+3. Dort **Einstellungen → Anlagenverbund → Als Anzeige beitreten** öffnen, den Code einfügen und beitreten. Erst eine erfolgreiche Verbindung aktiviert die Anzeige.
+4. Die Übersicht nennt die Anlage und den Empfangsstatus. Anlagenangaben und Aufzeichnung am Hauptgerät ändern; Kacheln, Farben und Anordnung bleiben je Handy einstellbar.
+
+Beispiel: Das S20 stellt den Hotspot bereit, das G5 bleibt als Hauptgerät am Wohnwagen, das S10 zeigt dessen Daten. Das S20 darf ebenfalls beitreten. Auch das Hotspot-Handy selbst kann stattdessen Hauptgerät sein.
+
+Das Hauptgerät benötigt WLAN-Empfang, Bluetooth-Aufzeichnung und den laufenden Anlagenverbund. Die Anzeige ruft bei geöffneter App den gemeinsamen Stand und die benötigten Kurven ab. Ohne Verbindung erscheint „Hauptgerät nicht erreichbar“ mit dem letzten Empfangszeitpunkt; dieser Stand ist kein Liveempfang. Neue Verlaufsabfragen benötigen die Verbindung. Unabhängige alte Aufzeichnungen werden erhalten und beim Verlassen wieder verwendet, jedoch nicht automatisch zusammengeführt. Nach einer geänderten Hotspot-Adresse wird das Hauptgerät im lokalen Netz gesucht. Falls die Suche blockiert ist, einen frischen Code vom Hauptgerät übernehmen.
+
+Der Code ist der lesende Zugang zu dieser Anlage. Der Austausch bleibt verschlüsselt im lokalen IPv4-Netz; Geräteschlüssel und PINs bleiben am Hauptgerät. **Verbund beenden** am Hauptgerät macht den Zugang ungültig. Die Solarkreise unter „Deine Solaranlage“ bleiben davon unabhängig.
+
+### Rollerladung als Sondernutzung
+
+Im Rollerbereich **Ladeaufzeichnung starten** wählen, wenn das Ladegerät den Roller aus dem Wohnwagen versorgt. Der Zeitraum wird als **Sondernutzung · Rollerladung** markiert. Nach dem Laden die Aufzeichnung beenden. Die betreffende Zeit lernt keinen allgemeinen Tagesbedarf; geeignete Messzeiten davor und danach bleiben nutzbar. Die tatsächliche Ladeenergie bleibt in Tagesverbrauch und Shuntbilanz enthalten. BMS-Energie und geschätzter Wohnwagenanteil stehen im Ladejournal. Der verbleibende geplante Ladebedarf fließt gesondert in die Akkuprognose ein.
+
+Die Markierung ist manuell; eine unzugeordnete Shuntlast lässt sich nicht sicher als Rollerladung erkennen. Empfangslücken werden nicht als gemessene Ladeenergie ergänzt.
+
 ## 1. Installieren und Geräte einrichten
 
 1. Die APK herunterladen und auf **Android 8 oder neuer** installieren. Beim Update die bestehende App behalten und die neue APK darüber installieren.

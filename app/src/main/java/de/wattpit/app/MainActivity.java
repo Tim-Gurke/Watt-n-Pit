@@ -25,6 +25,7 @@ import java.util.zip.*;
 public final class MainActivity extends Activity {
     private WebView web;
     private Repository repository;
+    private LanSync lan;
     private SolarPlanning solarPlanning;
     private SiteSensors siteSensors;
     private boolean pendingSiteLocation;
@@ -46,6 +47,7 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         if(savedInstanceState!=null)pendingSettingsExport=savedInstanceState.getString("pendingSettingsExport");
         repository = Repository.get(this);
+        lan=LanSync.get(this);
         solarPlanning=new SolarPlanning(this,repository,value->call("onSolarPlanData",value));
         siteSensors=new SiteSensors(this,repository,this::call);
         web = new WebView(this);
@@ -87,22 +89,25 @@ public final class MainActivity extends Activity {
     @Override protected void onStart(){
         super.onStart();
         foreground=true;
+        lan.foreground(bundle->{if(lan.viewer()&&bundle.optJSONObject("planning")!=null)call("onSolarPlanData",bundle.optJSONObject("planning"));});
+        if(lan.host()&&!lan.state().optBoolean("hosting"))try{startForegroundService(new Intent(this,LanService.class));}catch(Exception ignored){}
         web.removeCallbacks(retryIncompleteArchive);web.postDelayed(retryIncompleteArchive,15000);
         // Refresh on each foreground entry; WeatherClient skips disabled weather
         // and coalesces an already running request. Cached data stays available.
-        WeatherClient.refresh(repository,true);
+        if(!lan.viewer())WeatherClient.refresh(repository,true);
         if(!entered||stoppedAt>0&&SystemClock.elapsedRealtime()-stoppedAt>30000){
             entered=true;web.postDelayed(()->{
                 startAutomaticImport();
             },800);
         }
     }
-    @Override protected void onStop(){pendingSiteLocation=false;siteSensors.stop();foreground=false;web.removeCallbacks(retryIncompleteArchive);stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
+    @Override protected void onStop(){pendingSiteLocation=false;siteSensors.stop();foreground=false;lan.background();web.removeCallbacks(retryIncompleteArchive);stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
     private final Runnable retryIncompleteArchive=new Runnable(){@Override public void run(){startAutomaticImport(true);web.postDelayed(this,15000);}};
     private void startAutomaticImport(){
         startAutomaticImport(false);
     }
     private void startAutomaticImport(boolean retriesOnly){
+        if(lan.viewer())return;
         if(!foreground||isFinishing()||isDestroyed()||pendingStart||pendingArchive!=null||checkingArchive||repositoryArchiveActive()||!repository.prefs.getBoolean("cockpitNotice-v1",false))return;
         checkingArchive=true;
         files.execute(()->{
@@ -143,6 +148,7 @@ public final class MainActivity extends Activity {
 
     @SuppressLint("MissingPermission")
     private void requestStart() {
+        if(lan.viewer()){repository.message(LanSync.READ_ONLY);return;}
         if (isFinishing() || isDestroyed()) return;
         List<String> permissions = new ArrayList<>();
         if (Build.VERSION.SDK_INT >= 31) {
@@ -258,15 +264,27 @@ public final class MainActivity extends Activity {
 
     private boolean repositoryArchiveActive(){return repository.archiveBusy;}
     private void requestArchive(String target){
+        if(lan.viewer()){repository.message(LanSync.READ_ONLY);return;}
         runOnUiThread(()->{
             if(repositoryArchiveActive()||pendingArchive!=null){repository.message("Ein Archivimport läuft bereits oder wird vorbereitet.");return;}
             pendingArchive=target;requestStart();
         });
     }
     final class Bridge {
-        @JavascriptInterface public String rollerSnapshot(){try{return RollerStore.get(MainActivity.this).snapshot().toString();}catch(Exception e){return "{}";}}
-        @JavascriptInterface public String saveRoller(String json){try{RollerStore.get(MainActivity.this).configure(json);return "";}catch(Exception e){return Repository.safeError(e);}}
-        @JavascriptInterface public String rollerSession(boolean start){try{RollerStore.get(MainActivity.this).toggle(start);return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public boolean isLanViewer(){return lan.viewer();}
+        @JavascriptInterface public String lanState(){return lan.state().toString();}
+        @JavascriptInterface public String createLan(String name){
+            try{lan.create(name);runOnUiThread(()->{try{startForegroundService(new Intent(MainActivity.this,LanService.class));}catch(Exception e){error(e);}});return "";}
+            catch(Exception e){return Repository.safeError(e);}
+        }
+        @JavascriptInterface public void joinLan(String code){files.execute(()->{JSONObject result=new JSONObject();try{lan.join(code);result.put("ok",true);}catch(Exception e){try{result.put("error",e instanceof IllegalArgumentException?e.getMessage():"Hauptgerät nicht erreichbar. Beide Geräte im selben WLAN, Hauptgerät geöffnet und Code vollständig?");}catch(JSONException ignored){}}call("onLanResult",result);});}
+        @JavascriptInterface public String leaveLan(){try{boolean resume=lan.leave();runOnUiThread(()->{stopService(new Intent(MainActivity.this,LanService.class));if(resume)requestStart();});return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public String lanPairingCode(){try{return new JSONObject().put("code",lan.pairingCode()).toString();}catch(Exception e){try{return new JSONObject().put("error",Repository.safeError(e)).toString();}catch(Exception ignored){return "{}";}}}
+        @JavascriptInterface public String copyLanCode(){try{String code=lan.pairingCode();runOnUiThread(()->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Watt’n’Pit-Verbindungscode",code)));return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public void refreshLan(){lan.refreshNow();}
+        @JavascriptInterface public String rollerSnapshot(){if(lan.viewer())return lan.part("roller");try{return RollerStore.get(MainActivity.this).snapshot().toString();}catch(Exception e){return "{}";}}
+        @JavascriptInterface public String saveRoller(String json){if(lan.viewer())return LanSync.READ_ONLY;try{RollerStore.get(MainActivity.this).configure(json);return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public String rollerSession(boolean start){if(lan.viewer())return LanSync.READ_ONLY;try{RollerStore.get(MainActivity.this).toggle(start);repository.invalidateStats();solarPlanning.request();return "";}catch(Exception e){return Repository.safeError(e);}}
         @SuppressLint("MissingPermission") @JavascriptInterface public String rollerDevices(){try{JSONArray result=new JSONArray();android.bluetooth.BluetoothManager manager=getSystemService(android.bluetooth.BluetoothManager.class);android.bluetooth.BluetoothAdapter adapter=manager==null?null:manager.getAdapter();if(adapter!=null)for(android.bluetooth.BluetoothDevice device:adapter.getBondedDevices())result.put(new JSONObject().put("mac",device.getAddress()).put("name",device.getName()));return result.toString();}catch(Exception e){return "[]";}}
         @JavascriptInterface public String appVersion(){return BuildConfig.VERSION_NAME;}
         @JavascriptInterface public void openMonitorNotifications(){runOnUiThread(()->{
@@ -284,6 +302,7 @@ public final class MainActivity extends Activity {
             historyReads.execute(()->{
                 JSONObject result=new JSONObject();
                 try{
+                    if(lan.viewer()){result=lan.query("sunsetSoc",new JSONArray().put(at)).put("id",id);if(!isDestroyed())call("onSolarSunsetSoc",result);return;}
                     String shunt="";JSONArray devices=repository.configs();
                     for(int i=0;i<devices.length();i++)if(devices.getJSONObject(i).optString("kind").equals("shunt")){shunt=devices.getJSONObject(i).optString("mac");break;}
                     JSONObject point=shunt.isEmpty()?null:repository.db.sunsetSoc(at,System.currentTimeMillis(),shunt);
@@ -292,18 +311,19 @@ public final class MainActivity extends Activity {
                 if(!isDestroyed())call("onSolarSunsetSoc",result);
             });
         }
-        @JavascriptInterface public String syncState(){return repository.syncState();}
+        @JavascriptInterface public String syncState(){if(lan.viewer())try{return new JSONObject(repository.syncState()).put("busy",false).put("archive",new JSONObject()).toString();}catch(Exception e){return "{}";}return repository.syncState();}
         @JavascriptInterface public String backgroundArchive(long runId){return repository.archiveRun.background(runId)?"":"Dieser Synchronisationslauf ist bereits beendet. Bitte erneut versuchen.";}
         @JavascriptInterface public void requestHistory(String json){
             try{
                 if(json.length()>4096)throw new IllegalArgumentException();
                 JSONObject request=new JSONObject(json);long id=request.getLong("id");String method=request.getString("method");JSONArray args=request.getJSONArray("args");
-                long from=args.getLong(0),to=args.getLong(1);if(from<0||to<=from)throw new IllegalArgumentException();
+                long from=args.getLong(0),to=args.getLong(1);if(from<0||to<=from)throw new IllegalArgumentException();final boolean remote=lan.viewer();
                 historyReads.execute(()->{
                     JSONObject response=new JSONObject();
                     try{
                         JSONObject data;
-                        switch(method){
+                        if(remote!=lan.viewer())return;
+                        if(remote)data=lan.query(method,args);else switch(method){
                             case "history":data=new JSONObject().put("points",repository.db.query(from,to,args.getString(2),args.getString(3)));break;
                             case "dashboardHistory":data=repository.db.dashboardData(from,to,args.getString(2));break;
                             case "energyHistoryWindow":data=repository.db.energyFlow(from,to,args.getLong(3),args.getLong(4),args.getString(2));break;
@@ -313,7 +333,7 @@ public final class MainActivity extends Activity {
                         }
                         response.put("id",id).put("data",data);
                     }catch(Exception e){try{response.put("id",id).put("data",new JSONObject().put("error","Zeitraum konnte nicht geladen werden."));}catch(JSONException ignored){}}
-                    if(!isDestroyed())call("onHistoryResult",response);
+                    if(!isDestroyed()&&remote==lan.viewer())call("onHistoryResult",response);
                 });
             }catch(Exception ignored){}
         }
@@ -321,8 +341,9 @@ public final class MainActivity extends Activity {
             if(!repository.prefs.edit().putBoolean("cockpitNotice-v1",true).commit())return "Der Hinweis konnte nicht bestätigt werden. Bitte erneut versuchen.";
             runOnUiThread(()->web.postDelayed(MainActivity.this::startAutomaticImport,250));return "";
         }
-        @JavascriptInterface public String snapshot() { if(repository.archiveBusy)return repository.backgroundSnapshot();try { return repository.snapshot().toString(); } catch (Exception e) { return "{}"; } }
+        @JavascriptInterface public String snapshot() { if(lan.viewer())return lan.snapshot();if(repository.archiveBusy)return repository.backgroundSnapshot();try { return repository.snapshot().toString(); } catch (Exception e) { return "{}"; } }
         @JavascriptInterface public String history(long from, long to, String metric, String source) {
+            if(lan.viewer())return "{\"pending\":true}";
             if(repository.archiveBusy)return "{\"syncing\":true}";
             try { return new JSONObject().put("points",repository.db.query(from,to,metric,source)).toString(); }
             catch (Exception e) { return "{\"points\":[],\"error\":\"Verlauf konnte nicht geladen werden.\"}"; }
@@ -338,34 +359,38 @@ public final class MainActivity extends Activity {
             } catch(Exception e) { return Repository.safeError(e); }
         }
         @JavascriptInterface public String dashboardHistory(long from,long to,String metric) {
+            if(lan.viewer())return "{\"pending\":true}";
             if(repository.archiveBusy)return "{\"syncing\":true}";
             try { return repository.db.dashboardData(from,to,metric).toString(); }
             catch(Exception e) { return "{\"points\":[],\"summary\":{},\"error\":\"Zeitraum konnte nicht geladen werden.\"}"; }
         }
         @JavascriptInterface public String energyHistory(long from,long to,String source,long solarFrom) {
+            if(lan.viewer())return "{\"pending\":true}";
             if(repository.archiveBusy)return "{\"syncing\":true}";
             try {return repository.db.energyFlow(from,to,solarFrom,source).toString();}
             catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
         }
         @JavascriptInterface public String energyHistoryWindow(long from,long to,String source,long solarFrom,long solarTo) {
+            if(lan.viewer())return "{\"pending\":true}";
             if(repository.archiveBusy)return "{\"syncing\":true}";
             try{return repository.db.energyFlow(from,to,solarFrom,solarTo,source).toString();}
             catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
         }
         @JavascriptInterface public String dailyEnergy(long from,long to,long revision,long slot){
+            if(lan.viewer())return "{\"days\":[],\"pending\":true}";
             try{return repository.db.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}"))).toString();}
             catch(Exception e){return "{\"days\":[],\"error\":\"Tagesverbrauch konnte nicht geladen werden.\"}";}
         }
         @JavascriptInterface public void searchWeather(String query){files.execute(()->{try{call("onWeatherSearch",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onWeatherSearch",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte Verbindung prüfen und erneut suchen."));}catch(JSONException ignored){}}});}
-        @JavascriptInterface public String weatherPlace(String json){try{WeatherClient.place(repository,new JSONObject(json));return "";}catch(Exception e){return Repository.safeError(e);}}
-        @JavascriptInterface public void refreshWeather(){WeatherClient.refresh(repository,true);}
-        @JavascriptInterface public String solarSetup(){try{return solarPlanning.setup().toString();}catch(Exception e){return "{}";}}
-        @JavascriptInterface public String saveSolarSetup(String json,boolean newSite){try{solarPlanning.save(json,newSite);return "";}catch(Exception e){return Repository.safeError(e);}}
-        @JavascriptInterface public String saveSolarSite(String json,String place){try{solarPlanning.saveSite(json,place);return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public String weatherPlace(String json){if(lan.viewer())return LanSync.READ_ONLY;try{WeatherClient.place(repository,new JSONObject(json));return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public void refreshWeather(){if(!lan.viewer())WeatherClient.refresh(repository,true);}
+        @JavascriptInterface public String solarSetup(){if(lan.viewer())return lan.part("setup");try{return solarPlanning.setup().toString();}catch(Exception e){return "{}";}}
+        @JavascriptInterface public String saveSolarSetup(String json,boolean newSite){if(lan.viewer())return LanSync.READ_ONLY;try{solarPlanning.save(json,newSite);return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public String saveSolarSite(String json,String place){if(lan.viewer())return LanSync.READ_ONLY;try{solarPlanning.saveSite(json,place);return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public void searchSolarPlaces(String query){files.execute(()->{try{call("onSolarPlaces",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onSolarPlaces",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte erneut versuchen."));}catch(JSONException ignored){}}});}
-        @JavascriptInterface public void rememberSolarContext(String key){solarPlanning.context(key);}
-        @JavascriptInterface public void rememberSolarForecasts(String json){solarPlanning.remember(json);}
-        @JavascriptInterface public void requestSolarData(){solarPlanning.request();}
+        @JavascriptInterface public void rememberSolarContext(String key){if(!lan.viewer())solarPlanning.context(key);}
+        @JavascriptInterface public void rememberSolarForecasts(String json){if(!lan.viewer())solarPlanning.remember(json);}
+        @JavascriptInterface public void requestSolarData(){if(lan.viewer()){try{call("onSolarPlanData",new JSONObject(lan.part("planning")));}catch(JSONException ignored){}}else solarPlanning.request();}
         @JavascriptInterface public void startSolarCompass(String place){runOnUiThread(()->{try{siteSensors.startCompass(new JSONObject(place));}catch(Exception e){siteSensors.startCompass(new JSONObject());}});}
         @JavascriptInterface public void stopSolarCompass(){runOnUiThread(()->siteSensors.stopCompass());}
         @JavascriptInterface public void cancelSolarLocation(){runOnUiThread(()->{pendingSiteLocation=false;siteSensors.cancelLocation();});}
@@ -373,24 +398,27 @@ public final class MainActivity extends Activity {
             if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED||checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED)siteSensors.locate();
             else {pendingSiteLocation=true;requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},SITE_PERMISSION);}
         });}
-        @JavascriptInterface public String saveEquipment(String json){try{if(json.length()>20000)throw new IllegalArgumentException("Die Anlagenkonfiguration ist zu groß.");repository.saveEquipment(new JSONObject(json));WeatherClient.refresh(repository,true);return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public String saveEquipment(String json){if(lan.viewer())return LanSync.READ_ONLY;try{if(json.length()>20000)throw new IllegalArgumentException("Die Anlagenkonfiguration ist zu groß.");repository.saveEquipment(new JSONObject(json));WeatherClient.refresh(repository,true);return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public String copyArchiveDiagnostics(){try{String text=repository.diagnosticText();runOnUiThread(()->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Watt’n’Pit-Archivdiagnose",text)));return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public void importArchive(String mac) {requestArchive(mac);}
         @JavascriptInterface public void importMissingArchive(){requestArchive("MANUAL");}
-        @JavascriptInterface public void cancelArchive(){runOnUiThread(()->startService(new Intent(MainActivity.this,ArchiveService.class).setAction("CANCEL")));}
+        @JavascriptInterface public void cancelArchive(){if(!lan.viewer())runOnUiThread(()->startService(new Intent(MainActivity.this,ArchiveService.class).setAction("CANCEL")));}
         @JavascriptInterface public void start() { runOnUiThread(MainActivity.this::requestStart); }
         @JavascriptInterface public void stop() {
+            if(lan.viewer())return;
             repository.prefs.edit().putBoolean("recording",false).apply();
             runOnUiThread(() -> stopService(new Intent(MainActivity.this,MonitorService.class)));
         }
         @JavascriptInterface public String saveDevice(String json) {
+            if(lan.viewer())return LanSync.READ_ONLY;
             try { repository.saveDevice(new JSONObject(json)); return ""; } catch (Exception e) { return Repository.safeError(e); }
         }
         @JavascriptInterface public String removeDevice(String mac) {
+            if(lan.viewer())return LanSync.READ_ONLY;
             try { repository.removeDevice(mac); return ""; } catch (Exception e) { return Repository.safeError(e); }
         }
         @JavascriptInterface public String settings(String json) {
-            try { JSONObject s = new JSONObject(json); repository.saveSettings(s); runOnUiThread(() -> applyTheme(s.optString("theme",repository.prefs.getString("theme","dark")))); return ""; }
+            try { JSONObject s = new JSONObject(json);if(lan.viewer()&&(s.has("capacity")||s.has("sampleSeconds")))return LanSync.READ_ONLY; repository.saveSettings(s); runOnUiThread(() -> applyTheme(s.optString("theme",repository.prefs.getString("theme","dark")))); return ""; }
             catch (Exception e) { return Repository.safeError(e); }
         }
         @JavascriptInterface public String chooseSettingsExport(String json){
@@ -400,21 +428,26 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void chooseSettingsImport(){runOnUiThread(()->{try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),IMPORT_SETTINGS);}catch(Exception e){error(e);}});}
         @JavascriptInterface public String importSettings(String json){
+            if(lan.viewer())return LanSync.READ_ONLY;
             try{boolean weatherChanged=repository.importConfiguration(json);runOnUiThread(()->applyTheme(repository.prefs.getString("theme","dark")));if(weatherChanged)WeatherClient.refresh(repository,true);return "";}
             catch(Exception e){return Repository.safeError(e);}
         }
         @JavascriptInterface public void chooseImport() {
+            if(lan.viewer())return;
             runOnUiThread(() -> startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),IMPORT));
         }
         @JavascriptInterface public void chooseExport() {
+            if(lan.viewer())return;
             runOnUiThread(() -> startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                     .setType("text/csv").putExtra(Intent.EXTRA_TITLE,"Watt-n-Pit-Verlauf.csv"),EXPORT));
         }
         @JavascriptInterface public void choosePlanningDiagnostics(){
+            if(lan.viewer())return;
             runOnUiThread(()->startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                     .setType("application/zip").putExtra(Intent.EXTRA_TITLE,"Watt-n-Pit-Diagnose-"+BuildConfig.VERSION_NAME+".zip"),EXPORT_DIAGNOSTICS));
         }
         @JavascriptInterface public void importCsv(String mapping, String kind) {
+            if(lan.viewer())return;
             files.execute(() -> {
                 try {
                     CsvCodec.Table table = pendingImport;

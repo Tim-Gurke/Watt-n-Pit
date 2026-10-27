@@ -52,11 +52,11 @@ final class RollerStore {
         saveSession();
     }
     private boolean fresh(long now){long at=live.optLong("at");return at>0&&now>=at&&now-at<=10000;}
-    private JSONObject sessionJson()throws JSONException{return new JSONObject().put("started",session.started).put("ended",session.ended).put("active",session.active).put("batteryWh",session.batteryWh).put("inputWh",session.inputWh).put("observedMillis",session.observedMillis).put("gapMillis",session.gapMillis).put("savedAt",System.currentTimeMillis());}
+    private JSONObject sessionJson()throws JSONException{return new JSONObject().put("usageType","roller-charge").put("usageLabel","Sondernutzung · Rollerladung").put("started",session.started).put("ended",session.ended).put("active",session.active).put("batteryWh",session.batteryWh).put("inputWh",session.inputWh).put("observedMillis",session.observedMillis).put("gapMillis",session.gapMillis).put("savedAt",System.currentTimeMillis());}
     private void saveSession(){try{prefs.edit().putString("session",sessionJson().toString()).apply();
         JSONArray windows=new JSONArray(plantPrefs.getString("rollerChargeWindows","[]")),out=new JSONArray();
         for(int i=Math.max(0,windows.length()-4999);i<windows.length();i++){JSONObject w=windows.getJSONObject(i);if(w.optLong("from")!=session.started)out.put(w);}
-        if(session.started>0)out.put(new JSONObject().put("from",session.started).put("to",session.active?0:session.ended));
+        if(session.started>0)out.put(new JSONObject().put("type","roller-charge").put("from",session.started).put("to",session.active?0:session.ended));
         plantPrefs.edit().putString("rollerChargeWindows",out.toString()).apply();
     }catch(JSONException ignored){}}
     private void archiveSession(){try{if(session.started<=0)return;JSONArray rows=new JSONArray(prefs.getString("journal","[]")),out=new JSONArray();for(int i=Math.max(0,rows.length()-199);i<rows.length();i++)out.put(rows.getJSONObject(i));out.put(sessionJson().put("profile",new JSONObject(profile.toString())));prefs.edit().putString("journal",out.toString()).apply();}catch(JSONException ignored){}}

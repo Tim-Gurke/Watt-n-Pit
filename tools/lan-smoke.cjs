@@ -1,0 +1,33 @@
+const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+(async()=>{
+ const browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.WATTPIT_CHROMIUM?{executablePath:process.env.WATTPIT_CHROMIUM}:{})});
+ try{for(const theme of ['dark','light']){
+  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.addInitScript(theme=>{
+   window.lanRole=sessionStorage.getItem('lanRole')||'off';window.connected=true;window.rev=1;window.power=28;window.asyncQueries=0;window.saved=[];
+   window.fixture=()=>({running:true,historyRevision:window.rev,devices:[{mac:'DE:00:00:00:00:01',name:'Beispiel-Shunt',kind:'shunt',seen:Date.now(),hasKey:true},{mac:'DE:00:00:00:00:02',name:'Beispiel-Solar',kind:'solar',seen:Date.now(),hasKey:true}],found:[],readings:[{device:'DE:00:00:00:00:01',kind:'shunt',t:Date.now(),soc:76.4,voltage:12.94,current:-2.2,power:-window.power},{device:'DE:00:00:00:00:02',kind:'solar',t:Date.now(),solar:138,state:3}],stats:{count:2400},settings:{theme,palette:'classic',capacity:100,sampleSeconds:10},weather:{},...(window.lanRole==='viewer'?{lan:{connected:window.connected}}:{})});
+   const state=()=>({role:window.lanRole,name:'Beispiel-Wohnwagen',connected:window.connected,hosting:window.lanRole==='host',receivedAt:Date.now()-30000,peers:[{name:'Beispiel-Anzeige'}]});
+   const history=(method,args)=>{const [from,to]=args;if(method.startsWith('energy'))return {solar:{points:[],summary:{}},consumption:{points:[],summary:{}},balance:{points:[],summary:{}}};if(method==='dailyEnergy')return {days:[]};return {points:[{t:from,v:window.power,kind:'shunt'},{t:to,v:window.power,kind:'shunt'}],summary:{last:window.power,min:window.power,max:window.power}};};
+   window.WattPit={appVersion:()=> '1.6.0',isLanViewer:()=>window.lanRole==='viewer',lanState:()=>JSON.stringify(state()),snapshot:()=>JSON.stringify(window.fixture()),syncState:()=>JSON.stringify({busy:false,cockpitNoticeAccepted:true,theme,palette:'classic'}),dashboard:()=> '{}',saveDashboard:json=>{window.saved.push(json);return '';},settings:()=>'',solarSetup:()=> '{}',rollerSnapshot:()=> '{}',requestHistory:json=>{window.asyncQueries++;const q=JSON.parse(json);setTimeout(()=>window.onHistoryResult({id:q.id,data:history(q.method,q.args)}),30);},history:(...args)=>{if(window.lanRole==='viewer')throw Error('Blocking remote query');return JSON.stringify(history('history',args));},dashboardHistory:(...args)=>JSON.stringify(history('dashboardHistory',args)),energyHistoryWindow:(...args)=>JSON.stringify(history('energyHistoryWindow',args)),dailyEnergy:(...args)=>JSON.stringify(history('dailyEnergy',args)),createLan:()=>{window.lanRole='host';return '';},copyLanCode:()=>'',lanPairingCode:()=>JSON.stringify({code:'WNP1.Beispielcode-nur-fuer-diesen-Oberflaechentest'}),joinLan:code=>{if(code==='WNP1.falsch'){window.onLanResult({error:'Hauptgerät nicht erreichbar.'});return;}sessionStorage.setItem('lanRole','viewer');window.onLanResult({ok:true});},leaveLan:()=>{sessionStorage.removeItem('lanRole');window.lanRole='off';return '';},refreshLan:()=>{},saveDevice:()=>{throw Error('Viewer changed a device');},rollerSession:()=>{throw Error('Viewer changed a charge');}};
+  },theme);
+  await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
+  await page.locator('[data-page="settings"]').click();await page.locator('#lanManage').click();await page.locator('#lanCreate').click();await page.locator('#lanCopy').waitFor();
+  await page.locator('#lanShowCode').click();assert.match(await page.locator('#lanCode').inputValue(),/^WNP1\./);await page.locator('#lanCopy').click();
+  await page.locator('#closeModal').click();await page.locator('[data-page="overview"]').click();assert.match(await page.locator('#lanStatus').textContent(),/Hauptgerät.*1 Anzeige/);
+  await page.evaluate(()=>{window.lanRole='off';poll();});await page.locator('#lanOpen').isVisible();await page.locator('[data-page="settings"]').click();await page.locator('#lanManage').click();
+  await page.locator('#lanInvitation').fill('WNP1.falsch');await page.locator('#lanJoin').click();assert.match(await page.locator('#lanError').textContent(),/nicht erreichbar/);assert.equal(await page.locator('#lanJoin').isEnabled(),true);
+  await page.locator('#lanInvitation').fill('WNP1.gultig');await page.locator('#lanJoin').click();await page.waitForFunction(()=>window.lanRole==='viewer');await page.locator('#lanBanner').waitFor();
+  assert.match(await page.locator('#lanStatus').textContent(),/Anzeige.*Hauptgerät/);assert.equal(await page.locator('#overviewRecord').isDisabled(),true);assert.equal(await page.locator('#reloadArchive').isDisabled(),true);assert.equal(await page.locator('#editDashboard').isEnabled(),true);
+  await page.waitForFunction(()=>window.asyncQueries>0);
+  await page.locator('[data-page="history"]').click();await page.waitForFunction(()=>!historyPending&&points.length>0);assert.equal(await page.evaluate(()=>points[0].v),28);
+  await page.evaluate(()=>{window.power=37;window.rev++;poll();});await page.waitForFunction(()=>!historyPending&&points[0]?.v===37);
+  await page.evaluate(()=>{window.connected=false;poll();});assert.match(await page.locator('#lanStatus').textContent(),/nicht erreichbar.*Stand/);
+  await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#saveSettings').isDisabled(),true);assert.equal(await page.locator('#editEquipment').isDisabled(),true);assert.equal(await page.locator('#themeButtons button').first().isEnabled(),true);
+  await page.locator('[data-page="overview"]').click();await page.evaluate(()=>{window.connected=true;poll();});
+  for(const viewport of [{width:320,height:800},{width:844,height:390},{width:390,height:844}]){await page.setViewportSize(viewport);assert.equal(await page.evaluate(()=>document.body.scrollWidth>innerWidth),false);}
+  if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,`anlagenverbund-${theme}.png`),fullPage:false});}
+  assert.deepEqual(errors,[]);await page.close();
+ }
+ console.log('PASS plant network UI: host invitation, failed/successful join, read-only viewer, refreshed remote histories, offline state, independent layouts, 320/390/844px and both themes.');
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exit(1);});

@@ -1,5 +1,12 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const Bridge=require('../app/src/main/assets/read-bridge.js');
+test('LAN viewers read asynchronously, refresh on revision changes and reject stale in-flight results',()=>{
+ const requests=[];const b=new Bridge({isLanViewer:()=>true,history:()=>{throw Error('Blocking LAN query');},requestHistory:json=>requests.push(JSON.parse(json))},()=>{});
+ assert.equal(JSON.parse(b.bridge.history(0,100000,'power','all')).pending,true);const first=requests[0];
+ b.invalidate();b.bridge.history(0,100000,'power','all');b.result({id:first.id,data:{points:[{v:999}]}});
+ assert.equal(requests.length,2);assert.equal(b.cache.size,0);b.result({id:requests[1].id,data:{points:[{v:12}]}});
+ assert.equal(JSON.parse(b.bridge.history(0,100000,'power','all')).points[0].v,12);
+});
 test('calendar-day consumption is asynchronous even without a running import and preserves unknown and zero',()=>{
  const requests=[],ready=[];const b=new Bridge({dailyEnergy:()=>{throw Error('Synchronous daily query');},requestHistory:json=>requests.push(JSON.parse(json))},method=>ready.push(method));
  assert.equal(JSON.parse(b.bridge.dailyEnergy(0,100000,1,10)).pending,true);assert.equal(requests.length,1);

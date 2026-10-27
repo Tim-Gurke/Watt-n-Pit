@@ -18,8 +18,9 @@
     }
     key(method,args){return JSON.stringify([method,args.map((v,i)=>i<2?Math.floor(v/10000):v)]);}
     remember(key,value){if(this.cache.size>=128&&!this.cache.has(key))this.cache.delete(this.cache.keys().next().value);this.cache.set(key,value);}
+    invalidate(){this.generation++;this.cache.clear();this.queue.clear();}
     read(method,args){
-      if((!this.busy&&method!=='dailyEnergy')||!this.raw.requestHistory){const value=this.raw[method](...args);
+      if((!this.busy&&method!=='dailyEnergy'&&!this.raw.isLanViewer?.())||!this.raw.requestHistory){const value=this.raw[method](...args);
         if(JSON.parse(value).syncing){try{this.state(JSON.parse(this.raw.syncState()));}catch(_){}return this.busy?this.read(method,args):JSON.stringify(pending(method));}
         this.remember(this.key(method,args),{method,args,value});return value;}
       const key=this.key(method,args),cached=this.cache.get(key);if(cached)return cached.value;
