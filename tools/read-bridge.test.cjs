@@ -24,3 +24,37 @@ test('late responses from a finished or previous run cannot overwrite current da
 test('a failed read remains an explicit error and completion returns to fresh ordinary reads',()=>{const {b,requests,calls}=setup();b.state({busy:true,runId:1});b.bridge.history(0,100000,'power','all');b.result({id:requests[0].id,data:{error:'Lesefehler'}});assert.equal(JSON.parse(b.bridge.history(0,100000,'power','all')).error,'Lesefehler');b.state({busy:false,runId:1});assert.equal(JSON.parse(b.bridge.history(0,100000,'power','all')).points[0].v,42);assert.equal(calls.length,1);});
 
 test('an import starting between status poll and read cannot cache an empty synchronous result',()=>{const {b,requests}=setup();b.raw.history=()=>'{"syncing":true}';b.raw.syncState=()=>'{"busy":true,"runId":1}';assert.equal(JSON.parse(b.bridge.history(0,100000,'power','all')).pending,true);assert.equal(requests.length,1);assert.equal(b.cache.size,0);});
+
+function viewer(){const requests=[];let plant='one';const b=new Bridge({isLanViewer:()=>true,lanState:()=>JSON.stringify({id:plant}),requestHistory:q=>requests.push(JSON.parse(q))},()=>{});return {b,requests,plant:id=>plant=id,reply:data=>b.result({id:requests.at(-1).id,data})};}
+test('revision refresh retains the last success until a complete replacement arrives',()=>{
+ const {b,requests,reply}=viewer();b.read('history',[0,100000,'power','all'],'power-day');reply({points:[{v:12}]});
+ b.invalidate();let value=JSON.parse(b.read('history',[0,100000,'power','all'],'power-day'));assert.equal(value.points[0].v,12);assert.equal(value.pending,true);assert.equal(value.stale,true);assert.equal(requests.length,2);
+ reply({points:[{v:37}]});value=JSON.parse(b.read('history',[0,100000,'power','all'],'power-day'));assert.equal(value.points[0].v,37);assert.equal(value.stale,undefined);assert.equal(value.pending,undefined);
+});
+test('an error retains valid points and remains explicit; a successful empty replacement clears them',()=>{
+ const {b,reply}=viewer();b.read('history',[0,100000,'power','all'],'same-view');reply({points:[{v:12}]});b.invalidate();b.read('history',[0,100000,'power','all'],'same-view');reply({error:'Hauptgerät nicht erreichbar'});
+ let value=JSON.parse(b.read('history',[0,100000,'power','all'],'same-view'));assert.equal(value.points[0].v,12);assert.equal(value.pending,false);assert.equal(value.stale,true);assert.match(value.refreshError,/nicht erreichbar/);assert.equal(value.error,undefined);
+ b.invalidate();b.read('history',[0,100000,'power','all'],'same-view');reply({points:[]});value=JSON.parse(b.read('history',[0,100000,'power','all'],'same-view'));assert.deepEqual(value.points,[]);assert.equal(value.stale,undefined);
+});
+test('a moving scoped live window survives a long refresh, while another metric or period never inherits it',()=>{
+ const {b,reply}=viewer();b.read('history',[0,100000,'power','all'],'last-hour');reply({points:[{v:12}]});
+ const retained=JSON.parse(b.read('history',[600000,700000,'power','all'],'last-hour'));assert.equal(retained.points[0].v,12);assert.equal(retained.stale,true);
+ assert.deepEqual(JSON.parse(b.read('history',[600000,700000,'voltage','all'],'last-hour')).points,[]);
+ assert.deepEqual(JSON.parse(b.read('history',[600000,700000,'power','all'],'another-period')).points,[]);
+});
+test('previous energy summaries and calendar-day zero/unknown values survive refresh with explicit stale flags',()=>{
+ const {b,reply}=viewer();const energy={solar:{summary:{last:20}},consumption:{summary:{last:30}},balance:{summary:{last:-10}}};b.read('energyHistoryWindow',[0,100000,'all',1000,90000],'flow');reply(energy);b.invalidate();
+ const flow=JSON.parse(b.read('energyHistoryWindow',[0,110000,'all',1000,100000],'flow'));for(const key of ['solar','consumption','balance']){assert.equal(flow[key].summary.last,energy[key].summary.last);assert.equal(flow[key].stale,true);assert.equal(flow[key].pending,true);}
+});
+test('calendar-day refresh ignores cache-busting revisions without losing measured zero or unknown days',()=>{
+ const {b,reply}=viewer(),days=[{day:'2026-10-20',last:null},{day:'2026-10-21',last:0},{day:'2026-10-22',last:29.68}];b.read('dailyEnergy',[0,100000,1,1],'month');reply({days});b.invalidate();
+ const value=JSON.parse(b.read('dailyEnergy',[0,100000,2,2],'month'));assert.deepEqual(value.days,days);assert.equal(value.stale,true);assert.equal(value.pending,true);
+});
+test('switching plant drops the previous source and rejects its late response',()=>{
+ const {b,requests,reply,plant}=viewer();b.read('history',[0,100000,'power','all'],'day');reply({points:[{v:12}]});b.invalidate();b.read('history',[0,100000,'power','all'],'day');const previous=requests.at(-1);
+ plant('two');const value=JSON.parse(b.read('history',[0,100000,'power','all'],'day'));assert.deepEqual(value.points,[]);b.result({id:previous.id,data:{points:[{v:999}]}});assert.deepEqual(JSON.parse(b.read('history',[0,100000,'power','all'],'day')).points,[]);reply({points:[{v:2}]});assert.equal(JSON.parse(b.read('history',[0,100000,'power','all'],'day')).points[0].v,2);
+});
+test('slow queries coalesce moving requests for the same logical view',()=>{
+ const {b,requests,reply}=viewer();b.read('history',[0,100000,'power','all'],'day');
+ for(let i=1;i<=50;i++)b.read('history',[i*10000,i*10000+100000,'power','all'],'day');assert.equal(requests.length,1);assert.equal(b.queue.size,1);reply({points:[{v:12}]});assert.equal(requests.length,2);assert.equal(requests[1].args[0],500000);
+});

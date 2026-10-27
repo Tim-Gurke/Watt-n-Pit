@@ -72,6 +72,7 @@ jobs:
           node tools/roller-smoke.cjs
           node tools/lan-smoke.cjs
           node tools/plant-control-smoke.cjs
+          node tools/history-retention-smoke.cjs
           node tools/dashboard-usability-smoke.cjs
       - uses: actions/upload-artifact@v4
         with:

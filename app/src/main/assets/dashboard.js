@@ -147,23 +147,26 @@
       if(cancelled){this.config.tiles.find(t=>t.id===d.id).layouts[this.profile]=d.origin;this.layout();return;}
       if(d.moved){this.lastDrag=Date.now();this.commit();}
     }
-    data(t,window,solarFrom=window.from,solarTo=window.to) {
+    data(t,window,solarFrom=window.from,solarTo=window.to,retainScope) {
       if(this.a.isBlocked?.()||window.to<=window.from)return {points:[],summary:{}};
       const m=C.CATALOG[t.metric],backend=m.backend || m.field;
+      const period=m.flow?this.config.energyPeriod:t.period,day=['today','sunrise'].includes(period.mode)?new Date(window.from).toLocaleDateString('sv-SE'):'';
+      const scope=retainScope||JSON.stringify(['dashboard',m.flow?'flow':backend,period,m.flow?this.config.tiles.find(t=>t.metric==='solarEnergy')?.period:null,day,this.a.isDemo()]);
+      const read=(method,args)=>this.a.read?this.a.read(method,args,scope):this.a.native[method](...args);
       const key=[m.flow?'energy-flow':backend,Math.floor(window.from/10000),Math.floor(window.to/10000),m.flow?Math.floor(solarFrom/10000):'',m.flow?Math.floor(solarTo/10000):'',this.a.isDemo()].join(':');
       if(this.cache.has(key))return m.flow?this.cache.get(key)[m.flow]:this.cache.get(key);
       let data={points:[],summary:{}};
       try {
         if(m.flow){
           if(this.a.isDemo())data=this.demoFlow(t,window,solarFrom,solarTo);
-          else if(this.a.native?.energyHistoryWindow)data=JSON.parse(this.a.native.energyHistoryWindow(Math.floor(window.from),Math.ceil(window.to),'all',Math.floor(solarFrom),Math.ceil(solarTo)));
-          else if(this.a.native?.energyHistory)data=JSON.parse(this.a.native.energyHistory(Math.floor(window.from),Math.ceil(window.to),'all',solarFrom));
+          else if(this.a.native?.energyHistoryWindow)data=JSON.parse(read('energyHistoryWindow',[Math.floor(window.from),Math.ceil(window.to),'all',Math.floor(solarFrom),Math.ceil(solarTo)]));
+          else if(this.a.native?.energyHistory)data=JSON.parse(read('energyHistory',[Math.floor(window.from),Math.ceil(window.to),'all',solarFrom]));
           else throw new Error('Energieberechnung nicht verfügbar.');
           if(data.error||!data.solar||!data.consumption||!data.balance)throw new Error('Energiedaten nicht verfügbar.');
         }
         else if(this.a.isDemo())data=this.demoData(t,window);
-        else if(this.a.native?.dashboardHistory)data=JSON.parse(this.a.native.dashboardHistory(Math.floor(window.from),Math.ceil(window.to),backend));
-        else if(this.a.native?.history){data=JSON.parse(this.a.native.history(Math.floor(window.from),Math.ceil(window.to),backend,'all'));data.summary=this.summary(data.points || []);}
+        else if(this.a.native?.dashboardHistory)data=JSON.parse(read('dashboardHistory',[Math.floor(window.from),Math.ceil(window.to),backend]));
+        else if(this.a.native?.history){data=JSON.parse(read('history',[Math.floor(window.from),Math.ceil(window.to),backend,'all']));data.summary=this.summary(data.points || []);}
       } catch(_){const missing={points:[],summary:{},error:true};data=m.flow?{solar:missing,consumption:missing,balance:missing}:missing;}
       if(this.cache.size>128)this.cache.clear();this.cache.set(key,data);return m.flow?data[m.flow]:data;
     }
@@ -256,7 +259,8 @@
         if(m.energy&&data?.summary?.interpolatedMillis>0)hint=this.periodLabel(t,window)+' · '+Math.floor((data.summary.measuredCoverage??data.summary.coverage??0)*100)+' % gemessen · kurz interpoliert';
         if(t.type==='chart'&&C.usesLiveValue(t))hint=`${C.finite(value)?'Aktuell':'Kein Livewert'} · ${data?.error?'Verlauf nicht verfügbar':(t.period.mode==='sunrise'?'':'Verlauf: ')+this.periodLabel(t,window)}`;
         else if(data?.error)hint='Zeitraum nicht verfügbar';
-        if(data?.pending)hint='Daten werden im Hintergrund geladen …';
+        if(data?.pending)hint=data.stale?'Letzter Stand · neue Daten werden geladen …':'Daten werden im Hintergrund geladen …';
+        else if(data?.refreshError)hint='Letzter Stand · Aktualisierung fehlgeschlagen';
         const coverage=m.energy?Math.floor((data?.summary?.coverage||0)*100)+' % des Zeitraums abgedeckt'+(data?.summary?.interpolatedMillis>0?' · davon '+(data.summary.interpolatedMillis/60000).toLocaleString('de-DE',{maximumFractionDigits:1})+' min kurz interpoliert':''):'';
         const hintElement=el.querySelector('.tile-hint');hintElement.textContent=t.metric==='consumptionEnergy'&&C.finite(value)&&value<0?'Zusätzliche Einspeisung · '+hint:hint;hintElement.title=[window?.note||'',coverage,m.hint||''].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
         el.classList.toggle('no-value',!C.finite(value));

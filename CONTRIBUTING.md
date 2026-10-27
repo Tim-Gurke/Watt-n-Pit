@@ -15,3 +15,13 @@ Der Nutzer hat Umsetzung, Build und Veröffentlichung freigegeben.
 - Beim Update die G5-Vorlage auf jedem Handy einmalig installieren, einschließlich Hauptgerät und Anzeigen. Damit ersetzt sie ausdrücklich die bisherigen lokalen Layouts; spätere eigene Änderungen bleiben erhalten. Beide Ansichten sind unabhängig gespeichert.
 - Gemeinsame App- und Anlageneinstellungen auch von Anzeigen bedienen: insbesondere Solaranlage, Aufstellung, Wetter, Zusatzspeicher, Geräte und Aufzeichnung. Erst die Antwort des Hauptgeräts bestätigt die Änderung. Wiederholte und überholte Befehle abfangen; Layout und Erscheinungsbild bleiben lokal einstellbar.
 - Beim Zusatzspeicher die **aktuell enthaltene Energie in Wh** anzeigen: Näherung aus BMS-Restkapazität und Nennspannung, ersatzweise aus Ladezustand und Nennenergie. Fehlende aktuelle BMS-Werte bleiben unbekannt.
+
+## Nachladen und Tagesarchiv
+
+Bereits erfolgreich geladene historische Werte und Kurven bleiben beim Nachladen derselben Ansicht sichtbar. Frische Daten ersetzen sie erst nach der Antwort; währenddessen „Letzter Stand“ anzeigen. Fehler als Aktualisierungsfehler kennzeichnen, nicht als fehlende Messdaten. Bei einem Wechsel von Anlage, Messwert, Quelle oder Zeitraum keine fremden Werte übernehmen. Echte neue Leerantworten müssen alte Kurven weiterhin entfernen können.
+
+Kalenderabfragen für das Solar-Tagesarchiv enthalten das Monatsende, auch wenn es noch in der Zukunft liegt. Hauptgerät und Anzeige müssen dafür dieselbe begrenzte Tagesberechnung verwenden. Reale Nullwerte und unbekannte Werte unterscheiden.
+
+## Roller-BMS: Geräteaufteilung (offen)
+
+Auf der Zentrale **G5** läuft nur Watt’n’Pit; **ScootPit läuft auf dem S20**. Die vorhandene lokale BMS-Übergabe zwischen beiden Apps auf demselben Telefon deckt das nicht ab. Eine automatische Übergabe G5 → Fahrhandy S20 → G5 fehlt noch und gehört nicht zur Anzeigekorrektur in 1.6.4. Die Solaraufzeichnung soll bei einer späteren BMS-Übergabe weiterlaufen.

@@ -22,6 +22,8 @@ const reads=deviceNative&&window.WattReadBridge?new window.WattReadBridge(device
 }):null;
 const native=reads?.bridge||deviceNative;
 window.onHistoryResult=result=>reads?.result(result);
+const historyRead=(method,args,scope)=>reads?reads.read(method,args,scope):deviceNative?.[method](...args);
+const refreshNote=data=>data?.stale?(data.pending?'Letzter Stand · neue Daten werden geladen …':data.refreshError?'Letzter Stand · Aktualisierung fehlgeschlagen. Neuer Versuch folgt.':'Letzter Stand'):data?.pending?'Daten werden im Hintergrund geladen …':data?.error?'Daten konnten nicht geladen werden.':'';
 const dataTime=()=>lifecycle?.busy?lifecycle.startedAt||Date.now():Date.now();
 const icons = {
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/>',
@@ -49,7 +51,7 @@ let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastM
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let settingsRevision=-1;
-let currentImport = null, lastHistoryRevision=-1, historyPending=false, archiveRequestedUntil=0, lastLanConnection;
+let currentImport = null, lastHistoryRevision=-1, historyPending=false, archiveRequestedUntil=0, lastLanConnection, lastLanSource;
 let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null, solar = null, roller = null, lanUi = null;
 const overviewLandscape = window.matchMedia('(orientation: landscape)');
 
@@ -159,8 +161,11 @@ function poll() {
       const result = JSON.parse(native.snapshot());
       if(result.syncing&&lifecycle?.poll())return;
       if (result.devices) snapshot = result;
-      const lanChanged=snapshot.lan&&lastLanConnection!==snapshot.lan.connected;
-      if(lanChanged)lastLanConnection=snapshot.lan.connected;
+      const lanSource=snapshot.lan?.id||snapshot.lan?.name||(deviceNative?.isLanViewer?.()?'viewer':'local'),sourceChanged=lastLanSource!==undefined&&lastLanSource!==lanSource;
+      lastLanSource=lanSource;
+      if(sourceChanged){reads?.invalidate(true);points=[];miniPoints=[];energyData=null;}
+      const lanChanged=sourceChanged||snapshot.lan&&lastLanConnection!==snapshot.lan.connected;
+      if(lanChanged)lastLanConnection=snapshot.lan?.connected;
       if(lanChanged||snapshot.historyRevision!=null&&snapshot.historyRevision!==lastHistoryRevision){lastHistoryRevision=snapshot.historyRevision;if(deviceNative?.isLanViewer?.())reads?.invalidate();dashboard?.clearCache();lastMiniLoad=0;if(page==='history'&&!demo)loadHistory();}
       if (snapshot.eventId && snapshot.eventId !== lastEvent) { toast(snapshot.event); lastEvent = snapshot.eventId; }
       if (document.documentElement.dataset.theme !== snapshot.settings.theme) theme(snapshot.settings.theme,false);
@@ -274,17 +279,17 @@ function sampleDemo(from,to,chosen) {
 function loadHistory() {
   if(lifecycle?.blocked||!viewFrom)return;
   clearTimeout(loadTimer);
-  energyData=null;historyPending=false;
+  energyData=null;historyPending=false;let fetched;const scope=JSON.stringify(['history',demo,metric,source,viewFrom,viewTo]);
   try{
     if(metric==='energy'){
       const sun=window.WattDashboardCore.miniWindow('sunrise',snapshot.weather||{},dataTime()),solarFrom=range==='today'?Math.max(viewFrom,sun.solarFrom??viewFrom):viewFrom,solarTo=range==='today'?sun.solarTo??viewTo:viewTo;
-      energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo,solarFrom,solarTo)):native?.energyHistoryWindow?JSON.parse(native.energyHistoryWindow(Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom),Math.ceil(solarTo))):native?.energyHistory?JSON.parse(native.energyHistory(Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom))):{};
-      if(energyData.error)throw new Error();historyPending=!!energyData.pending;
+      energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo,solarFrom,solarTo)):native?.energyHistoryWindow?JSON.parse(historyRead('energyHistoryWindow',[Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom),Math.ceil(solarTo)],scope)):native?.energyHistory?JSON.parse(historyRead('energyHistory',[Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom)],scope)):{};
+      fetched=energyData;if(energyData.error)throw new Error();historyPending=!!energyData.pending;
       points=energyPlotPoints(energyData);
     }else if(demo)points=source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric);
-    else{const data=native?JSON.parse(native.history(Math.floor(viewFrom),Math.ceil(viewTo),metric,source)):{};if(data.error)throw new Error();points=data.points||[];historyPending=!!data.pending;}
+    else{const data=native?JSON.parse(historyRead('history',[Math.floor(viewFrom),Math.ceil(viewTo),metric,source],scope)):{};fetched=data;if(data.error)throw new Error();points=data.points||[];historyPending=!!data.pending;}
   }catch(error){points=[];energyData=null;toast('Der Verlauf konnte nicht geladen werden.');}
-  $('historyReadNote').hidden=!historyPending;$('historyReadNote').textContent=historyPending?'Daten werden im Hintergrund geladen …':'';
+  $('historyReadNote').textContent=refreshNote(fetched);$('historyReadNote').hidden=!$('historyReadNote').textContent;
   $('energyNote').hidden=metric!=='energy';
   $('energyOptions').hidden=metric!=='energy';
   $('energyNote').textContent=metric==='energy'?energyDescription(energyData):'';
@@ -302,8 +307,8 @@ function loadMini(force=false) {
   const key=[mode,Math.floor(miniWindow.from/60000)].join(':');
   if(!force&&key===miniKey&&Date.now()-lastMiniLoad<20000)return;
   miniKey=key;lastMiniLoad=Date.now();
-  const query=window.WattDashboardCore.solarQueryWindow(miniWindow);
-  try{const data=demo?{points:sampleDemo(query.from,query.to,'power')}:native?JSON.parse(native.history(query.from,query.to,'power','all')):{};miniPoints=data.points||[];if(data.pending){$('miniPeriodNote').textContent='Daten werden im Hintergrund geladen …';$('miniPeriodNote').hidden=false;}}
+  const query=window.WattDashboardCore.solarQueryWindow(miniWindow),scope=JSON.stringify(['mini',demo,mode,['last6h','last24h'].includes(mode)?'':new Date(miniWindow.from).toLocaleDateString('sv-SE')]);
+  try{const data=demo?{points:sampleDemo(query.from,query.to,'power')}:native?JSON.parse(historyRead('history',[query.from,query.to,'power','all'],scope)):{};miniPoints=data.points||[];if(refreshNote(data)){$('miniPeriodNote').textContent=refreshNote(data);$('miniPeriodNote').hidden=false;}}
   catch(error){miniPoints=[];}
   miniWindow=window.WattDashboardCore.solarPlotWindow(miniWindow,miniPoints);
   drawMini();
@@ -408,20 +413,21 @@ $('historyChart').addEventListener('pointercancel',event=>{pointers.delete(event
 function renderDaily() {
  let el=$('solarDailyArchive'); if(!el){el=document.createElement('article');el.id='solarDailyArchive';el.className='card';$('historyStats').after(el);}
  const rows=snapshot.solarDaily||[];el.hidden=!rows.length;
- const months=new Map(),consumption=new Map(),waiting=new Set();
+ const months=new Map(),consumption=new Map(),waiting=new Set(),failed=new Set(),outdated=new Set();
  if(!demo&&native?.dailyEnergy)for(const row of rows){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(row.day))continue;const month=row.day.slice(0,7);if(months.has(month))continue;
   const start=new Date(month+'-01T00:00:00'),end=new Date(start);end.setMonth(end.getMonth()+1);
   if(start.getTime()>=dataTime())continue;
-  try{const data=JSON.parse(native.dailyEnergy(start.getTime(),end.getTime(),snapshot.historyRevision||0,Math.floor(dataTime()/30000)));
-   months.set(month,data);if(data.pending)waiting.add(month);for(const day of data.days||[])consumption.set(day.day,day);
-  }catch(_){months.set(month,{});}
+  try{const data=JSON.parse(historyRead('dailyEnergy',[start.getTime(),end.getTime(),snapshot.historyRevision||0,Math.floor(dataTime()/30000)],'daily:'+month));
+   months.set(month,data);if(data.pending)waiting.add(month);if(data.error||data.refreshError)failed.add(month);if(data.stale)outdated.add(month);for(const day of data.days||[])consumption.set(day.day,day);
+  }catch(_){months.set(month,{});failed.add(month);}
  }
  el.innerHTML='<h2>Solar-Tagesarchiv</h2><p class="muted">Ertrag: Tageswerte des Solarladereglers. Verbrauch: aus Solar- und Shunt-Messungen berechnet, einschließlich der Nacht. Messlücken bleiben unberechnet; heute ist vorläufig.</p><div style="overflow-x:auto" tabindex="0" aria-label="Tagesarchiv, weitere Spalten seitlich erreichbar"><table><thead><tr><th>Tag</th><th>Ertrag Wh</th><th>Verbrauch Wh</th><th>Maximum W</th><th>Batterie min/max V</th></tr></thead><tbody>'+rows.map(r=>{
   const day=consumption.get(r.day),known=day?.last!=null&&Number.isFinite(Number(day.last));
   const amount=known?num(day.last,2):waiting.has(r.day.slice(0,7))?'…':'—';
-  const coverage=known?`${Math.floor(Math.max(0,Math.min(1,day.coverage||0))*100)} % erfasst${day.interpolatedMillis>0?' · kurz interpoliert':''}`:waiting.has(r.day.slice(0,7))?'wird berechnet':'keine Messdaten';
-  return `<tr><td>${escapeHtml(r.day)}</td><td>${num(r['Yield(Wh)'])}</td><td>${amount}<span class="daily-coverage">${coverage}</span></td><td>${num(r['Max. PV power(W)'])}</td><td>${num(r['Min. battery voltage(V)'],2)} / ${num(r['Max. battery voltage(V)'],2)}</td></tr>`;
+  const coverage=known?`${Math.floor(Math.max(0,Math.min(1,day.coverage||0))*100)} % erfasst${day.interpolatedMillis>0?' · kurz interpoliert':''}`:waiting.has(r.day.slice(0,7))?'wird berechnet':failed.has(r.day.slice(0,7))?'Abfrage fehlgeschlagen':'keine Messdaten';
+  const note=outdated.has(r.day.slice(0,7))?' · letzter Stand'+(waiting.has(r.day.slice(0,7))?' · wird aktualisiert':failed.has(r.day.slice(0,7))?' · Aktualisierung fehlgeschlagen':''):'';
+  return `<tr><td>${escapeHtml(r.day)}</td><td>${num(r['Yield(Wh)'])}</td><td>${amount}<span class="daily-coverage">${coverage}${note}</span></td><td>${num(r['Max. PV power(W)'])}</td><td>${num(r['Min. battery voltage(V)'],2)} / ${num(r['Max. battery voltage(V)'],2)}</td></tr>`;
  }).join('')+'</tbody></table></div>';
 }
 function chooseImport(){if(native)native.chooseImport();else toast('CSV-Dateien werden in der Android-App importiert.');}
@@ -484,7 +490,7 @@ $('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus'
 for(const [id,name] of [['navOverview','overview'],['navStorage','battery'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);
 lifecycle=new window.WattLifecycle({native,toast,poll,stateChanged:state=>reads?.state(state),completed:()=>{lastHistoryRevision=-1;lastMiniLoad=0;dashboard?.cache.clear();}});
 lifecycle.poll();
-dashboard = new window.WattDashboard({native,resizeMini:drawMini,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
+dashboard = new window.WattDashboard({native,read:historyRead,resizeMini:drawMini,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
 extras = new window.WattExtras({native,renderSolar:()=>solar?.render(),getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,cancelArchive:()=>lifecycle.confirmCancellation(),repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
 solar = new window.WattSolarPlan({native:deviceNative,equipment,getSnapshot:()=>snapshot,getReading:reading,openModal,closeModal,toast,poll,symbol:code=>extras.symbol(code)});

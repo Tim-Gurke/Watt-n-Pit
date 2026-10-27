@@ -69,6 +69,20 @@ public final class LanSyncProof {
             Method refresh=LanSync.class.getDeclaredMethod("refresh");refresh.setAccessible(true);refresh.invoke(viewer);
             check(Files.getLastModifiedTime(savedDisplay).toMillis()==1000000,"frequent live refreshes do not rewrite the complete persistent display bundle");
             JSONArray history=viewer.query("history",new JSONArray().put(now-60000).put(now).put("batteryPower").put("all")).getJSONArray("points");
+            java.time.ZoneId zone=java.time.ZoneId.systemDefault();java.time.LocalDate today=java.time.LocalDate.now(zone);
+            long monthFrom=today.withDayOfMonth(1).atStartOfDay(zone).toInstant().toEpochMilli(),monthTo=today.withDayOfMonth(1).plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli();
+            for(int i=3;i>=1;i--){Reading solar=new Reading();solar.device="AA:00:00:00:00:02";solar.kind="solar";solar.origin="live";solar.timestamp=now-i*10000;solar.period=10;solar.solar=30.0;source.db.insert(solar);}
+            JSONObject localDays=source.db.dailyEnergy(monthFrom,monthTo,new JSONObject());
+            JSONObject sharedDays=viewer.query("dailyEnergy",new JSONArray().put(monthFrom).put(monthTo).put(1).put(1));
+            JSONArray aDays=localDays.getJSONArray("days"),bDays=sharedDays.getJSONArray("days");boolean same=aDays.length()==bDays.length(),measured=false;
+            for(int i=0;i<aDays.length();i++){JSONObject a=aDays.getJSONObject(i),b=bDays.getJSONObject(i);same&=a.getString("day").equals(b.getString("day"))&&a.isNull("last")==b.isNull("last");if(!a.isNull("last")){measured|=a.getDouble("last")>0;same&=Math.abs(a.getDouble("last")-b.getDouble("last"))<1e-6;}}
+            check(same&&measured,"the complete current-month request returns the same daily consumption on host and viewer, even though the month ends in the future");
+            for(int i=0;i<2;i++){String day=today.minusDays(i).toString();android.content.ContentValues row=new android.content.ContentValues();row.put("device","AA:00:00:00:00:02");row.put("day",day);row.put("payload",new JSONObject().put("day",day).put("Yield(Wh)",i==0?410:0).put("Max. PV power(W)",170).put("Min. battery voltage(V)",12.9).put("Max. battery voltage(V)",14.2).toString());source.db.getWritableDatabase().insertWithOnConflict("device_daily",null,row,android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);}
+            refresh.invoke(viewer);check(source.db.daily().toString().equals(new JSONObject(viewer.snapshot()).getJSONArray("solarDaily").toString()),"yield, real zero, maximum power and voltage columns arrive unchanged in the viewer's solar day archive");
+            boolean dailyBound=false;try{viewer.query("dailyEnergy",new JSONArray().put(monthFrom).put(monthFrom+33L*86400000));}catch(IOException expected){dailyBound=true;}
+            check(dailyBound,"monthly consumption remains bounded to 32 days despite accepting a future month end");
+
+
             check(history.length()>0&&history.getJSONObject(0).getDouble("v")==-12,"history queries use the same host database over actual TCP");
             check(own.db.last("AA:00:00:00:00:01").power==-999,"display and history reads preserve the viewer's own stored measurements");
             boolean rejected=false;try{viewer.query("saveEquipment",new JSONArray().put(now-60000).put(now));}catch(IOException expected){rejected=true;}

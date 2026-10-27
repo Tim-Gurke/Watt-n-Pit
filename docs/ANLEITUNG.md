@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.6.3** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.3/Watt-n-Pit-v1.6.3.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.6.4** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.4/Watt-n-Pit-v1.6.4.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -337,3 +337,12 @@ Während einer Änderung erscheint **Bestätigung vom Hauptgerät wird erwartet 
 Das freigegebene **G5-Layout** ersetzt beim ersten Start nach dem Update einmalig die bisherigen Kachelanordnungen auf jedem Handy, in schmaler und breiter Ansicht. Weitere Starts erhalten danach deine eigenen Änderungen. **Standardübersicht wiederherstellen** verwendet ebenfalls diese Vorlage. Schriftgrößen sind auf **höchstens 20** begrenzt, auch beim Laden älterer Einstellungsdateien. Kleinere Werte bleiben erhalten. Neue Kacheln bleiben im gemeinsamen Raster verschiebbar und skalierbar.
 
 Unter **Zusatzspeicher → Enthaltene Energie** steht der aktuelle Speicherinhalt in Wh als Näherung: BMS-Restkapazität in Ah × eingestellte Nennspannung, ersatzweise Ladezustand × hinterlegte Nennenergie. Ohne aktuelle BMS-Daten bleibt der Wert unbekannt. **Geladen** zeigt weiterhin nur die in einer Ladeaufzeichnung gemessenen Abschnitte. Der Speicherinhalt ist keine Zusage für tatsächlich zum Wohnwagen rückspeisbare Energie.
+
+
+## Tagesarchiv und Nachladen ab 1.6.4
+
+Im **Verlauf → Solar-Tagesarchiv** können Anzeigen die Verbrauchswerte auch für den laufenden Kalendermonat vom Hauptgerät abfragen. Die Berechnung endet am aktuellen Zeitpunkt; zukünftige Tage erhalten keine erfundenen Werte. Ertrag, Spitzenleistung und Spannungsgrenzen stammen weiterhin aus dem Tagesarchiv des Hauptgeräts.
+
+Bei einer Aktualisierung bleiben die bereits geladenen Kurven und historischen Werte derselben Ansicht sichtbar. **Letzter Stand · neue Daten werden geladen …** kennzeichnet den laufenden Abruf. Erst die neue Antwort ersetzt die Daten. Bei einem Aktualisierungsfehler bleibt der letzte erfolgreiche Stand erkennbar; die App versucht den Abruf erneut. Eine erfolgreiche Antwort ohne Messdaten entfernt alte Werte. Andere Anlagen, Messgrößen, Quellen und ausgewählte Zeiträume übernehmen keine Daten aus der vorherigen Ansicht.
+
+Für beide Korrekturen **Hauptgerät und Anzeigen auf 1.6.4 aktualisieren**. Die G5-Vorlage wird dabei nach erfolgtem 1.6.3-Update nicht erneut über eigene Layoutänderungen geschrieben.

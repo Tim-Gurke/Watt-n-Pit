@@ -107,7 +107,7 @@ final class LanSync {
     JSONObject state(){
         JSONObject result=new JSONObject();try{
             long now=SystemClock.elapsedRealtime();JSONArray connected=new JSONArray();for(JSONObject peer:peers.values())if(now-peer.optLong("seen")<20000)connected.put(new JSONObject().put("name",peer.optString("name")));
-            result.put("role",config.optString("role","off")).put("name",config.optString("name")).put("hosting",hosting).put("connected",viewer()?receivedElapsed>0&&now-receivedElapsed<10000:hosting)
+            result.put("role",config.optString("role","off")).put("id",config.optString("id")).put("name",config.optString("name")).put("hosting",hosting).put("connected",viewer()?receivedElapsed>0&&now-receivedElapsed<10000:hosting)
                 .put("receivedAt",receivedAt).put("error",error).put("peers",connected).put("address",resolvedHost);
             if(hosting)result.put("addresses",addresses()).put("port",server.getLocalPort());
         }catch(Exception ignored){}return result;
@@ -210,8 +210,8 @@ final class LanSync {
         JSONArray listed=target.getJSONArray("addresses");for(int i=0;i<listed.length();i++)if(!hosts.contains(listed.getString(i)))hosts.add(listed.getString(i));
         long deadline=SystemClock.elapsedRealtime()+10000;
         boolean command=method.equals("rollerSession")||method.equals("control");
-        for(String host:hosts){if(command&&SystemClock.elapsedRealtime()>deadline)break;if(!LanWire.localAddress(host))continue;try(Socket socket=new Socket()){
-            socket.connect(new InetSocketAddress(host,port),1800);socket.setSoTimeout(command?4000:10000);
+        for(String host:hosts){long remaining=deadline-SystemClock.elapsedRealtime();if(remaining<=0)break;if(!LanWire.localAddress(host))continue;try(Socket socket=new Socket()){
+            socket.connect(new InetSocketAddress(host,port),(int)Math.min(1800,remaining));remaining=deadline-SystemClock.elapsedRealtime();if(remaining<=0)break;socket.setSoTimeout((int)Math.min(command?4000:10000,remaining));
             String nonce=LanWire.random(18);JSONObject request=new JSONObject().put("group",target.getString("id")).put("nonce",nonce).put("at",System.currentTimeMillis())
                 .put("peer",prefs.getString("deviceId","")).put("name",Build.MODEL).put("method",method).put("args",args);
             byte[] key=LanWire.key(target.getString("key"));LanWire.write(socket.getOutputStream(),key,request.toString(),LanWire.MAX_REQUEST);
@@ -264,13 +264,16 @@ final class LanSync {
             for(int i=0;i<devices.length();i++)if(devices.getJSONObject(i).optString("kind").equals("shunt")){shunt=devices.getJSONObject(i).optString("mac");break;}
             JSONObject point=shunt.isEmpty()?null:repository.db.sunsetSoc(from,System.currentTimeMillis(),shunt);return new JSONObject().put("point",point==null?JSONObject.NULL:point);
         }
-        long to=args.getLong(1);if(from<0||to<=from||to-from>366L*86400000||to>System.currentTimeMillis()+86400000)throw new IllegalArgumentException();
+        long to=args.getLong(1);
+        // Calendar-month requests include their future month end. HistoryDb validates
+        // their bounded 32-day span and only calculates consumption up to the present.
+        if(method.equals("dailyEnergy"))return repository.db.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}")));
+        if(from<0||to<=from||to-from>366L*86400000||to>System.currentTimeMillis()+86400000)throw new IllegalArgumentException();
         switch(method){
             case "history":return new JSONObject().put("points",repository.db.query(from,to,args.getString(2),args.getString(3)));
             case "dashboardHistory":return repository.db.dashboardData(from,to,args.getString(2));
             case "energyHistoryWindow":return repository.db.energyFlow(from,to,args.getLong(3),args.getLong(4),args.getString(2));
             case "energyHistory":return repository.db.energyFlow(from,to,args.getLong(3),args.getString(2));
-            case "dailyEnergy":return repository.db.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}")));
             default:throw new IllegalArgumentException();
         }
     }

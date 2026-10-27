@@ -134,7 +134,7 @@
         const t=this.tiles.get(metric),m=C.CATALOG[metric];
         const sun=C.miniWindow('sunrise',snapshot.weather||{}),daily=['today','sunrise'].includes(this.period.mode);
         const query=this.period.mode==='sunrise'&&(t.metric==='solar'||m.flow)?C.solarQueryWindow(this.base):this.base;
-        const data=m.status||m.liveOnly?{points:[],summary:{}}:this.d.data(t,query,daily?Math.max(query.from,sun.solarFrom??query.from):query.from,daily?sun.solarTo??query.to:query.to);
+        const data=m.status||m.liveOnly?{points:[],summary:{}}:this.d.data(t,query,daily?Math.max(query.from,sun.solarFrom??query.from):query.from,daily?sun.solarTo??query.to:query.to,JSON.stringify(['detail',m.flow?'flow':metric,this.period,['today','sunrise','yesterday'].includes(this.period.mode)?new Date(query.from).toLocaleDateString('sv-SE'):'']));
         this.series.push({tile:t,data,points:seriesPoints(t,data.points||[],snapshot.settings.capacity||100)});
       }
       const primary=this.series[0],m=C.CATALOG[this.tile.metric];
@@ -150,7 +150,8 @@
       $('detailCompareCount').textContent=this.selected.size>1?'('+String(this.selected.size-1)+')':'';
       $('detailLegend').innerHTML=this.series.map((s,i)=>`<span><i style="background:${this.color(s,i)}"></i>${esc(label(s.tile))} · ${esc(s.tile.unit)}</span>`).join('');
       const notes=[this.base.note||'',m.hint||''];
-      if(primary.data.pending)notes.push('Daten werden im Hintergrund geladen …');
+      if(primary.data.pending)notes.push(primary.data.stale?'Letzter Stand · neue Daten werden geladen …':'Daten werden im Hintergrund geladen …');
+      else if(primary.data.refreshError)notes.push('Letzter Stand · Aktualisierung fehlgeschlagen. Neuer Versuch folgt.');
       if(m.energy)notes.push(Math.floor((primary.data.summary?.coverage||0)*100)+' % des Zeitraums abgedeckt.');
       if(m.energy&&primary.data.summary?.interpolatedMillis>0)notes.push('Davon '+(primary.data.summary.interpolatedMillis/60000).toLocaleString('de-DE',{maximumFractionDigits:1})+' min kurz interpoliert. Verfügbare Originaldaten haben Vorrang; größere Lücken bleiben offen.');
       if(m.liveOnly||m.status)notes.push('Für diesen Wert steht kein gespeicherter Verlauf zur Verfügung.');
