@@ -5,6 +5,7 @@ const preset=require('../app/src/main/assets/dashboard-preset.json');
  const browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.WATTPIT_CHROMIUM?{executablePath:process.env.WATTPIT_CHROMIUM}:{})});
  try{for(const theme of ['dark','light']){
   const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const until=async fn=>{for(let i=0;i<200;i++){if(await page.evaluate(fn))return;await page.waitForTimeout(50);}throw Error('History retention UI did not reach the expected state');};
   await page.clock.setFixedTime(new Date('2026-10-27T19:00:00Z'));
   await page.addInitScript(({preset,theme})=>{
    window.revision=1;window.auto=true;window.pendingReads=[];window.amount=640;window.dayAmount=29.68;
@@ -19,13 +20,15 @@ const preset=require('../app/src/main/assets/dashboard-preset.json');
   },{preset,theme});
   await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
   const consumption=page.locator('.cockpit-tile').filter({has:page.locator('.tile-label',{hasText:'Verbrauch'})});
-  await page.waitForFunction(()=>miniPoints.length===3&&[...document.querySelectorAll('.tile-label')].some(e=>e.textContent==='Verbrauch'&&e.closest('.cockpit-tile').querySelector('.tile-number').textContent==='640,00'));
+  await until(()=>miniPoints.length===3&&[...document.querySelectorAll('.tile-label')].some(e=>e.textContent==='Verbrauch'&&e.closest('.cockpit-tile').querySelector('.tile-number').textContent==='640,00'));
+  await page.evaluate(()=>{const tile=dashboard.config.tiles.find(t=>t.metric==='consumptionEnergy');if(!dashboard.detail)dashboard.detail=new WattTileDetail(dashboard);dashboard.detail.open(tile.id);window.auto=false;window.revision++;poll();dashboard.detail.refresh(false);});
+  assert.equal(await page.locator('#detailReading .detail-number').textContent(),'640,00');assert.match(await page.locator('#detailNote').textContent(),/Letzter Stand/);await page.locator('#detailClose').click();
   await page.evaluate(()=>{window.auto=false;window.revision++;poll();});
   assert.equal(await consumption.locator('.tile-number').textContent(),'640,00');assert.equal(await page.evaluate(()=>miniPoints.length),3);assert.match(await consumption.locator('.tile-hint').textContent(),/Letzter Stand/);
   await page.evaluate(()=>window.drain(true));await page.waitForTimeout(120);assert.equal(await consumption.locator('.tile-number').textContent(),'640,00');assert.match(await consumption.locator('.tile-hint').textContent(),/Aktualisierung fehlgeschlagen/);
   await page.clock.setFixedTime(new Date('2026-10-27T19:10:00Z'));await page.evaluate(()=>poll());
   assert.equal(await consumption.locator('.tile-number').textContent(),'640,00');assert.equal(await page.evaluate(()=>miniPoints.length),3);
-  await page.evaluate(()=>{window.amount=660;window.drain(false);});await page.waitForFunction(()=>[...document.querySelectorAll('.tile-label')].some(e=>e.textContent==='Verbrauch'&&e.closest('.cockpit-tile').querySelector('.tile-number').textContent==='660,00'));
+  await page.evaluate(()=>{window.amount=660;window.drain(false);});await until(()=>[...document.querySelectorAll('.tile-label')].some(e=>e.textContent==='Verbrauch'&&e.closest('.cockpit-tile').querySelector('.tile-number').textContent==='660,00'));
   await page.locator('[data-page="history"]').click();await page.evaluate(()=>{poll();window.drain(false);});await page.waitForTimeout(120);
   const row=day=>page.locator('#solarDailyArchive tr').filter({has:page.locator('td').filter({hasText:day})});
   assert.match(await row('2026-10-27').locator('td').nth(2).textContent(),/29,68/);assert.match(await row('2026-10-26').locator('td').nth(2).textContent(),/0,00/);
