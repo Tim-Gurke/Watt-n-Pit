@@ -52,6 +52,7 @@ final class LanSync {
     }
     boolean viewer(){return "viewer".equals(config.optString("role"));}
     boolean host(){return "host".equals(config.optString("role"));}
+    void hostFailed(){error="Anlagenverbund konnte nicht gestartet werden. App erneut öffnen und WLAN prüfen.";}
     void foreground(Consumer<JSONObject> callback){visible=true;listener=callback;if(viewer()){discover();client.execute(this::refresh);}}
     void background(){visible=false;listener=null;if(viewer())stopDiscovery();}
     private void save(JSONObject next)throws Exception{

@@ -18,7 +18,7 @@ public final class LanService extends Service {
         try{
             if(Build.VERSION.SDK_INT>=29)startForeground(12,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);else startForeground(12,notification);
             lan.startHost();
-        }catch(Exception e){stopSelf();return START_NOT_STICKY;}
+        }catch(Exception e){lan.hostFailed();stopSelf();return START_NOT_STICKY;}
         return START_STICKY;
     }
     @Override public void onDestroy(){LanSync.get(this).stopHost();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy();}

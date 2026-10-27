@@ -6,18 +6,18 @@
     constructor(a){
       this.a=a;this.state={role:'off'};
       $('lanManage').onclick=$('lanOpen').onclick=()=>this.open();
-      window.onLanResult=result=>{if(result.error){this.message(result.error);if($('lanJoin'))$('lanJoin').disabled=false;}else location.reload();};
+      window.onLanResult=result=>{if(result.error){this.message(result.error);if($('lanJoin')){$('lanJoin').disabled=false;$('lanJoin').textContent='Als Anzeige beitreten';}}else location.reload();};
     }
     render(){
       try{this.state=JSON.parse(this.a.native?.lanState?.()||'{"role":"off"}');}catch(_){this.state={role:'off'};}
       const s=this.state,viewer=s.role==='viewer',host=s.role==='host',active=viewer||host;
       $('lanBanner').hidden=!active;
       $('lanTitle').textContent=active?s.name:'Anlagenverbund';
-      const status=viewer?(s.connected?'Anzeige · vom Hauptgerät':`Hauptgerät nicht erreichbar · Stand ${stamp(s.receivedAt)}`):host?(s.hosting?`Hauptgerät · ${s.peers?.length||0} Anzeige${s.peers?.length===1?'':'n'} verbunden`:'Hauptgerät wird gestartet …'):'Messwerte direkt auf diesem Gerät';
+      const status=viewer?(s.connected?'Anzeige · vom Hauptgerät':`Hauptgerät nicht erreichbar · Stand ${stamp(s.receivedAt)}`):host?(s.hosting?`Hauptgerät · ${s.peers?.length||0} Anzeige${s.peers?.length===1?'':'n'} verbunden`:s.error||'Hauptgerät wird gestartet …'):'Messwerte direkt auf diesem Gerät';
       $('lanStatus').textContent=status;$('lanSummary').textContent=active?`${s.name} · ${status}`:'Ein Hauptgerät zeichnet auf. Weitere Handys zeigen denselben Datenstand im WLAN.';
       $('lanBanner').classList.toggle('lan-offline',viewer&&!s.connected);
       // Keep layout, theme and chart controls local. Plant changes belong to the source device.
-      const ids=['overviewRecord','scanButton','reloadArchive','addDevice','setupFirst','rollerConfigure','rollerSettings','rollerSession','solarSetupSettings','solarSetupButton','solarConsumptionSettings','solarMobileToggle','solarGpsSettings','weatherQuery','weatherSearchButton','weatherOff','capacitySetting','sampleSetting','saveSettings','editEquipment','importConfiguration','settingsImport','historyImport','importCsv','settingsExport','exportCsv','exportPlanningDiagnostics'];
+      const ids=['overviewRecord','scanButton','reloadArchive','addDevice','setupFirst','rollerConfigure','rollerSettings','rollerSession','solarSetupSettings','solarSetupButton','solarConsumptionSettings','solarMobileToggle','solarGpsSettings','weatherRefresh','weatherQuery','weatherSearchButton','weatherOff','capacitySetting','sampleSetting','saveSettings','editEquipment','importConfiguration','settingsImport','historyImport','importCsv','settingsExport','exportCsv','exportPlanningDiagnostics'];
       for(const id of ids){const el=$(id);if(!el)continue;if(viewer){el.dataset.lanDisabled='1';el.disabled=true;el.title='Am Hauptgerät ändern';}else if(el.dataset.lanDisabled){delete el.dataset.lanDisabled;el.disabled=false;el.removeAttribute('title');}}
       document.querySelectorAll('.edit-device,.use-found,.archive-import').forEach(el=>{if(viewer){el.disabled=true;el.title='Am Hauptgerät ändern';}});
       if(viewer){$('scanStatus').textContent='Geräte und Archive werden am Hauptgerät verwaltet.';$('recordText').textContent='Aufzeichnung am Hauptgerät';}

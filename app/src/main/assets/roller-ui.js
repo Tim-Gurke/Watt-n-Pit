@@ -17,7 +17,7 @@
       $('rollerSoc').textContent=num(live.soc)+' %';$('rollerPower').textContent=num(live.power)+' W';
       $('rollerInput').textContent=energy(session.inputWh);$('rollerCharged').textContent=energy(session.batteryWh);
       $('rollerLiveNote').textContent=live.at?`${num(live.voltage,2)} V · ${num(live.current,2)} A · Wohnwagenanteil ≈ ${num(s.estimatedInputWatts)} W`:'Keine aktuellen BMS-Werte · alte Werte werden nicht fortgeschrieben.';
-      $('rollerSession').textContent=session.active?'Ladeaufzeichnung beenden':'Ladeaufzeichnung starten';$('rollerSession').disabled=this.a.isDemo()||!this.a.native?.rollerSession||!session.active&&!s.fresh;
+      $('rollerSession').textContent=session.active?'Sondernutzung beenden':'Ladung als Sondernutzung starten';$('rollerSession').disabled=this.a.isDemo()||!this.a.native?.rollerSession||!session.active&&!s.fresh;
       $('rollerGaps').textContent=session.started?`${num((session.observedMillis||0)/60000)} min erfasst · ${num((session.gapMillis||0)/1000,0)} s ohne Messung${session.active?' · Aufzeichnung läuft':''}`:'Rollerladung als Sondernutzung starten: Die Ladezeit bleibt vom üblichen Tagesbedarf getrennt.';
       let text=r.away?'Geplante Fahrt läuft: Roller als Zusatzspeicher nicht verfügbar.':r.impossible?'Die geplante Fahrt samt Reserve überschreitet die hinterlegte Akkukapazität.':r.missing===null?'Für die Ladeplanung aktuelle BMS-Werte empfangen.':`Bis zum Ladeziel fehlen ≈ ${energy(r.missing)} im Roller. Wohnwagenbedarf ≈ ${energy(r.draw)}, Ladedauer ≈ ${num(r.hours)} h.`;
       if(r.late)text+=' Bis zur geplanten Abfahrt reicht die angesetzte Ladeleistung voraussichtlich nicht.';

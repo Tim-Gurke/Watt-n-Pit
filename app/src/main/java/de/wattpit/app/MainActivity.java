@@ -162,6 +162,7 @@ public final class MainActivity extends Activity {
     }
     @SuppressLint("MissingPermission")
     private void startAfterPermissions() {
+        if(lan.viewer()){pendingStart=false;pendingArchive=null;return;}
         if (isFinishing() || isDestroyed()) return;
         boolean allowed = Build.VERSION.SDK_INT >= 31 ? checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
                 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED

@@ -88,6 +88,7 @@ public final class ArchiveService extends Service {
     }
     @Override public void onCreate(){super.onCreate();repository=Repository.get(this);getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel(CHANNEL,"Gerätearchiv importieren",NotificationManager.IMPORTANCE_LOW));}
     @Override public int onStartCommand(Intent intent,int flags,int startId){
+        if(LanSync.get(this).viewer()){stopSelf();return START_NOT_STICKY;}
         if(intent==null){stopSelf();return START_NOT_STICKY;}
         if("CANCEL".equals(intent.getAction())){cancelled=true;repository.pauseAutomaticArchives();failOperation(new IOException("cancelled"));received.offer(new byte[0]);if(!started)stopSelf();return START_NOT_STICKY;}
         if(started)return START_NOT_STICKY;started=true;mac=intent.getStringExtra("mac");

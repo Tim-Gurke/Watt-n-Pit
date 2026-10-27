@@ -26,7 +26,7 @@ Der Code ist der lesende Zugang zu dieser Anlage. Der Austausch bleibt verschlü
 
 ### Rollerladung als Sondernutzung
 
-Im Rollerbereich **Ladeaufzeichnung starten** wählen, wenn das Ladegerät den Roller aus dem Wohnwagen versorgt. Der Zeitraum wird als **Sondernutzung · Rollerladung** markiert. Nach dem Laden die Aufzeichnung beenden. Die betreffende Zeit lernt keinen allgemeinen Tagesbedarf; geeignete Messzeiten davor und danach bleiben nutzbar. Die tatsächliche Ladeenergie bleibt in Tagesverbrauch und Shuntbilanz enthalten. BMS-Energie und geschätzter Wohnwagenanteil stehen im Ladejournal. Der verbleibende geplante Ladebedarf fließt gesondert in die Akkuprognose ein.
+Im Rollerbereich **Ladung als Sondernutzung starten** wählen, wenn das Ladegerät den Roller aus dem Wohnwagen versorgt. Der Zeitraum wird als **Sondernutzung · Rollerladung** markiert. Nach dem Laden die Aufzeichnung beenden. Die betreffende Zeit lernt keinen allgemeinen Tagesbedarf; geeignete Messzeiten davor und danach bleiben nutzbar. Die tatsächliche Ladeenergie bleibt in Tagesverbrauch und Shuntbilanz enthalten. BMS-Energie und geschätzter Wohnwagenanteil stehen im Ladejournal. Der verbleibende geplante Ladebedarf fließt gesondert in die Akkuprognose ein.
 
 Die Markierung ist manuell; eine unzugeordnete Shuntlast lässt sich nicht sicher als Rollerladung erkennen. Empfangslücken werden nicht als gemessene Ladeenergie ergänzt.
 
@@ -297,7 +297,7 @@ Nach dem heutigen Sonnenuntergang zeigt die Akkuvorschau den zeitlich nächsten 
 ## Roller und Ladeplanung ab 1.5.0
 
 1. **Einstellungen → Roller einrichten**: tatsächliche Akkudaten und BMS-Adresse eintragen oder ein gekoppeltes Gerät wählen. Watt’n’Pit-Aufzeichnung starten.
-2. Für den Ladeweg Wohnwagen → Wechselrichter → Netzladegerät → Roller im Rollerbereich **Ladeaufzeichnung starten** wählen und nach dem Laden beenden. Die App schaltet keine Hardware. Wh im Roller sind aus erfassten BMS-Abschnitten berechnet; der Wohnwagenanteil ist mit dem vorläufigen Verlustprofil geschätzt. Fehlende Messzeiten bleiben offen.
+2. Für den Ladeweg Wohnwagen → Wechselrichter → Netzladegerät → Roller im Rollerbereich **Ladung als Sondernutzung starten** wählen und nach dem Laden beenden. Die App schaltet keine Hardware. Wh im Roller sind aus erfassten BMS-Abschnitten berechnet; der Wohnwagenanteil ist mit dem vorläufigen Verlustprofil geschätzt. Fehlende Messzeiten bleiben offen.
 3. Ladeziel und optional Strecke, Wh/km, Fahrpuffer und Abfahrts-/Rückkehrzeit hinterlegen. Mit **Ladung ab jetzt in der Akkuprognose einplanen** den noch benötigten Ladebedarf berücksichtigen. Verbrauch und Verluste sind vorläufige Planungswerte, keine Ladegarantie.
 4. Auf demselben Telefon kann ScootPit ab der BMS-Schnittstelle in **1.6.13-test.1** seine Grunddaten lokal liefern. Beide Apps aktualisieren und dasselbe BMS verwenden. Bei Übernahme erscheint **BMS über ScootPit · lokale Datenübernahme**. Mit älteren ScootPit-Versionen bzw. Overkill ist diese Übergabe nicht möglich. Kein Austausch zwischen unterschiedlichen Telefonen.
 5. Unter **Anordnen** den Rollerblock über die Pfeile nach oben setzen. **Größe ändern** oder der ↘-Griff passen Breite und Höhe an. Maße werden getrennt für schmale und breite Ansicht gespeichert. Kleine Bereiche lassen sich innen scrollen.
