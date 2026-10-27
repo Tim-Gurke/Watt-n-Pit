@@ -27,6 +27,8 @@ methods='\n'.join(method(s) for s in ['private void startAutomaticImport(){','pr
 harness='''package de.wattpit.app;
 import java.util.concurrent.Executor;
 final class ForegroundHarness {
+ static final class Lan { boolean viewer(){return false;} }
+ final Lan lan=new Lan();
  final Repository repository;
  final Executor files=Runnable::run;
  final Web web=new Web();

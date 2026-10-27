@@ -39,6 +39,7 @@ jobs:
           java com.sun.tools.javac.Main -cp "$deps/android-api35.jar" -d "$RUNNER_TEMP/roller-proof" app/src/main/java/de/wattpit/app/core/BmsPacket.java app/src/main/java/de/wattpit/app/core/RollerEnergy.java app/src/main/java/de/wattpit/app/RollerStore.java tools/RollerStoreProof.java
           java -cp "$RUNNER_TEMP/roller-proof:$deps/android-api35.jar" de.wattpit.app.RollerStoreProof "$RUNNER_TEMP/roller-preferences"
           python3 tools/prove-archive-foreground.py --dependencies "$deps" --output app/build/reports/archive-foreground-proof --mode fixed
+          python3 tools/prove-lan.py --output app/build/reports/lan-proof --android-jar "$deps/android-api35.jar" --sqlite-jar "$deps/sqlite-jdbc-3.46.1.0.jar" --slf4j-jar "$deps/slf4j-api-1.7.36.jar"
       - name: Native Abdeckung in allen Kurven prüfen
         env:
           WATTPIT_CHROMIUM: /usr/bin/google-chrome
@@ -82,6 +83,8 @@ jobs:
             app/build/reports/archive-storage-proof/results.log
             app/build/reports/archive-storage-proof/weather-contract-fixture.json
             app/build/reports/archive-foreground-proof/
+            app/build/reports/lan-proof/report.json
+            app/build/reports/lan-proof/results.log
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/publish/')
