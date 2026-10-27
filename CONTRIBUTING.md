@@ -6,4 +6,10 @@ Die Verbundkachel verwendet denselben Katalog und dieselben Gesten wie die Mess-
 
 Aktionen über den Anlagenverbund brauchen eine Bestätigung vom Hauptgerät. Vor dieser Antwort darf die Anzeige keinen erfolgreichen Zustandswechsel behaupten. Neue Netzwerkaktionen auf ihren benötigten Umfang begrenzen; wiederholte oder verspätete Anfragen dürfen keine zweite oder inzwischen ungültige Änderung auslösen.
 
-Für das nächste Layout-Update ist vorgemerkt: Die voreingestellte Schriftgröße beträgt maximal **20**.
+## Vormerkungen für ein späteres Update
+
+Derzeit nur Wünsche festhalten. Umsetzung, Build und Veröffentlichung warten auf einen späteren Auftrag des Nutzers.
+
+- Voreingestellte Schriftgröße maximal **20**. Mit dem späteren Update auch größere Schrift in bereits gespeicherten Layouts einmalig auf 20 reduzieren; kleinere Werte und die Anordnung erhalten.
+- Das Anzeigehandy soll alle gemeinsamen App- und Anlageneinstellungen steuern können, insbesondere Solaranlage, mobile Aufstellung und Wetter. Das Hauptgerät übernimmt und bestätigt die Änderungen.
+- Beim Zusatzspeicher die **aktuell enthaltene Energie in Wh** anzeigen; diese Anzeige beschreibt den gegenwärtigen Speicherinhalt.
