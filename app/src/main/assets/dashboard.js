@@ -267,9 +267,12 @@
     fitNumbers() {
       for(const el of this.elements.values()){
         const number=el.querySelector('.tile-number');if(!number)continue;
-        number.style.fontSize='';const parent=number.closest('.tile-reading') || number.parentElement;
-        const available=parent.clientWidth-(parent.querySelector('.tile-unit')?.offsetWidth || 0)-8;
-        if(number.scrollWidth>available && available>10){const font=parseFloat(getComputedStyle(number).fontSize);number.style.fontSize=Math.max(14,Math.floor(font*available/number.scrollWidth))+'px';}
+        number.style.fontSize='';const parent=number.closest('.tile-reading') || number.parentElement;parent.classList.remove('stack-unit');
+        let available=parent.clientWidth-(parent.querySelector('.tile-unit')?.offsetWidth || 0)-8;
+        const font=parseFloat(getComputedStyle(number).fontSize),natural=number.scrollWidth;
+        // Keep a readable value on narrow tiles; put the unit below before shrinking further.
+        if(available>10&&font*available/natural<14&&parent.classList.contains('tile-reading')){parent.classList.add('stack-unit');available=parent.clientWidth;}
+        if(natural>available&&available>10)number.style.fontSize=Math.max(14,Math.floor(font*available/natural))+'px';
       }
     }
     periodLabel(t,window) {

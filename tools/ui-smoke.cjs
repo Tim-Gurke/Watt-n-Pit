@@ -128,7 +128,7 @@ const http = require('node:http');
   assert.equal(await shared.locator('#layoutProfile').textContent(),'Breite Ansicht');
   assert.equal(await shared.evaluate(()=>localStorage.getItem('wattpit-dashboard-v1')),saved,'rotation rewrites the saved arrangement');
   await shared.locator('#addTile').click();await shared.locator('.metric-option[data-metric="solar"]').click();
-  assert.equal(await shared.locator('.cockpit-tile').count(),10);
+  assert.equal(await shared.locator('.cockpit-tile').count(),11);
   await shared.waitForTimeout(350);await shared.locator('.cockpit-tile').last().click();await shared.locator('#tileActionSettings').click();
   await shared.locator('#tileType').selectOption('chart');await shared.locator('#saveTile').click();
   assert.equal(await shared.locator('.cockpit-tile').last().locator('.tile-sparkline').count(),1,'the historical tile does not display its series');
