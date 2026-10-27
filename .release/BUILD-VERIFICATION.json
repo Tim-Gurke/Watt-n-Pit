@@ -1,26 +1,29 @@
 {
-  "version": "1.3.9",
-  "versionCode": 30,
-  "compiledSource": "f799dda5bf72c3f084750039800aab24562c05b6",
-  "unsignedBuildCommit": "6593531eebdda3b39fde616fedeaa93bd8d64b65",
-  "unsignedBuildRun": 39614559024,
-  "publicationSource": "3464de14d3448cd0049c5625e355abc36846268b",
-  "apk": {
-    "file": "Watt-n-Pit-v1.3.9.apk",
-    "size": 190505,
-    "sha256": "512a4ba02937183b7882314f864105036d20b49e4c3363169e90b8f8553265bc",
-    "gitBlobSha": "f37bdafbb9024c8707e9b22f27ab555eb470b39c",
-    "base64Length": 254008,
-    "certificateSha256": "0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2"
+  "version": "1.6.3",
+  "version_code": 52,
+  "package": "de.wattpit.app",
+  "source_commit": "62d92a16d9ce3cc1cd2f7240820feced5a425fff",
+  "source_ci": {
+    "run_id": 40558525433,
+    "url": "https://github.com/Tim-Gurke/Watt-n-Pit/actions/runs/40558525433",
+    "conclusion": "success",
+    "unsigned_artifact_id": 12757344931,
+    "unsigned_artifact_zip_sha256": "56fc16adde06eba414f1d9616d4a36a9609584d4d5600ca0a378431d3b478b8c"
   },
-  "afterBuildChanges": [
-    "tools/mini-history-smoke.cjs"
-  ],
-  "applicationInputsChangedAfterBuild": false,
-  "layoutProbe": {
-    "run": 39615757304,
-    "commit": "c59d79c378a97021a70cdd94fcd7a79208eb41d2",
-    "completeSuccessfulPasses": 3,
-    "scope": "Wait two animation frames for viewport resize and ResizeObserver; read both rectangles atomically. Keep overflow/minimum height checks; add profile assertion. No application change."
+  "signed_apk": {
+    "file": "Watt-n-Pit-v1.6.3.apk",
+    "sha256": "11c7db593a516e05bbc80b062b83a9372c9abfad85cc774573b51c89fdf3a551",
+    "size": 588659,
+    "git_blob_sha": "06748ab2451b07c72b0634369dbc6718765201b5",
+    "certificate_sha256": "0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2",
+    "v2_verified": true
+  },
+  "validation": {
+    "javascript_tests": 139,
+    "production_lan_checks": 30,
+    "android_unit_tests_lint_debug_and_release_build": "passed",
+    "sqlite_proofs": "passed",
+    "browser_checks": "passed",
+    "physical_phone_camera_bluetooth_hotspot_tests": "not performed"
   }
 }
