@@ -25,7 +25,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.evaluate(()=>{window.connected=false;poll();});assert.match(await page.locator('#lanStatus').textContent(),/nicht erreichbar.*Stand/);
   await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#saveSettings').isDisabled(),true);assert.equal(await page.locator('#editEquipment').isDisabled(),true);assert.equal(await page.locator('#themeButtons button').first().isEnabled(),true);
   await page.locator('[data-page="overview"]').click();await page.evaluate(()=>{window.connected=true;poll();});
-  for(const viewport of [{width:320,height:800},{width:844,height:390},{width:390,height:844}]){await page.setViewportSize(viewport);assert.equal(await page.evaluate(()=>document.body.scrollWidth>innerWidth),false);}
+  for(const viewport of [{width:320,height:800},{width:844,height:390},{width:390,height:844}]){await page.setViewportSize(viewport);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const overflow=await page.evaluate(()=>({extra:document.body.scrollWidth-innerWidth,elements:[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1&&e.getClientRects().length).slice(0,8).map(e=>({id:e.id,class:e.className,width:e.getBoundingClientRect().width,right:e.getBoundingClientRect().right}))}));assert.ok(overflow.extra<=0,JSON.stringify({viewport,...overflow}));}
   if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,`anlagenverbund-${theme}.png`),fullPage:false});}
   assert.deepEqual(errors,[]);await page.close();
  }
