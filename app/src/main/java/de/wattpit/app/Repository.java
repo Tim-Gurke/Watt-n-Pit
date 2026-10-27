@@ -272,7 +272,7 @@ final class Repository {
         JSONArray updated = new JSONArray();
         for (int i=0;i<list.length();i++) if (list.getJSONObject(i) != previous) updated.put(list.getJSONObject(i));
         updated.put(config);
-        prefs.edit().putString("devices",updated.toString()).apply();
+        if(!prefs.edit().putString("devices",updated.toString()).commit())throw new java.io.IOException();
         keys.clear(); errors.remove(mac); latest.remove(mac); stored.remove(mac);
         if (!original.isEmpty()) { latest.remove(original); stored.remove(original); errors.remove(original); }
         message("Gerät gespeichert. Für Livewerte Aufzeichnung starten.");
@@ -297,7 +297,7 @@ final class Repository {
     synchronized void removeDevice(String mac) throws Exception {
         JSONArray updated = new JSONArray(), list = configs();
         for (int i=0;i<list.length();i++) if (!list.getJSONObject(i).getString("mac").equals(mac)) updated.put(list.getJSONObject(i));
-        prefs.edit().putString("devices",updated.toString()).apply();
+        if(!prefs.edit().putString("devices",updated.toString()).commit())throw new java.io.IOException();
         latest.remove(mac); keys.remove(mac); errors.remove(mac); stored.remove(mac);
         message("Gerät entfernt. Gespeicherte Messwerte bleiben im Verlauf.");
     }
@@ -369,7 +369,7 @@ final class Repository {
         return result;
     }
     synchronized void invalidateStats() { statsTime = 0;historyRevision++; }
-    void saveSettings(JSONObject settings) throws Exception { settingsEditor(settings).apply(); }
+    void saveSettings(JSONObject settings) throws Exception { if(!settingsEditor(settings).commit())throw new java.io.IOException(); }
     private SharedPreferences.Editor settingsEditor(JSONObject settings) throws Exception {
         String theme = settings.optString("theme",prefs.getString("theme","dark"));
         double capacity = settings.optDouble("capacity",prefs.getFloat("capacity",100f));
@@ -380,7 +380,9 @@ final class Repository {
         if(!Arrays.asList("classic","blue","green","turquoise","orange","neutral").contains(palette))throw new IllegalArgumentException("Unbekanntes Farbdesign.");
         String miniRange=settings.optString("miniRange",prefs.getString("miniRange","today"));
         if(!Arrays.asList("sunrise","today","last6h","last24h","yesterday","week","month").contains(miniRange))throw new IllegalArgumentException("Unbekannter Übersichtszeitraum.");
-        return prefs.edit().putString("miniRange",miniRange).putString("palette",palette).putString("theme",theme).putFloat("capacity",(float)capacity).putInt("sampleSeconds",seconds);
+        SharedPreferences.Editor edit=prefs.edit();
+        if(settings.has("miniRange"))edit.putString("miniRange",miniRange);if(settings.has("palette"))edit.putString("palette",palette);if(settings.has("theme"))edit.putString("theme",theme);
+        if(settings.has("capacity"))edit.putFloat("capacity",(float)capacity);if(settings.has("sampleSeconds"))edit.putInt("sampleSeconds",seconds);return edit;
     }
     synchronized boolean importConfiguration(String json)throws Exception{
         JSONObject backup=ConfigurationBackup.normalize(json),place=backup.getJSONObject("weatherPlace");
@@ -394,6 +396,19 @@ final class Repository {
         if(changed)edit.remove("weatherCache").remove("weatherError");
         if(!edit.commit())throw new java.io.IOException();
         return changed;
+    }
+    synchronized void importSharedConfiguration(String json)throws Exception{
+        JSONObject backup=ConfigurationBackup.normalize(json),settings=backup.getJSONObject("settings"),place=backup.getJSONObject("weatherPlace");
+        SharedPreferences.Editor edit=prefs.edit().putFloat("capacity",(float)settings.getDouble("capacity")).putInt("sampleSeconds",settings.getInt("sampleSeconds"))
+            .putString("equipment-v1",backup.getJSONObject("equipment").toString()).putString("solar-setup-v1",backup.getJSONObject("solarSetup").toString())
+            .remove("weatherCache").remove("weatherError");
+        if(place.length()==0)edit.remove("weatherPlace");else edit.putString("weatherPlace",place.toString());
+        if(!edit.commit())throw new java.io.IOException();
+    }
+    void importLocalAppearance(String json)throws Exception{
+        JSONObject backup=ConfigurationBackup.normalize(json),settings=backup.getJSONObject("settings");
+        if(!prefs.edit().putString("theme",settings.getString("theme")).putString("palette",settings.getString("palette")).putString("miniRange",settings.getString("miniRange"))
+            .putString("dashboard-v1",backup.getJSONObject("dashboard").toString()).commit())throw new java.io.IOException();
     }
     static String safeError(Exception e) {
         if (e instanceof IllegalArgumentException) return e.getMessage();

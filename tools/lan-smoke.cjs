@@ -4,7 +4,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  const browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.WATTPIT_CHROMIUM?{executablePath:process.env.WATTPIT_CHROMIUM}:{})});
  try{for(const theme of ['dark','light']){
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
-  const until=async fn=>{for(let i=0;i<150;i++){try{if(await page.evaluate(fn))return;}catch(e){if(!/context was destroyed|Cannot find context/.test(e.message))throw e;}await page.waitForTimeout(100);}throw Error('LAN UI did not reach the expected state');};
+  const until=async fn=>{for(let i=0;i<150;i++){try{if(await page.evaluate(fn))return;}catch(e){if(!/context was destroyed|Cannot find context/.test(e.message))throw e;}await page.waitForTimeout(100);}throw Error('LAN UI did not reach the expected state '+theme+' '+JSON.stringify(await page.evaluate(()=>({role:window.lanRole,saved:sessionStorage.getItem('lanRole'),modal:document.getElementById('modalTitle').textContent,error:document.getElementById('lanError')?.textContent,scans:window.scanCalls,join:document.getElementById('lanJoin')?.textContent}))));};
   await page.addInitScript(({theme,qr})=>{
    window.lanRole=sessionStorage.getItem('lanRole')||'off';window.connected=true;window.rev=1;window.power=28;window.asyncQueries=0;window.saved=[];
    window.fixture=()=>({running:true,historyRevision:window.rev,devices:[{mac:'DE:00:00:00:00:01',name:'Beispiel-Shunt',kind:'shunt',seen:Date.now(),hasKey:true},{mac:'DE:00:00:00:00:02',name:'Beispiel-Solar',kind:'solar',seen:Date.now(),hasKey:true}],found:[],readings:[{device:'DE:00:00:00:00:01',kind:'shunt',t:Date.now(),soc:76.4,voltage:12.94,current:-2.2,power:-window.power},{device:'DE:00:00:00:00:02',kind:'solar',t:Date.now(),solar:138,state:3}],stats:{count:2400},settings:{theme,palette:'classic',capacity:100,sampleSeconds:10},weather:{},...(window.lanRole==='viewer'?{lan:{connected:window.connected}}:{})});
@@ -15,7 +15,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
    window.WattPit.lanQrCode=()=>JSON.stringify({image:qr.image});window.WattPit.scanLanCode=()=>{window.scanCalls++;setTimeout(()=>window.onLanScanned(window.scanResult),20);};
    window.WattPit.joinLan=code=>{if(window.throwJoin)throw Error('Illegal base64 character 2e');if(window.deferJoin){window.pendingCode=code;return;}return join(code);};
   },{theme,qr});
-  await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
+  await page.route('http://wattpit.test/**',route=>route.fulfill({path:path.resolve(__dirname,'../app/src/main/assets',new URL(route.request().url()).pathname.slice(1))}));
+  await page.goto('http://wattpit.test/index.html');
   assert.deepEqual(await page.locator('.bottom-nav button').evaluateAll(es=>es.map(e=>e.textContent.trim())),['Übersicht','Zusatzspeicher','Verlauf','Geräte','Einstellungen']);
   const widget=page.locator('.type-lan');assert.equal(await widget.locator('#lanBanner').count(),1);
   await page.locator('#editDashboard').click();await widget.scrollIntoViewIfNeeded();
@@ -36,17 +37,17 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.evaluate(()=>{window.throwJoin=false;});const oldCode=await page.locator('#lanInvitation').inputValue();await page.locator('#lanScan').click();await until(()=>window.scanCalls===1);await page.waitForTimeout(80);assert.equal(await page.locator('#lanInvitation').inputValue(),oldCode);assert.equal(await page.evaluate(()=>window.lanRole),'off');
   if(theme==='dark'){await page.locator('#lanInvitation').fill(qr.code);await page.locator('#lanJoin').click();}else{await page.evaluate(()=>{window.scanResult={code:window.qrFixture.code};});await page.locator('#lanScan').click();}
   await until(()=>window.lanRole==='viewer');await page.locator('#lanJoinedDone').waitFor();assert.equal(await page.locator('#modalTitle').textContent(),'Verbindung hergestellt');assert.match(await page.locator('.lan-success').textContent(),/Beispiel-Wohnwagen.*Anzeige.*Datenstand/s);await page.locator('#lanJoinedDone').click();await page.locator('#lanBanner').waitFor();
-  assert.match(await page.locator('#lanStatus').textContent(),/Anzeige.*Hauptgerät/);assert.equal(await page.locator('#overviewRecord').isDisabled(),true);assert.equal(await page.locator('#reloadArchive').isDisabled(),true);assert.equal(await page.locator('#editDashboard').isEnabled(),true);
+  assert.match(await page.locator('#lanStatus').textContent(),/Anzeige.*Hauptgerät/);assert.equal(await page.locator('#overviewRecord').isDisabled(),false);assert.equal(await page.locator('#reloadArchive').isDisabled(),false);assert.equal(await page.locator('#editDashboard').isEnabled(),true);
   await until(()=>window.asyncQueries>0);
   await page.locator('[data-page="history"]').click();await until(()=>!historyPending&&points.length>0);assert.equal(await page.evaluate(()=>points[0].v),28);
   await page.evaluate(()=>{window.power=37;window.rev++;poll();});await until(()=>!historyPending&&points[0]?.v===37);
   await page.evaluate(()=>{window.connected=false;poll();});assert.match(await page.locator('#lanStatus').textContent(),/nicht erreichbar.*Stand/);
-  await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#saveSettings').isDisabled(),true);assert.equal(await page.locator('#editEquipment').isDisabled(),true);assert.equal(await page.locator('#themeButtons button').first().isEnabled(),true);
+  await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#saveSettings').isDisabled(),false);assert.equal(await page.locator('#editEquipment').isDisabled(),false);assert.equal(await page.locator('#themeButtons button').first().isEnabled(),true);
   await page.locator('[data-page="overview"]').click();await page.evaluate(()=>{window.connected=true;poll();});
   for(const viewport of [{width:320,height:800},{width:844,height:390},{width:390,height:844}]){await page.setViewportSize(viewport);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const overflow=await page.evaluate(()=>({extra:document.body.scrollWidth-innerWidth,elements:[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1&&e.getClientRects().length).slice(0,8).map(e=>({id:e.id,class:e.className,width:e.getBoundingClientRect().width,right:e.getBoundingClientRect().right}))}));assert.ok(overflow.extra<=0,JSON.stringify({viewport,...overflow}));}
   if(process.env.WATTPIT_SCREENSHOT_DIR){fs.mkdirSync(process.env.WATTPIT_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.WATTPIT_SCREENSHOT_DIR,`anlagenverbund-${theme}.png`),fullPage:false});}
   assert.deepEqual(errors,[]);await page.close();
  }
- console.log('PASS plant network UI: actual QR display, scan success/cancel, manual pairing, decoder failures and retry, acknowledged pairing, movable persisted plant tile, restricted viewer, refreshed histories, offline state, 320/390/844px and both themes.');
+ console.log('PASS plant network UI: actual QR display, scan success/cancel, manual pairing, decoder failures and retry, acknowledged pairing, movable persisted plant tile, editable viewer, refreshed histories, offline state, 320/390/844px and both themes.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1);});

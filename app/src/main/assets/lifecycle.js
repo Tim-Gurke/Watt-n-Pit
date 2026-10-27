@@ -11,11 +11,11 @@ window.WattLifecycle=class {
     };
     document.getElementById('syncCancel').onclick=()=>this.confirmCancellation();
     document.getElementById('syncContinue').onclick=()=>{this.confirmCancel=false;this.paint(this.state);document.getElementById('syncBackground').focus();};
-    document.getElementById('syncCancelConfirm').onclick=()=>{
-      if(this.cancelled||!this.confirmCancel)return;this.cancelled=true;this.confirmCancel=false;this.a.native?.cancelArchive?.();this.paint(this.state);
+    document.getElementById('syncCancelConfirm').onclick=async()=>{
+      if(this.cancelled||!this.confirmCancel)return;this.cancelled=true;this.confirmCancel=false;const error=await this.a.native?.cancelArchive?.();if(error){this.cancelled=false;this.a.toast(error);}this.paint(this.state);
     };
-    document.getElementById('syncBackground').onclick=()=>{
-      const error=a.native?.backgroundArchive?.(this.runId);
+    document.getElementById('syncBackground').onclick=async()=>{
+      const error=await a.native?.backgroundArchive?.(this.runId);
       if(error){document.getElementById('syncChoiceError').textContent=error;document.getElementById('syncChoiceError').hidden=false;return;}
       this.review=false;this.confirmCancel=false;this.poll();a.poll();
     };

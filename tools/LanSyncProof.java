@@ -61,6 +61,7 @@ public final class LanSyncProof {
             boolean badFormat=false;try{JSONObject bad=new JSONObject(invitation.toString()).put("key","WNP1.invalid.key");viewer.join(LanWire.encodeInvitation(bad.toString()));}catch(IllegalArgumentException expected){badFormat=expected.getMessage().equals(LanWire.INVALID_INVITATION);}
             check(badFormat&&!viewer.viewer(),"a malformed nested key gives a readable format error before any pairing state is changed");
             viewer.join("\uFEFF„WNP1."+code.substring(0,35)+"\n\u00a0"+code.substring(35)+"\u200b”.");
+            check(viewer.consumeJoined()&&!viewer.consumeJoined(),"pairing acknowledgement is persisted natively and consumed exactly once, independently of WebView session storage");
             JSONObject snapshot=new JSONObject(viewer.snapshot());check(viewer.viewer()&&viewer.state().getBoolean("connected"),"a real encrypted TCP handshake activates the intended plant viewer");
             check(snapshot.getJSONArray("readings").getJSONObject(0).getDouble("power")==-12,"viewer shows the source device rather than its independent -999 W database");
             check(!snapshot.toString().contains("PRIVATE-"),"device keys and PINs never leave the host snapshot");
@@ -72,6 +73,36 @@ public final class LanSyncProof {
             check(own.db.last("AA:00:00:00:00:01").power==-999,"display and history reads preserve the viewer's own stored measurements");
             boolean rejected=false;try{viewer.query("saveEquipment",new JSONArray().put(now-60000).put(now));}catch(IOException expected){rejected=true;}
             check(rejected,"network API rejects unrelated plant-write commands");
+            String preset=Files.readString(Path.of("app/src/main/assets/dashboard-preset.json"));
+            DashboardPreset.install(own.prefs,preset);JSONObject installed=new JSONObject(own.prefs.getString("dashboard-v1","{}"));
+            check(installed.getJSONArray("tiles").length()==11&&installed.getJSONArray("tiles").getJSONObject(0).getJSONObject("layouts").getJSONObject("compact").getDouble("h")==8,"the approved G5 layout is installed on an existing viewer, including compact geometry");
+            boolean small=true;for(int i=0;i<installed.getJSONArray("tiles").length();i++)small&=installed.getJSONArray("tiles").getJSONObject(i).getDouble("fontSize")<=20;
+            check(small&&installed.getJSONArray("tiles").getJSONObject(0).getJSONObject("layouts").getJSONObject("wide").getDouble("w")==2,"all preset font sizes are at most 20 and the separate wide geometry survives");
+            own.prefs.edit().putString("dashboard-v1","custom-after-update").commit();DashboardPreset.install(own.prefs,preset);
+            check(own.prefs.getString("dashboard-v1","").equals("custom-after-update"),"reopening the app does not reapply the one-time rollout over subsequent edits");
+            JSONObject groups=new JSONObject().put("version",1).put("groups",new JSONArray().put(new JSONObject().put("id","mobile").put("label","Mobile test").put("count",1).put("watts",100).put("placement","mobile").put("measurement","shunt").put("tilt",45)));
+            viewer.control("saveEquipment",new JSONArray().put(groups.toString()),viewer.controlRevision());
+            check(source.equipment().getJSONArray("groups").length()==1&&new JSONObject(viewer.snapshot()).getJSONObject("equipment").getJSONArray("groups").length()==1,"a viewer saves plant equipment on its host and receives the confirmed configuration");
+            JSONObject setup=new JSONObject().put("version",1).put("groups",new JSONObject().put("mobile",new JSONObject().put("active",true).put("azimuth",180).put("shade",new JSONArray().put(0).put(0).put(0))));
+            viewer.control("saveSolarSite",new JSONArray().put(setup.toString()).put("{}"),viewer.controlRevision());
+            check(new JSONObject(source.prefs.getString("solar-setup-v1","{}")).getJSONObject("groups").getJSONObject("mobile").getBoolean("active"),"mobile-panel activation and orientation entered on the viewer reach the actual host");
+            long configBefore=viewer.controlRevision();String configId=LanWire.random(16);JSONArray controlArgs=new JSONArray().put("settings").put(new JSONArray().put("{\"capacity\":120,\"sampleSeconds\":30}")).put(configBefore).put(configId);
+            JSONObject confirmed=viewer.query("control",controlArgs);long afterConfig=confirmed.getLong("controlRevision");
+            viewer.query("control",controlArgs);
+            check(source.prefs.getFloat("capacity",0)==120&&source.prefs.getInt("sampleSeconds",0)==30&&host.controlRevision()==afterConfig,"shared battery settings commit before acknowledgement and a retried command is applied once");
+            rejected=false;try{viewer.query("control",new JSONArray().put("settings").put(new JSONArray().put("{\"capacity\":5}")).put(configBefore).put(LanWire.random(16)));}catch(IllegalArgumentException expected){rejected=expected.getMessage().contains("inzwischen");}
+            check(rejected&&source.prefs.getFloat("capacity",0)==120,"a stale configuration command cannot overwrite a newer acknowledged change");
+            refresh.invoke(viewer);rejected=false;try{viewer.control("settings",new JSONArray().put("{\"capacity\":0}"),viewer.controlRevision());}catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected&&source.prefs.getFloat("capacity",0)==120,"host-side validation rejects invalid values from the remote form");
+            rejected=false;try{viewer.control("deleteDatabase",new JSONArray(),viewer.controlRevision());}catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected,"the control API accepts only the explicit app-operation whitelist");
+            viewer.control("weatherPlace",new JSONArray().put("{\"off\":true}"),viewer.controlRevision());
+            check(!source.prefs.contains("weatherPlace"),"the viewer can disable shared weather at the host");
+            source.prefs.edit().putString("theme","dark").putString("dashboard-v1","host-layout").commit();
+            JSONObject backup=new JSONObject().put("format","wattnpit-settings").put("version",1).put("dashboard",new JSONObject(preset)).put("equipment",groups).put("solarSetup",setup).put("weatherPlace",new JSONObject()).put("settings",new JSONObject().put("theme","light").put("palette","blue").put("miniRange","today").put("capacity",130).put("sampleSeconds",10));
+            viewer.control("importSettings",new JSONArray().put(backup.toString()),viewer.controlRevision());
+            check(source.prefs.getFloat("capacity",0)==130&&source.prefs.getString("theme","").equals("dark")&&source.prefs.getString("dashboard-v1","").equals("host-layout"),"a remote configuration import applies shared settings while preserving host appearance and layout");
+            check(own.prefs.getFloat("capacity",100)==100&&own.prefs.getString("dashboard-v1","").equals("custom-after-update"),"remote configuration writes do not alter the viewer's independent plant preferences");
             RollerStore roller=RollerStore.get(main);JSONObject profile=RollerStore.checked(new JSONObject()).put("mac","AA:BB:CC:DD:EE:FF");roller.configure(profile.toString());
             byte[] frame=new byte[30];frame[0]=(byte)0xdd;frame[1]=3;frame[3]=23;frame[4]=0x13;frame[5]=(byte)0xd6;frame[7]=(byte)189;frame[23]=70;int sum=0;for(int i=2;i<27;i++)sum+=frame[i]&255;int checksum=(-sum)&65535;frame[27]=(byte)(checksum>>8);frame[28]=(byte)checksum;frame[29]=0x77;
             roller.accept(BmsPacket.decode(frame),System.currentTimeMillis());refresh.invoke(viewer);long initialRevision=roller.snapshot().getLong("sessionRevision");String command=LanWire.random(16);

@@ -1,6 +1,9 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const deviceNative=window.WattPit||null;
+const rawNative=window.WattPit||null;
+const controls=rawNative&&window.WattControlBridge?new window.WattControlBridge(rawNative,toast,()=>{poll();solar?.render();},()=>snapshot.controlRevision):null;
+const deviceNative=controls?.bridge||rawNative;
+window.onPlantResult=result=>controls?.result(result);
 if(typeof deviceNative?.appVersion==='function'){
   const version=deviceNative.appVersion();
   document.querySelectorAll('[data-app-version]').forEach(element=>element.textContent=version);
@@ -45,6 +48,7 @@ let snapshot = {running:false,status:'Aufzeichnung pausiert',devices:[],found:[]
 let page = 'overview', demo = false, lastEvent = 0, settingsDirty = false, lastMiniLoad = 0, miniPoints = [], miniWindow = null, miniKey = '', energyData = null;
 let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
+let settingsRevision=-1;
 let currentImport = null, lastHistoryRevision=-1, historyPending=false, archiveRequestedUntil=0, lastLanConnection;
 let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null, solar = null, roller = null, lanUi = null;
 const overviewLandscape = window.matchMedia('(orientation: landscape)');
@@ -145,7 +149,7 @@ function renderDevices(force=false) {
   $('foundDevices').querySelectorAll('.use-found').forEach(b => b.onclick = () => deviceForm(snapshot.found.find(d => d.mac===b.dataset.mac),true));
 }
 function renderSettings() {
-  if (!settingsDirty) { $('capacitySetting').value = snapshot.settings.capacity; $('sampleSetting').value = snapshot.settings.sampleSeconds; }
+  if (!settingsDirty) { settingsRevision=snapshot.controlRevision; $('capacitySetting').value = snapshot.settings.capacity; $('sampleSetting').value = snapshot.settings.sampleSeconds; }
   document.querySelectorAll('#themeButtons button').forEach(b => b.classList.toggle('selected',b.dataset.theme===snapshot.settings.theme));
 }
 function poll() {
@@ -174,17 +178,15 @@ function poll() {
   repaintReads();
   lanUi?.render();
 }
-function toggleRecord() {
-  if(deviceNative?.isLanViewer?.()){toast('Aufzeichnung am Hauptgerät verwalten.');return;}
+async function toggleRecord() {
   if (!native) { toast('Bluetooth-Empfang ist in der Android-App verfügbar.'); return; }
-  if (snapshot.running) native.stop(); else native.start();
+  const error=await (snapshot.running?native.stop():native.start());if(error){toast(error);return;}
   setTimeout(poll,400);
 }
-function reloadMissingData(){
-  if(deviceNative?.isLanViewer?.()){deviceNative.refreshLan();return;}
+async function reloadMissingData(){
   if(demo||!snapshot.devices.length||lifecycle?.busy||snapshot.archiveBusy||Date.now()<archiveRequestedUntil)return;
   if(!native?.importMissingArchive){toast('Daten nachladen ist in der Android-App verfügbar.');return;}
-  archiveRequestedUntil=Date.now()+1500;renderOverview();native.importMissingArchive();setTimeout(poll,250);
+  archiveRequestedUntil=Date.now()+1500;renderOverview();const error=await native.importMissingArchive();if(error)toast(error);setTimeout(poll,250);
 }
 let modalReturnScroll=0;
 function openModal(title,content) {
@@ -192,6 +194,7 @@ function openModal(title,content) {
   const expanded=keep?new Map([...sheet.querySelectorAll('details')].map(el=>[el.querySelector('summary')?.textContent,el.open])):null;
   if($('modal').hidden)modalReturnScroll=window.scrollY;
   document.dispatchEvent(new Event('watt-modal-close'));
+  controls?.capture();
   $('modalTitle').textContent = title; $('modalBody').innerHTML = content; $('modal').hidden = false;
   document.body.style.overflow = 'hidden';
   if(expanded)sheet.querySelectorAll('details').forEach(el=>{const key=el.querySelector('summary')?.textContent;if(expanded.has(key))el.open=expanded.get(key);});
@@ -199,6 +202,7 @@ function openModal(title,content) {
   if(keep)requestAnimationFrame(()=>{if(!$('modal').hidden&&$('modalTitle').textContent===title)sheet.scrollTop=position;});
 }
 function closeModal() {
+  if(controls?.pending)return;
   if (currentImport?.busy) return;
   if (currentImport && native) native.cancelImport();
   document.dispatchEvent(new Event('watt-modal-close'));
@@ -221,16 +225,16 @@ function deviceForm(device={},found=false) {
     <label class="form-field">Verschlüsselungsschlüssel<input id="deviceKey" type="password" class="monospace" autocomplete="off" spellcheck="false" maxlength="80" placeholder="${original?'Leer lassen, um den Schlüssel zu behalten':'32 Hex-Zeichen aus VictronConnect'}"><small>Je Gerät ein eigener Schlüssel. Nicht die Bluetooth-PIN.</small></label>
     <p id="deviceError" class="form-error" hidden></p><div class="form-actions">${original?'<button class="quiet" id="removeDevice">Entfernen</button>':''}<button class="primary" id="saveDevice">Gerät speichern</button></div>`);
   $('deviceKind').value = device.kind || 'shunt';
-  $('saveDevice').onclick = () => {
+  $('saveDevice').onclick = async () => {
     if (!native) { toast('Geräte werden in der Android-App eingerichtet.'); return; }
-    const error = native.saveDevice(JSON.stringify({original,kind:$('deviceKind').value,name:$('deviceName').value,mac:$('deviceMac').value,key:$('deviceKey').value}));
+    const error = await native.saveDevice(JSON.stringify({original,kind:$('deviceKind').value,name:$('deviceName').value,mac:$('deviceMac').value,key:$('deviceKey').value}));
     if (error) { $('deviceError').textContent=error; $('deviceError').hidden=false; return; }
     closeModal(); poll(); renderDevices(true);
   };
   if (original) $('removeDevice').onclick = () => {
     openModal('Gerät entfernen?',`<p class="muted">${escapeHtml(device.name)} wird aus der Liveanzeige entfernt. Seine gespeicherten Messwerte bleiben im Verlauf.</p><div class="form-actions"><button class="quiet" id="keepDevice">Behalten</button><button class="primary" id="confirmRemove">Gerät entfernen</button></div>`);
     $('keepDevice').onclick=closeModal;
-    $('confirmRemove').onclick=()=>{const error=native.removeDevice(original);if(error){toast(error);return;}closeModal();poll();renderDevices(true);};
+    $('confirmRemove').onclick=async()=>{const error=await native.removeDevice(original);if(error){toast(error);return;}closeModal();poll();renderDevices(true);};
   };
 }
 
@@ -474,7 +478,7 @@ $('resetChart').onclick=()=>{viewFrom=baseFrom;viewTo=baseTo;manualY=null;loadHi
 ['exportCsv','settingsExport'].forEach(id=>$(id).onclick=chooseExport);
 $('exportPlanningDiagnostics').onclick=()=>{if(native?.choosePlanningDiagnostics)native.choosePlanningDiagnostics();else toast('Der Diagnoseexport ist in der Android-App verfügbar.');};
 ['capacitySetting','sampleSetting'].forEach(id=>$(id).oninput=()=>settingsDirty=true);
-$('saveSettings').onclick=()=>{const settings={capacity:Number($('capacitySetting').value),sampleSeconds:Number($('sampleSetting').value)};if(!settings.capacity||settings.capacity<=0||settings.capacity>10000){toast('Bitte eine Kapazität zwischen 1 und 10.000 Ah eingeben.');return;}const error=native?native.settings(JSON.stringify(settings)):'';if(error){toast(error);return;}Object.assign(snapshot.settings,settings);settingsDirty=false;toast('Einstellungen gespeichert.');renderOverview();};
+$('saveSettings').onclick=async()=>{const settings={capacity:Number($('capacitySetting').value),sampleSeconds:Number($('sampleSetting').value)};if(!settings.capacity||settings.capacity<=0||settings.capacity>10000){toast('Bitte eine Kapazität zwischen 1 und 10.000 Ah eingeben.');return;}const error=deviceNative?.isLanViewer?.()?await controls.send('settings',[JSON.stringify(settings)],settingsRevision):native?await native.settings(JSON.stringify(settings)):'';if(error){toast(error);return;}Object.assign(snapshot.settings,settings);settingsDirty=false;renderSettings();toast('Einstellungen gespeichert.');renderOverview();};
 $('miniRange').onchange=()=>{const miniRange=$('miniRange').value,error=native?native.settings(JSON.stringify({miniRange})):'';if(error){toast(error);loadMini(true);return;}snapshot.settings.miniRange=miniRange;if(!native)localStorage.setItem('wattpit-mini-range',miniRange);loadMini(true);};
 $('historyImport').innerHTML=icon('import');$('addDevice').innerHTML=icon('plus');
 for(const [id,name] of [['navOverview','overview'],['navStorage','battery'],['navHistory','history'],['navDevices','devices'],['navSettings','settings']])$(id).innerHTML=icon(name);

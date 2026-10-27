@@ -1,6 +1,6 @@
 # Watt’n’Pit bedienen
 
-Für Version **1.3.12** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.3.12/Watt-n-Pit-v1.3.12.apk) · [Zur Projektübersicht](../README.md)
+Für Version **1.6.3** · [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.3/Watt-n-Pit-v1.6.3.apk) · [Zur Projektübersicht](../README.md)
 
 Watt’n’Pit zeigt Solarleistung, Batteriezustand und gespeicherte Verläufe direkt auf deinem Android-Telefon. Die folgenden Screenshots stammen aus der App-Oberfläche mit **frei erfundenen Beispieldaten**. Wetterort und Gerätekennungen sind Beispiele; es sind keine privaten Verbindungsdaten enthalten. Eine sichtbare Demo liest keine Bluetooth-Geräte aus.
 
@@ -281,7 +281,7 @@ Ladezustand und Restlaufzeit stammen vom SmartShunt. Temperatur und Zusatzspannu
 
 ## 10. Mehrere Handys
 
-Mit dem optionalen **Anlagenverbund** stellt ein Hauptgerät Messwerte, Verläufe, Wetter und Lernstand verschlüsselt im selben WLAN bereit. Anzeigen brauchen keine eigenen Sofortanzeigeschlüssel. Kacheln und Farben bleiben pro Handy einstellbar. Unter **Zusatzspeicher** lassen sich Start und Ende der Sondernutzung nach Bestätigung am Hauptgerät fernbedienen. Weitere Anlagen- und Geräteeinstellungen änderst du am Hauptgerät.
+Mit dem optionalen **Anlagenverbund** stellt ein Hauptgerät Messwerte, Verläufe, Wetter und Lernstand verschlüsselt im selben WLAN bereit. Anzeigen brauchen keine eigenen Sofortanzeigeschlüssel. Kacheln und Farben bleiben pro Handy einstellbar. Unter **Zusatzspeicher** lassen sich Start und Ende der Sondernutzung nach Bestätigung am Hauptgerät fernbedienen. Ab 1.6.3 kannst du auch die gemeinsamen App-, Anlagen- und Geräteeinstellungen von einer Anzeige ändern; das Hauptgerät bestätigt die Änderung.
 
 Ohne Anlagenverbund arbeiten die Handys mit eigenen Geräten und Daten. Einstellungen lassen sich dann per JSON, Messdaten per CSV übertragen; importierte CSV-Daten bilden keine verlässlichen neuen Lernbeispiele.
 
@@ -323,6 +323,17 @@ Für die automatische Zuordnung im Rollerprofil **Laden am Wohnwagen automatisch
 
 Die Sondernutzung lässt sich unter **Zusatzspeicher** auch am Anzeigegerät starten und beenden. Der Button wartet auf die Antwort des Hauptgeräts; danach erscheint **Bestätigt: Sondernutzung läuft/beendet**. Bei einem Fehler bleibt eine verständliche Meldung sichtbar. Für diese Funktion alle beteiligten Handys auf 1.6.2 aktualisieren. Die App schaltet das physische Ladegerät nicht.
 
-Nach erfolgreichem Beitritt zum Verbund erscheint **Verbindung hergestellt** mit Anlagenname und Empfangsstand. **Zur Übersicht** führt zur Verbundkachel. Diese ist unter **Anordnen** frei zwischen den Hauptkacheln verschiebbar und skalierbar; vorhandene Positionen werden beim Update erhalten. Entfernte Verbundkacheln lassen sich über **+ Kachel → Anlagenverbund** wieder hinzufügen. Die genaue neue Standardanordnung wird später festgelegt.
+Nach erfolgreichem Beitritt zum Verbund erscheint **Verbindung hergestellt** mit Anlagenname und Empfangsstand. **Zur Übersicht** führt zur Verbundkachel. Diese ist unter **Anordnen** frei zwischen den Hauptkacheln verschiebbar und skalierbar; vorhandene Positionen werden beim Update erhalten. Entfernte Verbundkacheln lassen sich über **+ Kachel → Anlagenverbund** wieder hinzufügen. Ab 1.6.3 wird die freigegebene G5-Anordnung beim Update einmalig auf alle Handys übernommen.
 
 Beim QR-Scan alle Ränder des Codes im Rahmen halten und etwas Abstand zum Bildschirm lassen. Nach fehlender Kameraberechtigung oder Zeitablauf erklärt die App den nächsten Schritt. Ein über die Kamera-App kopierter Textcode bleibt als Alternative verwendbar.
+
+
+## Gemeinsam bedienen und G5-Layout ab 1.6.3
+
+**Alle beteiligten Handys aktualisieren**, zuerst das Hauptgerät. Am Anzeigehandy lassen sich jetzt Solaranlage, mobile Aufstellung, Standort/Wetter, saisonaler Bedarf, Zusatzspeicherprofil, Geräte, Batteriekapazität und Abtastintervall ändern. Aufzeichnung sowie Gerätearchivabrufe lassen sich starten, beenden bzw. abbrechen und im Hintergrund weiterführen. GPS und Kompass verwenden die Sensoren des gerade bedienten Handys; gespeichert werden die bestätigten Angaben am Hauptgerät.
+
+Während einer Änderung erscheint **Bestätigung vom Hauptgerät wird erwartet …**, anschließend **Vom Hauptgerät bestätigt** oder eine Fehlermeldung. Bei zwischenzeitlich geänderten Einstellungen die Ansicht schließen und neu öffnen. Ohne erreichbares Hauptgerät wird keine erfolgreiche Änderung behauptet. Der Verbindungscode erlaubt jetzt auch die Bedienung der gemeinsamen App-Einstellungen. Geräteparameter und Firmware ändern sich weiterhin ausschließlich über die jeweilige Hersteller-App. CSV-Verlaufsdateien und Diagnosepakete werden am Hauptgerät verwaltet.
+
+Das freigegebene **G5-Layout** ersetzt beim ersten Start nach dem Update einmalig die bisherigen Kachelanordnungen auf jedem Handy, in schmaler und breiter Ansicht. Weitere Starts erhalten danach deine eigenen Änderungen. **Standardübersicht wiederherstellen** verwendet ebenfalls diese Vorlage. Schriftgrößen sind auf **höchstens 20** begrenzt, auch beim Laden älterer Einstellungsdateien. Kleinere Werte bleiben erhalten. Neue Kacheln bleiben im gemeinsamen Raster verschiebbar und skalierbar.
+
+Unter **Zusatzspeicher → Enthaltene Energie** steht der aktuelle Speicherinhalt in Wh als Näherung: BMS-Restkapazität in Ah × eingestellte Nennspannung, ersatzweise Ladezustand × hinterlegte Nennenergie. Ohne aktuelle BMS-Daten bleibt der Wert unbekannt. **Geladen** zeigt weiterhin nur die in einer Ladeaufzeichnung gemessenen Abschnitte. Der Speicherinhalt ist keine Zusage für tatsächlich zum Wohnwagen rückspeisbare Energie.

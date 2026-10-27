@@ -1,9 +1,9 @@
 /* Dashboard values and configuration. No Bluetooth or UI dependencies. */
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module==='object'&&module.exports?require('./dashboard-preset.json'):root.WattPit?.dashboardPreset?JSON.parse(root.WattPit.dashboardPreset()):null);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.WattDashboardCore = api;
-})(typeof globalThis === 'object' ? globalThis : this, function () {
+})(typeof globalThis === 'object' ? globalThis : this, function (preset) {
   'use strict';
   const CATALOG = {
     soc:          {label:'Ladezustand', group:'Akku', kind:'shunt', field:'soc', units:['%'], min:0, max:100, digits:1, color:'#65cbb0'},
@@ -185,7 +185,7 @@
   function tile(metric,id) {
     const m=CATALOG[metric] || CATALOG.soc;
     return {id:id || 'tile-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),metric:CATALOG[metric]?metric:'soc',title:'',unit:m.units[0],type:m.widget|| (m.energy?'chart':metric==='soc'?'gauge':'number'),
-      digits:m.digits,fontSize:32,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,reverseSign:metric==='dischargeEnergy',min:m.min,max:m.max,scaleMode:m.energy?'auto':'fixed',valueMode:'history',background:'auto',opacity:100,
+      digits:m.digits,fontSize:20,color:m.color,colorMid:'#81baf4',colorEnd:'#e8bb57',adaptiveColor:true,multicolor:false,invert:false,reverseSign:metric==='dischargeEnergy',min:m.min,max:m.max,scaleMode:m.energy?'auto':'fixed',valueMode:'history',background:'auto',opacity:100,
       period:{mode:m.energy?'today':'live',amount:6,unit:'h',aggregate:m.energy||m.status?'last':'avg',resetAt:Date.now(),from:0,to:0},layouts:{compact:position(m.widget?{w:12,h:4}:{h:m.energy?6:metric==='chargeTime'?4:3}),wide:position(m.widget?{w:12,h:4}:{h:m.energy?6:metric==='chargeTime'?4:3},true)}};
   }
   function normalizeTile(input,seen) {
@@ -196,7 +196,7 @@
     if(input.metric==='energyBalance'&&/^(?:Ertrag\s*[−–-]\s*Entnahme|Akkubilanz)$/i.test(result.title.trim()))result.title='';
     result.unit=m.units.includes(input.unit)?input.unit:m.units[0];
     result.type=!m.status && (m.liveOnly?['number','gauge']:['number','gauge','chart']).includes(input.type)?input.type:'number';
-    result.digits=Math.round(numeric(input.digits,m.digits,0,3));result.fontSize=numeric(input.fontSize,32,18,64);
+    result.digits=Math.round(numeric(input.digits,m.digits,0,3));result.fontSize=numeric(input.fontSize,20,18,20);
     for (const k of ['color','colorMid','colorEnd']) result[k]=color(input[k],fallback[k]);
     result.multicolor=!!input.multicolor;result.invert=!!input.invert;result.adaptiveColor=input.adaptiveColor!==false;
     result.min=numeric(input.min,m.min,-1e9,1e9);result.max=numeric(input.max,m.max,-1e9,1e9);
@@ -215,6 +215,7 @@
     return result;
   }
   function defaults() {
+    if(preset)return normalize(JSON.parse(JSON.stringify(preset)));
     const ids=['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy','state','chargeTime'];
     const energyPeriod={...tile('energyBalance').period};
     const layouts={

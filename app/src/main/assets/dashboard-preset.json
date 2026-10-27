@@ -1,0 +1,532 @@
+{
+  "version": 1,
+  "blockOrder": [
+    "tiles",
+    "roller",
+    "history",
+    "record"
+  ],
+  "tiles": [
+    {
+      "id": "default-soc",
+      "metric": "soc",
+      "title": "",
+      "unit": "%",
+      "type": "gauge",
+      "digits": 1,
+      "fontSize": 20,
+      "color": "#65cbb0",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": 0,
+      "max": 100,
+      "scaleMode": "auto",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "live",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "avg",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 0,
+          "y": 0,
+          "w": 4,
+          "h": 8
+        },
+        "wide": {
+          "x": 0,
+          "y": 0,
+          "w": 2,
+          "h": 4
+        }
+      }
+    },
+    {
+      "id": "default-solar",
+      "metric": "solar",
+      "title": "",
+      "unit": "W",
+      "type": "chart",
+      "digits": 0,
+      "fontSize": 20,
+      "color": "#e8bb57",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": 0,
+      "max": 300,
+      "scaleMode": "auto",
+      "valueMode": "live",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "sunrise",
+        "amount": 3,
+        "unit": "h",
+        "aggregate": "avg",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 4,
+          "y": 0,
+          "w": 4,
+          "h": 9
+        },
+        "wide": {
+          "x": 2,
+          "y": 0,
+          "w": 2,
+          "h": 8
+        }
+      }
+    },
+    {
+      "id": "default-energyBalance",
+      "metric": "energyBalance",
+      "title": "",
+      "unit": "Wh",
+      "type": "chart",
+      "digits": 2,
+      "fontSize": 20,
+      "color": "#81baf4",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": -2000,
+      "max": 2000,
+      "scaleMode": "auto",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "today",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "last",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 8,
+          "y": 8,
+          "w": 4,
+          "h": 7.5
+        },
+        "wide": {
+          "x": 7,
+          "y": 0,
+          "w": 3,
+          "h": 8
+        }
+      }
+    },
+    {
+      "id": "default-solarEnergy",
+      "metric": "solarEnergy",
+      "title": "",
+      "unit": "Wh",
+      "type": "chart",
+      "digits": 2,
+      "fontSize": 20,
+      "color": "#e8bb57",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": 0,
+      "max": 2000,
+      "scaleMode": "auto",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "sunrise",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "last",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 8,
+          "y": 0,
+          "w": 4,
+          "h": 8
+        },
+        "wide": {
+          "x": 4,
+          "y": 0,
+          "w": 3,
+          "h": 8
+        }
+      }
+    },
+    {
+      "id": "default-voltage",
+      "metric": "voltage",
+      "title": "",
+      "unit": "V",
+      "type": "number",
+      "digits": 2,
+      "fontSize": 20,
+      "color": "#81baf4",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": 10,
+      "max": 15,
+      "scaleMode": "fixed",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "live",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "avg",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 0,
+          "y": 10.5,
+          "w": 4,
+          "h": 2.5
+        },
+        "wide": {
+          "x": 0,
+          "y": 4,
+          "w": 2,
+          "h": 2
+        }
+      }
+    },
+    {
+      "id": "default-power",
+      "metric": "power",
+      "title": "Aktuell",
+      "unit": "W",
+      "type": "number",
+      "digits": 0,
+      "fontSize": 20,
+      "color": "#65cbb0",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": -1000,
+      "max": 1000,
+      "scaleMode": "fixed",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "live",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "avg",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 0,
+          "y": 13,
+          "w": 4,
+          "h": 2.5
+        },
+        "wide": {
+          "x": 0,
+          "y": 6,
+          "w": 2,
+          "h": 2
+        }
+      }
+    },
+    {
+      "id": "default-weather",
+      "metric": "weather",
+      "title": "",
+      "unit": "",
+      "type": "weather",
+      "digits": 0,
+      "fontSize": 20,
+      "color": "#e8bb57",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": 0,
+      "max": 1,
+      "scaleMode": "fixed",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "live",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "avg",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 0,
+          "y": 15.5,
+          "w": 12,
+          "h": 5
+        },
+        "wide": {
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 4
+        }
+      }
+    },
+    {
+      "id": "default-consumptionEnergy",
+      "metric": "consumptionEnergy",
+      "title": "",
+      "unit": "Wh",
+      "type": "chart",
+      "digits": 2,
+      "fontSize": 20,
+      "color": "#65cbb0",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": 0,
+      "max": 2000,
+      "scaleMode": "auto",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "today",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "last",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 4,
+          "y": 9,
+          "w": 4,
+          "h": 6.5
+        },
+        "wide": {
+          "x": 10,
+          "y": 0,
+          "w": 2,
+          "h": 8
+        }
+      }
+    },
+    {
+      "id": "default-state",
+      "metric": "state",
+      "title": "",
+      "unit": "",
+      "type": "number",
+      "digits": 0,
+      "fontSize": 20,
+      "color": "#e8bb57",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": 0,
+      "max": 255,
+      "scaleMode": "fixed",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "live",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "last",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 0,
+          "y": 20.5,
+          "w": 4,
+          "h": 2.5
+        },
+        "wide": {
+          "x": 0,
+          "y": 12,
+          "w": 4,
+          "h": 3
+        }
+      }
+    },
+    {
+      "id": "default-chargeTime",
+      "metric": "chargeTime",
+      "title": "",
+      "unit": "h",
+      "type": "number",
+      "digits": 1,
+      "fontSize": 20,
+      "color": "#65cbb0",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": 0,
+      "max": 1440,
+      "scaleMode": "fixed",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "live",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "avg",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 0,
+          "y": 8,
+          "w": 4,
+          "h": 2.5
+        },
+        "wide": {
+          "x": 0,
+          "y": 15,
+          "w": 4,
+          "h": 4
+        }
+      }
+    },
+    {
+      "id": "default-lan",
+      "metric": "lan",
+      "title": "",
+      "unit": "",
+      "type": "lan",
+      "digits": 0,
+      "fontSize": 20,
+      "color": "#81baf4",
+      "colorMid": "#81baf4",
+      "colorEnd": "#e8bb57",
+      "adaptiveColor": true,
+      "multicolor": false,
+      "invert": false,
+      "min": 0,
+      "max": 1,
+      "scaleMode": "fixed",
+      "valueMode": "history",
+      "reverseSign": false,
+      "background": "auto",
+      "opacity": 100,
+      "period": {
+        "mode": "live",
+        "amount": 6,
+        "unit": "h",
+        "aggregate": "avg",
+        "resetAt": 0,
+        "from": 0,
+        "to": 0
+      },
+      "layouts": {
+        "compact": {
+          "x": 4,
+          "y": 20.5,
+          "w": 8,
+          "h": 5
+        },
+        "wide": {
+          "x": 0,
+          "y": 19,
+          "w": 12,
+          "h": 4
+        }
+      }
+    }
+  ],
+  "lanTileVersion": 1,
+  "dischargeSignVersion": 1,
+  "energyFlowVersion": 1,
+  "energyPeriod": {
+    "mode": "today",
+    "amount": 6,
+    "unit": "h",
+    "aggregate": "last",
+    "resetAt": 0,
+    "from": 0,
+    "to": 0
+  },
+  "rollerLayout": {
+    "compact": {
+      "width": 12,
+      "height": 650
+    },
+    "wide": {
+      "width": 12,
+      "height": 650
+    }
+  },
+  "historyHeight": {
+    "compact": 465,
+    "wide": 380
+  }
+}

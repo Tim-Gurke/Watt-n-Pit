@@ -13,7 +13,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 /** Length-bounded, authenticated LAN frames. A fresh nonce is used for every frame. */
 public final class LanWire {
-    public static final int MAX_REQUEST=16*1024, MAX_RESPONSE=8*1024*1024;
+    public static final int MAX_REQUEST=768*1024, MAX_RESPONSE=8*1024*1024;
     private static final SecureRandom RANDOM=new SecureRandom();
     private static final byte[] AAD="Watt-n-Pit LAN 1".getBytes(StandardCharsets.UTF_8);
     public static final String INVALID_INVITATION="Der Verbindungscode ist unvollständig oder verändert. Bitte am Hauptgerät neu kopieren und das gesamte Codefeld ersetzen oder den QR-Code scannen.";

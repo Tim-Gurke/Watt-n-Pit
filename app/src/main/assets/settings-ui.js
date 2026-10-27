@@ -20,9 +20,9 @@
     const backup=window.WattSettingsCore.normalize(result.backup),s=backup.settings;
     this.a.openModal('Einstellungen übernehmen?',`<p class="muted">${esc(result.name||'Einstellungssicherung')} · ${backup.dashboard.tiles.length} Kacheln · ${backup.equipment.groups.length} Solarkreise</p><p class="muted">${s.theme==='light'?'Helles':'Dunkles'} Design · ${esc(backup.weatherPlace.name||'Wetter ausgeschaltet')}</p><p class="muted">Die gesicherten Kacheln, Farben, Zeiträume und Anlageneinstellungen ersetzen deine jetzigen Einstellungen. Messdaten und eingerichtete Geräte bleiben erhalten. Mobile Kreise sind nach dem Übernehmen ausgeschaltet; ihre Aufstellung meldest du auf diesem Handy.</p><p id="configurationError" class="form-error" role="alert" hidden></p><div class="form-actions"><button id="cancelConfigurationImport" class="quiet">Abbrechen</button><button id="applyConfigurationImport" class="primary">Einstellungen übernehmen</button></div>`);
     $('cancelConfigurationImport').onclick=()=>this.a.closeModal();
-    $('applyConfigurationImport').onclick=()=>{
+    $('applyConfigurationImport').onclick=async()=>{
      try{
-      const error=this.a.native?.importSettings(JSON.stringify(backup));if(error)throw new Error(error);
+      const error=await this.a.native?.importSettings(JSON.stringify(backup));if(error)throw new Error(error);
       this.a.applied(backup);this.a.closeModal();this.a.toast('Einstellungen übernommen.');
      }catch(error){$('configurationError').hidden=false;$('configurationError').textContent=error.message;}
     };

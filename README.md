@@ -6,9 +6,13 @@
 
 Auch Firmware-Updates deiner Victron-Geräte führst du weiterhin über die offiziellen Victron-Apps durch, bei SmartShunt und SmartSolar über VictronConnect. Watt’n’Pit kann keine Geräteupdates durchführen.
 
-**[Android-APK 1.6.2 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.2/Watt-n-Pit-v1.6.2.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.6.3 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.3/Watt-n-Pit-v1.6.3.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
+
+## Neu in 1.6.3
+
+**Gemeinsam bedienen:** Solaranlage, mobile Aufstellung, Wetter, Zusatzspeicherprofil, Geräte und Aufzeichnung lassen sich auch am Anzeigehandy steuern. Das Hauptgerät bestätigt die Änderungen. Das freigegebene G5-Layout wird beim Update auf jedem Handy einmalig übernommen, mit Schriftgröße höchstens 20. Unter Zusatzspeicher steht zusätzlich die aktuell enthaltene Energie in Wh. [Änderungen und Einrichtung](docs/releases/1.6.3.md).
 
 ## Neu in 1.6.2
 
@@ -123,7 +127,7 @@ Die Hochkant-Vorlage enthält zehn Kacheln und eine Verlaufshöhe von 465 Pixeln
 
 Beim ersten Öffnen den Cockpit-Hinweis lesen und **Verstanden** wählen. Er erscheint auch bei bestehenden Installationen einmal nach diesem Update. Die Bestätigung bleibt nur auf diesem Gerät und wird nicht mit Einstellungen exportiert.
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.2/Watt-n-Pit-v1.6.2.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.3/Watt-n-Pit-v1.6.3.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.

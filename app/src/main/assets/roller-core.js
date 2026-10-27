@@ -2,6 +2,12 @@
   'use strict';
   const defaults={planCharge:false,autoSpecialUse:false,name:'Roller',mac:'',technology:'Li-Ion',capacityAh:26,nominalVoltage:48.1,reservePercent:20,targetPercent:90,idleWatts:21,conversionEfficiency:96/117,chargeWatts:96,rideKm:0,whPerKm:15,rideReservePercent:20,departure:0,returnAt:0};
   const input=(watts,p)=>watts>0?p.idleWatts+watts/p.conversionEfficiency:0;
+  function storedEnergy(profile,live){
+    const p={...defaults,...profile},valid=n=>typeof n==='number'&&Number.isFinite(n);
+    if(!valid(p.nominalVoltage)||p.nominalVoltage<=0)return null;
+    if(valid(live?.remainingAh)&&valid(live?.fullAh)&&live.fullAh>0&&live.remainingAh>=0&&live.remainingAh<=live.fullAh)return live.remainingAh*p.nominalVoltage;
+    return valid(live?.soc)&&live.soc>=0&&live.soc<=100&&valid(p.capacityAh)&&p.capacityAh>0?p.capacityAh*p.nominalVoltage*live.soc/100:null;
+  }
   function plan(profile,live,now=Date.now()){
     const p={...defaults,...profile},capacity=p.capacityAh*p.nominalVoltage,rideWh=p.rideKm*p.whPerKm*(1+p.rideReservePercent/100),reserve=capacity*p.reservePercent/100;
     const requiredRide=rideWh+reserve,needed=Math.max(capacity*p.targetPercent/100,p.rideKm>0?requiredRide:0),available=typeof live?.soc==='number'?capacity*live.soc/100:null;
@@ -14,5 +20,5 @@
     const end=now+r.hours*3600000;if(p.departure>0&&p.departure<end&&p.departure>now)return [];
     return [{from:now,to:end,watts:input(p.chargeWatts,p)}];
   }
-  return {defaults,input,plan,loads};
+  return {defaults,input,storedEnergy,plan,loads};
 });

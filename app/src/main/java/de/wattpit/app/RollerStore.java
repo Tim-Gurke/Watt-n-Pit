@@ -42,7 +42,8 @@ final class RollerStore {
     synchronized void configure(String json)throws JSONException{
         if(json.length()>8000)throw new IllegalArgumentException("Profil zu groß");
         if(session.active)throw new IllegalArgumentException("Bitte zuerst die Ladeaufzeichnung beenden.");
-        profile=checked(new JSONObject(json));detector.suppressed=false;detector.interrupt();prefs.edit().putString("profile",profile.toString()).putBoolean("autoSuppressed",false).apply();live=new JSONObject();lastAcceptedAt=0;
+        JSONObject next=checked(new JSONObject(json));if(!prefs.edit().putString("profile",next.toString()).putBoolean("autoSuppressed",false).commit())throw new IllegalArgumentException("Profil konnte nicht gespeichert werden.");
+        profile=next;detector.suppressed=false;detector.interrupt();live=new JSONObject();lastAcceptedAt=0;
     }
     synchronized String mac(){return profile.optString("mac");}
     synchronized void status(String value){status=value;}

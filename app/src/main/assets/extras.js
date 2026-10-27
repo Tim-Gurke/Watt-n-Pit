@@ -9,11 +9,11 @@ window.WattExtras=class {
     document.getElementById('weatherQuery').oninput=()=>{document.getElementById('weatherSearchButton').disabled=false;};
     document.getElementById('weatherQuery').onkeydown=e=>{if(e.key==='Enter')this.search();};
     document.getElementById('weatherOff').onclick=()=>this.place({off:true});
-    document.getElementById('weatherRefresh').onclick=()=>{if(a.native)a.native.refreshWeather();else a.toast('Wetter ist in der Android-App verfügbar.');};
+    document.getElementById('weatherRefresh').onclick=async()=>{if(a.native){const error=await a.native.refreshWeather();if(error)a.toast(error);}else a.toast('Wetter ist in der Android-App verfügbar.');};
     document.getElementById('copyArchiveDiagnostics').onclick=()=>{if(!a.native?.copyArchiveDiagnostics){a.toast('Diagnose kopieren ist in der Android-App verfügbar.');return;}const error=a.native.copyArchiveDiagnostics();a.toast(error||'Diagnose ohne private Gerätedaten kopiert.');};
     document.getElementById('archiveCancel').onclick=()=>a.cancelArchive();
     document.getElementById('monitorNotifications').onclick=()=>{if(a.native?.openMonitorNotifications)a.native.openMonitorNotifications();else a.toast('Die Betriebsbenachrichtigung lässt sich in der Android-App einstellen.');};
-    document.getElementById('deviceCards').addEventListener('click',e=>{const b=e.target.closest('.archive-import');if(!b)return;if(a.isDemo()){a.toast('Demo liest keine Geräte aus.');return;}if(a.native)a.native.importArchive(b.dataset.mac);else a.toast('Gerätearchive werden in der Android-App gelesen.');});
+    document.getElementById('deviceCards').addEventListener('click',async e=>{const b=e.target.closest('.archive-import');if(!b)return;if(a.isDemo()){a.toast('Demo liest keine Geräte aus.');return;}if(a.native){const error=await a.native.importArchive(b.dataset.mac);if(error)a.toast(error);}else a.toast('Gerätearchive werden in der Android-App gelesen.');});
     window.onWeatherSearch=result=>{
       const query=document.getElementById('weatherQuery').value.trim();if(result.query!==query)return;
       const el=document.getElementById('weatherResults');document.getElementById('weatherSearchButton').disabled=false;
@@ -31,7 +31,7 @@ window.WattExtras=class {
     if(save){const error=this.a.native?this.a.native.settings(JSON.stringify({palette:id})):'';if(error)this.a.toast(error);else{if(!this.a.native)localStorage.setItem('wattpit-palette',id);this.a.repaint();}}
   }
   search(){const query=document.getElementById('weatherQuery').value.trim();if(query.length<2){this.a.toast('Bitte einen Ort eingeben.');return;}if(!this.a.native){this.a.toast('Die Ortssuche ist in der Android-App verfügbar.');return;}document.getElementById('weatherResults').textContent='Suche …';document.getElementById('weatherSearchButton').disabled=true;this.a.native.searchWeather(query);}
-  place(place){if(!this.a.native)return;const error=this.a.native.weatherPlace(JSON.stringify(place));if(error)this.a.toast(error);else{document.getElementById('weatherLocation').textContent=place.off?'Wetter ist ausgeschaltet.':place.name;this.a.toast(place.off?'Wetter ausgeschaltet.':'Wetterort gespeichert. Vorschau wird geladen.');this.a.poll();}}
+  async place(place){if(!this.a.native)return;const error=await this.a.native.weatherPlace(JSON.stringify(place));if(error)this.a.toast(error);else{document.getElementById('weatherLocation').textContent=place.off?'Wetter ist ausgeschaltet.':place.name;this.a.toast(place.off?'Wetter ausgeschaltet.':'Wetterort gespeichert. Vorschau wird geladen.');this.a.poll();}}
   symbol(code){
     const sun='<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/>';
     const cloud='<path d="M6 17a4 4 0 1 1 1-7.9A6 6 0 0 1 19 11a3 3 0 0 1 0 6Z"/>';

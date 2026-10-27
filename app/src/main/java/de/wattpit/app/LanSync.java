@@ -4,6 +4,7 @@ import android.content.*;
 import android.net.nsd.*;
 import android.os.*;
 import de.wattpit.app.core.LanWire;
+import de.wattpit.app.core.ArchiveRun;
 import org.json.*;
 import java.io.*;
 import java.net.*;
@@ -13,7 +14,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-/** Local plant data and the scoped, acknowledged roller-session command. Never merges databases. */
+/** Local plant data and explicitly scoped, acknowledged app controls. Never merges databases. */
 final class LanSync {
     private static LanSync instance;
     static synchronized LanSync get(Context context){if(instance==null)instance=new LanSync(context.getApplicationContext());return instance;}
@@ -41,12 +42,15 @@ final class LanSync {
     private final AtomicBoolean resolving=new AtomicBoolean();
     private SolarPlanning planning;
     private final File cache;
+    private String controlFingerprint="";
+    private long controlRevision;
 
     private LanSync(Context context){
         this.context=context;repository=Repository.get(context);prefs=context.getSharedPreferences("wattpit-lan",Context.MODE_PRIVATE);nsd=context.getSystemService(NsdManager.class);
         try{config=new JSONObject(prefs.getString("config","{}"));}catch(Exception e){config=new JSONObject();}
         if(!prefs.contains("deviceId"))prefs.edit().putString("deviceId",LanWire.random(12)).apply();
         cache=new File(context.getFilesDir(),"lan-display.json");
+        controlRevision=prefs.getLong("controlRevision",0);
         if(viewer()&&cache.length()<=LanWire.MAX_RESPONSE)try(InputStream in=new FileInputStream(cache)){ByteArrayOutputStream bytes=new ByteArrayOutputStream();byte[] block=new byte[8192];int n;while((n=in.read(block))!=-1){if(bytes.size()+n>LanWire.MAX_RESPONSE)throw new IOException();bytes.write(block,0,n);}JSONObject saved=new JSONObject(bytes.toString("UTF-8"));if(config.optString("id").equals(saved.optString("id"))){remote=saved.getJSONObject("bundle");receivedAt=saved.optLong("at");}}catch(Exception ignored){}
         client.scheduleWithFixedDelay(()->{if(visible&&viewer())refresh();},0,3,TimeUnit.SECONDS);
     }
@@ -56,8 +60,9 @@ final class LanSync {
     void foreground(Consumer<JSONObject> callback){visible=true;listener=callback;if(viewer()){discover();client.execute(this::refresh);}}
     void background(){visible=false;listener=null;if(viewer())stopDiscovery();}
     private void save(JSONObject next)throws Exception{
-        if(!prefs.edit().putString("config",next.toString()).commit())throw new IOException();config=next;
+        if(!prefs.edit().putString("config",next.toString()).putBoolean("joinedNotice","viewer".equals(next.optString("role"))).commit())throw new IOException();config=next;
     }
+    synchronized boolean consumeJoined(){return viewer()&&prefs.getBoolean("joinedNotice",false)&&prefs.edit().putBoolean("joinedNotice",false).commit();}
     synchronized void create(String name)throws Exception{
         name=name.trim();if(name.isEmpty()||name.length()>60)throw new IllegalArgumentException("Bitte einen Namen mit 1 bis 60 Zeichen eingeben.");
         if(viewer()||hosting)throw new IllegalArgumentException("Bitte den bestehenden Anlagenverbund zuerst verlassen.");
@@ -112,10 +117,57 @@ final class LanSync {
             JSONObject result=new JSONObject(remote.optJSONObject("snapshot")==null?"{\"devices\":[],\"found\":[],\"readings\":[],\"stats\":{},\"settings\":{}}":remote.getJSONObject("snapshot").toString());
             JSONObject settings=result.getJSONObject("settings");for(String key:new String[]{"theme","palette","miniRange"})settings.put(key,repository.prefs.getString(key,key.equals("theme")?"dark":key.equals("palette")?"classic":"today"));
             if(!state().optBoolean("connected"))result.put("running",false);
-            return result.put("lan",state()).toString();
+            return result.put("controlRevision",remote.optLong("controlRevision",-1)).put("lan",state()).toString();
         }catch(Exception e){return "{}";}
     }
     String part(String name){JSONObject value=remote.optJSONObject(name);if(value==null)return "{}";try{JSONObject result=new JSONObject(value.toString());if(name.equals("roller")&&!state().optBoolean("connected"))result.put("fresh",false).put("status","Hauptgerät nicht erreichbar");return result.toString();}catch(Exception e){return "{}";}}
+    String bondedDevices(){return viewer()?remote.optJSONArray("bonded")==null?"[]":remote.optJSONArray("bonded").toString():PlantCommands.bonded(context).toString();}
+    long controlRevision(){if(viewer())return remote.optLong("controlRevision",-1);synchronized(this){try{return currentControlRevision();}catch(Exception e){return -1;}}}
+    String remoteSyncState(){JSONObject sync=remote.optJSONObject("sync");try{
+        JSONObject value=sync==null?new JSONObject():new JSONObject(sync.toString());
+        // Progress is shared, while notice consent, theme and palette belong to this handset.
+        JSONObject local=new JSONObject(repository.syncState());for(String k:new String[]{"cockpitNoticeAccepted","theme","palette"})value.put(k,local.opt(k));
+        if(!state().optBoolean("connected"))value.put("busy",false).put("archive",new JSONObject());
+        return value.toString();
+    }catch(Exception e){return "{}";}}
+    private String fingerprint()throws Exception{
+        JSONArray values=new JSONArray();Map<String,?> all=repository.prefs.getAll();
+        for(String key:new String[]{"devices","equipment-v1","solar-setup-v1","weatherPlace","capacity","sampleSeconds","recording"})values.put(all.get(key));
+        ArchiveRun.State run=repository.archiveRun.state();values.put(run.id).put(run.startedAt).put(run.busy);
+        values.put(RollerStore.get(context).snapshot().optJSONObject("profile"));return digest(values.toString());
+    }
+    private static String digest(String value)throws Exception{return java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}
+    private long currentControlRevision()throws Exception{
+        String next=fingerprint();if(!next.equals(controlFingerprint)){
+            controlRevision++;if(!prefs.edit().putLong("controlRevision",controlRevision).commit())throw new IOException();controlFingerprint=next;
+        }return controlRevision;
+    }
+    synchronized void localControl(String action,JSONArray args,SolarPlanning source)throws Exception{
+        if(viewer())throw new IllegalArgumentException(READ_ONLY);
+        PlantCommands.apply(context,repository,source,action,args);controlFingerprint="";currentControlRevision();
+    }
+    synchronized void importLocalConfiguration(String json,SolarPlanning source)throws Exception{
+        if(viewer())throw new IllegalArgumentException(READ_ONLY);
+        boolean changed=repository.importConfiguration(json);if(changed)WeatherClient.refresh(repository,true);source.request();controlFingerprint="";currentControlRevision();
+    }
+    JSONObject control(String action,JSONArray args,long expectedRevision)throws Exception{
+        if(!viewer())throw new IllegalStateException();JSONObject active=config;
+        if(remote.optInt("controlProtocol")!=1)throw new IllegalArgumentException("Bitte zuerst das Hauptgerät auf Version 1.6.3 oder neuer aktualisieren.");
+        JSONObject bundle=rpc(active,"control",new JSONArray().put(action).put(args).put(expectedRevision).put(LanWire.random(16)));
+        validateBundle(bundle);if(active!=config)throw new IOException("Anlage wurde gewechselt.");accept(bundle,active);return bundle;
+    }
+    private JSONObject applyControl(JSONArray args)throws Exception{
+        if(args.length()!=4||!(args.get(1) instanceof JSONArray))throw new IllegalArgumentException("Ungültige Bedienanfrage.");
+        String action=args.getString(0),id=args.getString(3),hash=digest(action+args.getJSONArray(1).toString());
+        if(!id.matches("[A-Za-z0-9_-]{22}"))throw new IllegalArgumentException("Ungültige Bedienanfrage.");
+        JSONArray receipts=new JSONArray(prefs.getString("controlReceipts","[]"));
+        for(int i=0;i<receipts.length();i++){JSONObject receipt=receipts.getJSONObject(i);if(id.equals(receipt.optString("id"))){if(!hash.equals(receipt.optString("hash")))throw new IllegalArgumentException("Die Anfragekennung wurde bereits verwendet.");return read("bundle",new JSONArray());}}
+        if(args.getLong(2)!=currentControlRevision())throw new IllegalArgumentException("Die Einstellungen wurden inzwischen geändert. Bitte die Ansicht schließen, neu öffnen und erneut versuchen.");
+        PlantCommands.apply(context,repository,planning,action,args.getJSONArray(1));
+        controlFingerprint="";currentControlRevision();JSONArray kept=new JSONArray();for(int i=Math.max(0,receipts.length()-31);i<receipts.length();i++)kept.put(receipts.get(i));kept.put(new JSONObject().put("id",id).put("hash",hash));
+        if(!prefs.edit().putString("controlReceipts",kept.toString()).commit())throw new IOException();
+        return read("bundle",new JSONArray());
+    }
     void refreshNow(){if(viewer())client.execute(this::refresh);}
     private void refresh(){
         if(!viewer()||!refreshing.compareAndSet(false,true))return;JSONObject active=config;
@@ -128,6 +180,7 @@ final class LanSync {
     }
     private synchronized void accept(JSONObject bundle,JSONObject expected){
         if(expected!=config||!viewer())return;
+        if(bundle.optLong("controlRevision",-1)<remote.optLong("controlRevision",-1))return;
         // A slower background poll must not undo a newer, acknowledged charge command.
         JSONObject oldRoller=remote.optJSONObject("roller"),newRoller=bundle.optJSONObject("roller");
         if(oldRoller!=null&&newRoller!=null&&oldRoller.optLong("sessionRevision")>newRoller.optLong("sessionRevision"))try{bundle.put("roller",oldRoller);}catch(JSONException ignored){}
@@ -156,13 +209,14 @@ final class LanSync {
         if(target==config&&LanWire.localAddress(resolvedHost)){hosts.add(resolvedHost);if(resolvedPort>0)port=resolvedPort;}
         JSONArray listed=target.getJSONArray("addresses");for(int i=0;i<listed.length();i++)if(!hosts.contains(listed.getString(i)))hosts.add(listed.getString(i));
         long deadline=SystemClock.elapsedRealtime()+10000;
-        for(String host:hosts){if(method.equals("rollerSession")&&SystemClock.elapsedRealtime()>deadline)break;if(!LanWire.localAddress(host))continue;try(Socket socket=new Socket()){
-            socket.connect(new InetSocketAddress(host,port),1800);socket.setSoTimeout(method.equals("rollerSession")?4000:10000);
+        boolean command=method.equals("rollerSession")||method.equals("control");
+        for(String host:hosts){if(command&&SystemClock.elapsedRealtime()>deadline)break;if(!LanWire.localAddress(host))continue;try(Socket socket=new Socket()){
+            socket.connect(new InetSocketAddress(host,port),1800);socket.setSoTimeout(command?4000:10000);
             String nonce=LanWire.random(18);JSONObject request=new JSONObject().put("group",target.getString("id")).put("nonce",nonce).put("at",System.currentTimeMillis())
                 .put("peer",prefs.getString("deviceId","")).put("name",Build.MODEL).put("method",method).put("args",args);
             byte[] key=LanWire.key(target.getString("key"));LanWire.write(socket.getOutputStream(),key,request.toString(),LanWire.MAX_REQUEST);
             JSONObject response=new JSONObject(LanWire.read(socket.getInputStream(),key,LanWire.MAX_RESPONSE));
-            if(!nonce.equals(response.optString("nonce")))throw new IOException("Falsche Antwort.");if(response.has("error")){if(method.equals("rollerSession"))throw new IllegalArgumentException(response.getString("error"));throw new IOException(response.getString("error"));}
+            if(!nonce.equals(response.optString("nonce")))throw new IOException("Falsche Antwort.");if(response.has("error")){if(command)throw new IllegalArgumentException(response.getString("error"));throw new IOException(response.getString("error"));}
             if(target==config){resolvedHost=host;resolvedPort=port;}return response.getJSONObject("data");
         }catch(IllegalArgumentException e){throw e;}catch(Exception ignored){/* Try another local interface from the same invitation. */}}
         throw new IOException("Hauptgerät nicht erreichbar oder Verbindungscode ungültig.");
@@ -185,23 +239,25 @@ final class LanSync {
             if(!host()||!active.getString("id").equals(request.optString("group"))||!nonce.matches("[A-Za-z0-9_-]{24}")||Math.abs(System.currentTimeMillis()-request.optLong("at"))>120000)return;
             synchronized(requests){if(requests.containsKey(nonce))return;requests.put(nonce,true);if(requests.size()>512)requests.remove(requests.keySet().iterator().next());}
             JSONObject response=new JSONObject().put("nonce",nonce);try{
-                if(request.optString("method").equals("rollerSession")){synchronized(this){if(active!=config||!host())return;response.put("data",read("rollerSession",request.getJSONArray("args")));}}
+                if(request.optString("method").equals("rollerSession")||request.optString("method").equals("control")||request.optString("method").equals("bundle")){synchronized(this){if(active!=config||!host())return;response.put("data",read(request.getString("method"),request.getJSONArray("args")));}}
                 else response.put("data",read(request.getString("method"),request.getJSONArray("args")));
-            }catch(Exception e){response.put("error",request.optString("method").equals("rollerSession")&&e instanceof IllegalArgumentException?e.getMessage():"Daten konnten gerade nicht gelesen werden.");}
+            }catch(Exception e){response.put("error",(request.optString("method").equals("rollerSession")||request.optString("method").equals("control"))&&e instanceof IllegalArgumentException?e.getMessage():"Die Anfrage konnte gerade nicht abgeschlossen werden. Bitte erneut versuchen.");}
             if(!host()||active!=config)return;
             LanWire.write(open.getOutputStream(),key,response.toString(),LanWire.MAX_RESPONSE);
             if(peers.size()<20||peers.containsKey(request.optString("peer")))peers.put(request.optString("peer"),new JSONObject().put("name",request.optString("name").substring(0,Math.min(60,request.optString("name").length()))).put("seen",SystemClock.elapsedRealtime()));
         }catch(Exception ignored){/* Authentication errors never reveal data or key material. */}
     }
     private JSONObject read(String method,JSONArray args)throws Exception{
+        if(method.equals("control"))return applyControl(args);
         if(method.equals("rollerSession")){
             if(args.length()!=3||!(args.get(0) instanceof Boolean))throw new IllegalArgumentException("Ungültige Ladeanfrage.");
             RollerStore.get(context).command(args.getBoolean(0),args.getLong(1),args.getString(2));repository.invalidateStats();planning.request();return read("bundle",new JSONArray());
         }
         if(method.equals("bundle")){
             long now=System.currentTimeMillis();if(!repository.archiveBusy&&now-lastPlanRequest>30000){lastPlanRequest=now;planning.request();}
-            JSONObject snapshot=repository.archiveBusy?new JSONObject(repository.backgroundSnapshot()):repository.snapshot();snapshot.put("found",new JSONArray()).remove("archiveDiagnostics");snapshot.remove("event");snapshot.remove("eventId");
-            return new JSONObject().put("snapshot",snapshot).put("setup",planning.setup()).put("planning",new JSONObject(SolarPlanning.sharedKnowledge)).put("roller",RollerStore.get(context).snapshot());
+            JSONObject snapshot=repository.archiveBusy?new JSONObject(repository.backgroundSnapshot()):repository.snapshot();snapshot.remove("archiveDiagnostics");snapshot.remove("event");snapshot.remove("eventId");
+            return new JSONObject().put("snapshot",snapshot).put("setup",planning.setup()).put("planning",new JSONObject(SolarPlanning.sharedKnowledge)).put("roller",RollerStore.get(context).snapshot())
+                .put("controlProtocol",1).put("controlRevision",currentControlRevision()).put("sync",new JSONObject(repository.syncState())).put("bonded",PlantCommands.bonded(context));
         }
         long from=args.getLong(0);if(method.equals("sunsetSoc")){
             if(from<=0||from>System.currentTimeMillis())throw new IllegalArgumentException();String shunt="";JSONArray devices=repository.configs();

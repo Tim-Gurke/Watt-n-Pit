@@ -23,6 +23,7 @@ final class ConfigurationBackup {
             JSONObject row=rows.getJSONObject(i);String id=row.getString("id"),metric=row.getString("metric");
             if(!id.matches("[a-zA-Z0-9_-]{1,90}")||!ids.add(id)||!metric.matches("[a-zA-Z][a-zA-Z0-9]{0,40}"))throw new IllegalArgumentException("Ungültige Kachel in der Sicherung.");
             JSONObject tile=pick(row,"id","metric","title","unit","type","digits","fontSize","color","colorMid","colorEnd","adaptiveColor","multicolor","invert","min","max","scaleMode","valueMode","reverseSign","background","opacity");
+            tile.put("fontSize",Math.max(18,Math.min(20,row.optDouble("fontSize",20))));
             if(row.has("period"))tile.put("period",pick(row.getJSONObject("period"),"mode","amount","unit","aggregate","resetAt","from","to"));
             if(row.has("layouts")){
                 JSONObject layouts=row.getJSONObject("layouts"),clean=new JSONObject();

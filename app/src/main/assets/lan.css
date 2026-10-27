@@ -17,4 +17,6 @@ body.showing-pairing-qr #toast{visibility:hidden}
 .type-lan .textbutton{font-size:11px;padding:4px 0;text-align:left;white-space:normal}
 .is-editing .lan-banner{overflow:hidden;pointer-events:none}
 
-.lan-success{text-align:center}.lan-success>span{display:block;font-size:48px;color:var(--mint)}.lan-success h3{margin-bottom:12px}.lan-success p{margin-bottom:16px}.lan-success button{width:100%}
+.lan-success{text-align:center}.lan-success>span{display:block;font-size:20px;color:var(--mint)}.lan-success h3{margin-bottom:12px}.lan-success p{margin-bottom:16px}.lan-success button{width:100%}
+
+.plant-action-status{position:fixed;left:12px;right:12px;bottom:90px;z-index:1200;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text);font-size:12px;box-shadow:0 3px 18px #0004}.plant-command-busy main,.plant-command-busy .topbar,.plant-command-busy .bottom-nav,.plant-command-busy #modal{pointer-events:none}

@@ -274,10 +274,10 @@ test('readable numbers handle shorthand white, custom dark surfaces and transpar
   }
   assert.notEqual(C.readableColor('#e8bb57','#fff','#f4f6f9'),'#ffffff');
 });
-test('the 1.4.3 standard portrait overview matches the approved taller preview and preserves wide positions',()=>{
+test('the 1.6.3 standard overview uses the approved G5 layout in both profiles',()=>{
   const board=C.defaults();assert.equal(board.tiles.find(t=>t.metric==='solar').period.amount,3);
   assert.deepEqual(board.tiles.slice(0,10).map(t=>t.metric),['soc','solar','energyBalance','solarEnergy','voltage','power','weather','consumptionEnergy','state','chargeTime']);
-  assert.deepEqual(board.tiles.slice(0,10).map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:5},{x:4,y:0,w:4,h:7},{x:8,y:7,w:4,h:5.5},{x:8,y:0,w:4,h:7},{x:0,y:7.5,w:4,h:2.5},{x:0,y:10,w:4,h:2.5},{x:0,y:12.5,w:12,h:5},{x:4,y:7,w:4,h:5.5},{x:4,y:17.5,w:4,h:3.5},{x:0,y:5,w:4,h:2.5}]);
+  assert.deepEqual(board.tiles.slice(0,10).map(t=>t.layouts.compact),[{x:0,y:0,w:4,h:8},{x:4,y:0,w:4,h:9},{x:8,y:8,w:4,h:7.5},{x:8,y:0,w:4,h:8},{x:0,y:10.5,w:4,h:2.5},{x:0,y:13,w:4,h:2.5},{x:0,y:15.5,w:12,h:5},{x:4,y:9,w:4,h:6.5},{x:0,y:20.5,w:4,h:2.5},{x:0,y:8,w:4,h:2.5}]);
   assert.deepEqual(board.tiles.slice(0,8).map(t=>t.layouts.wide),[{x:0,y:0,w:2,h:4},{x:2,y:0,w:2,h:8},{x:7,y:0,w:3,h:8},{x:4,y:0,w:3,h:8},{x:0,y:4,w:2,h:2},{x:0,y:6,w:2,h:2},{x:0,y:8,w:12,h:4},{x:10,y:0,w:2,h:8}]);
   assert.deepEqual(board.historyHeight,{compact:465,wide:380});
   assert.equal(board.tiles[1].valueMode,'live');assert.equal(board.tiles[1].scaleMode,'auto');
@@ -455,4 +455,11 @@ test('roller block migrates without moving tiles and keeps independent dimension
  assert.deepEqual(m.tiles.map(t=>t.layouts),layouts);assert.deepEqual(m.blockOrder,['history','tiles','record','roller']);
  m.blockOrder=['roller','tiles','history','record'];m.rollerLayout={compact:{width:8.5,height:310},wide:{width:5,height:890}};assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(m))),m);
  m.rollerLayout.compact={width:100,height:-5};assert.deepEqual(C.normalize(m).rollerLayout.compact,{width:12,height:250});
+});
+
+test('new tiles, stored layouts and imported layouts respect the requested font maximum',()=>{
+ for(const metric of Object.keys(C.CATALOG))assert.equal(C.tile(metric).fontSize,20);
+ const old=C.defaults();old.tiles[0].fontSize=18;old.tiles[1].fontSize=64;
+ const positions=structuredClone(old.tiles.map(t=>t.layouts)),clean=C.normalize(old);
+ assert.equal(clean.tiles[0].fontSize,18);assert.equal(clean.tiles[1].fontSize,20);assert.deepEqual(clean.tiles.map(t=>t.layouts),positions);
 });

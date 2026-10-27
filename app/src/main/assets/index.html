@@ -49,8 +49,8 @@
 <section id="storage" class="page">
   <div class="pagehead"><div><p class="eyebrow">ROLLER UND LADEPLANUNG</p><h1>Zusatzspeicher.</h1></div></div>
   <article id="rollerWelcome" class="card"><h2>Dein Roller als Zusatzspeicher</h2><p class="muted">BMS-Werte, Ladeplanung und Sondernutzung an einem Ort.</p><button id="rollerSetup" class="primary">Roller einrichten</button></article>
-  <p id="rollerViewerNote" class="muted" hidden>Werte vom Hauptgerät. Start und Ende der Sondernutzung werden dort bestätigt; das Rollerprofil richtest du am Hauptgerät ein.</p>
-  <article class="card roller-panel" id="rollerPanel" hidden><div class="roller-heading"><div><p class="eyebrow">ZUSATZSPEICHER</p><h2 id="rollerName">Roller</h2></div><button class="quiet" id="rollerConfigure">Einrichten</button></div><p id="rollerState" class="muted"></p><div class="roller-values"><div><strong id="rollerSoc">— %</strong><span>Ladezustand · BMS</span></div><div><strong id="rollerPower">— W</strong><span>Batterieleistung · BMS</span></div><div><strong id="rollerCharged">— Wh</strong><span>Geladen · gemessene Abschnitte</span></div><div><strong id="rollerInput">— Wh</strong><span>Wohnwagenanteil · geschätzt</span></div></div><p id="rollerLiveNote" class="muted"></p><button class="primary" id="rollerSession">Ladung als Sondernutzung starten</button><p id="rollerActionStatus" class="muted" role="status" aria-live="polite" hidden></p><p id="rollerGaps" class="muted"></p><button id="rollerJournal" class="quiet">Ladejournal</button><p id="rollerPlan"></p><p class="muted">Sondernutzung · Rollerladung. Im Gesamtverbrauch enthalten; vom Lernen des üblichen Tagesbedarfs ausgenommen.</p></article>
+  <p id="rollerViewerNote" class="muted" hidden>Werte vom Hauptgerät. Start und Ende der Sondernutzung werden dort bestätigt; auch das Rollerprofil kannst du hier einstellen.</p>
+  <article class="card roller-panel" id="rollerPanel" hidden><div class="roller-heading"><div><p class="eyebrow">ZUSATZSPEICHER</p><h2 id="rollerName">Roller</h2></div><button class="quiet" id="rollerConfigure">Einrichten</button></div><p id="rollerState" class="muted"></p><div class="roller-values"><div><strong id="rollerStored">— Wh</strong><span>Enthaltene Energie · geschätzt</span></div><div><strong id="rollerSoc">— %</strong><span>Ladezustand · BMS</span></div><div><strong id="rollerPower">— W</strong><span>Batterieleistung · BMS</span></div><div><strong id="rollerCharged">— Wh</strong><span>Geladen · gemessene Abschnitte</span></div><div><strong id="rollerInput">— Wh</strong><span>Wohnwagenanteil · geschätzt</span></div></div><p class="muted">Speicherinhalt näherungsweise aus BMS-Restkapazität × Nennspannung, ersatzweise aus Ladezustand × Nennenergie. Keine Zusage für nutzbare Rückspeiseenergie.</p><p id="rollerLiveNote" class="muted"></p><button class="primary" id="rollerSession">Ladung als Sondernutzung starten</button><p id="rollerActionStatus" class="muted" role="status" aria-live="polite" hidden></p><p id="rollerGaps" class="muted"></p><button id="rollerJournal" class="quiet">Ladejournal</button><p id="rollerPlan"></p><p class="muted">Sondernutzung · Rollerladung. Im Gesamtverbrauch enthalten; vom Lernen des üblichen Tagesbedarfs ausgenommen.</p></article>
 </section>
 <section id="history" class="page">
   <div class="pagehead"><div><p class="eyebrow">DEINE DATEN BLEIBEN BEI DIR</p><h1>Der Verlauf.</h1></div><button class="iconbutton" id="historyImport" aria-label="CSV importieren"></button></div>
@@ -111,6 +111,7 @@
   </section>
 </div>
 <aside id="syncCompact" class="sync-compact" hidden><button id="syncOpen" aria-label="Synchronisationsfortschritt und Abbrechen öffnen"><span class="sync-compact-icon" aria-hidden="true">↻</span><span><strong id="syncCompactTitle"></strong><small id="syncCompactDetail"></small></span><span aria-hidden="true">›</span></button></aside>
+<aside id="plantActionStatus" class="plant-action-status" role="status" aria-live="polite" hidden></aside>
 <div id="toast" class="toast" role="status" hidden></div>
 <script src="dashboard-core.js"></script>
 <script src="dashboard.js"></script>
@@ -123,6 +124,7 @@
 <script src="extras.js"></script>
 <script src="lifecycle.js"></script>
 <script src="read-bridge.js"></script>
+<script src="control-bridge.js"></script>
 <script src="lan-ui.js"></script>
 <script src="roller-core.js"></script>
 <script src="roller-ui.js"></script>
