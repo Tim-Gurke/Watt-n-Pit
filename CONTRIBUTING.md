@@ -10,6 +10,7 @@ Aktionen über den Anlagenverbund brauchen eine Bestätigung vom Hauptgerät. Vo
 
 Derzeit nur Wünsche festhalten. Umsetzung, Build und Veröffentlichung warten auf einen späteren Auftrag des Nutzers.
 
-- Voreingestellte Schriftgröße maximal **20**. Mit dem späteren Update auch größere Schrift in bereits gespeicherten Layouts einmalig auf 20 reduzieren; kleinere Werte und die Anordnung erhalten.
+- Schriftgröße überall maximal **20** voreinstellen. Mit dem späteren Update auch größere Schrift in bereits gespeicherten Layouts einmalig auf 20 reduzieren; kleinere Werte und die Anordnung erhalten.
+- Die vom Hauptgerät **G5** bereitgestellte Datei `Watt-n-Pit-Einstellungen (2).json` und der Screenshot `Screenshot_20261027-184807364.jpg` dienen als Layoutreferenz für das spätere Update. Die Datei enthält 11 Kacheln, davon 6 mit Schriftgröße 32. Diese Werte später auf höchstens 20 setzen und die gespeicherten Anordnungen übernehmen. Die Anhänge bleiben bis dahin Referenzmaterial; derzeit nur sammeln.
 - Das Anzeigehandy soll alle gemeinsamen App- und Anlageneinstellungen steuern können, insbesondere Solaranlage, mobile Aufstellung und Wetter. Das Hauptgerät übernimmt und bestätigt die Änderungen.
 - Beim Zusatzspeicher die **aktuell enthaltene Energie in Wh** anzeigen; diese Anzeige beschreibt den gegenwärtigen Speicherinhalt.
