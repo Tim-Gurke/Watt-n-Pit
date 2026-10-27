@@ -28,7 +28,7 @@ final class LanSync {
     private final Map<String,JSONObject> peers=new ConcurrentHashMap<>();
     private final LinkedHashMap<String,Boolean> requests=new LinkedHashMap<>();
     private volatile JSONObject config,remote=new JSONObject();
-    private volatile long receivedAt,receivedElapsed,lastPlanRequest;
+    private volatile long receivedAt,receivedElapsed,lastPlanRequest,lastCacheElapsed;
     private volatile String error="",resolvedHost="";
     private volatile int resolvedPort;
     private volatile boolean visible,hosting;
@@ -79,12 +79,12 @@ final class LanSync {
         if(repository.archiveBusy)throw new IllegalArgumentException("Bitte den Geräteabruf zuerst abschließen oder abbrechen.");
         JSONObject next=invitation(code),bundle=rpc(next,"bundle",new JSONArray());validateBundle(bundle);
         next.put("previousRecording",repository.prefs.getBoolean("recording",false));save(next);
-        context.stopService(new Intent(context,MonitorService.class));remote=new JSONObject();receivedElapsed=0;resolvedHost="";
-        accept(bundle);discover();
+        context.stopService(new Intent(context,MonitorService.class));remote=new JSONObject();receivedElapsed=lastCacheElapsed=0;resolvedHost="";
+        accept(bundle,next);discover();
     }
     synchronized boolean leave()throws Exception{
         boolean resume=viewer()&&config.optBoolean("previousRecording");stopHost();stopDiscovery();save(new JSONObject());
-        remote=new JSONObject();receivedAt=receivedElapsed=0;resolvedHost="";resolvedPort=0;error="";cache.delete();return resume;
+        remote=new JSONObject();receivedAt=receivedElapsed=lastCacheElapsed=0;resolvedHost="";resolvedPort=0;error="";cache.delete();return resume;
     }
     String pairingCode()throws Exception{
         if(!host()||!hosting)throw new IllegalArgumentException("Der Anlagenverbund ist noch nicht bereit.");
@@ -118,17 +118,20 @@ final class LanSync {
     void refreshNow(){if(viewer())client.execute(this::refresh);}
     private void refresh(){
         if(!viewer()||!refreshing.compareAndSet(false,true))return;JSONObject active=config;
-        try{JSONObject bundle=rpc(active,"bundle",new JSONArray());validateBundle(bundle);if(active==config)accept(bundle);}
+        try{JSONObject bundle=rpc(active,"bundle",new JSONArray());validateBundle(bundle);accept(bundle,active);}
         catch(Exception e){if(active==config)error="Hauptgerät nicht erreichbar. WLAN und Watt’n’Pit am Hauptgerät prüfen.";}
         finally{refreshing.set(false);}
     }
     private static void validateBundle(JSONObject bundle)throws JSONException{
         JSONObject snapshot=bundle.getJSONObject("snapshot");snapshot.getJSONArray("devices");snapshot.getJSONArray("readings");snapshot.getJSONObject("settings");
     }
-    private void accept(JSONObject bundle){
+    private synchronized void accept(JSONObject bundle,JSONObject expected){
+        if(expected!=config||!viewer())return;
         remote=bundle;receivedAt=System.currentTimeMillis();receivedElapsed=SystemClock.elapsedRealtime();error="";
         // A cached display never becomes live merely because the Activity or process restarts.
-        try{File temporary=new File(cache.getPath()+".tmp");try(OutputStream out=new FileOutputStream(temporary)){out.write(new JSONObject().put("id",config.optString("id")).put("at",receivedAt).put("bundle",bundle).toString().getBytes(StandardCharsets.UTF_8));}if(!temporary.renameTo(cache))temporary.delete();}catch(Exception ignored){}
+        // Live refreshes stay in memory; avoid rewriting the full weather/learning bundle
+        // every three seconds. The saved display is explicitly timestamped on restart.
+        if(lastCacheElapsed==0||receivedElapsed-lastCacheElapsed>=60000)try{File temporary=new File(cache.getPath()+".tmp");try(OutputStream out=new FileOutputStream(temporary)){out.write(new JSONObject().put("id",config.optString("id")).put("at",receivedAt).put("bundle",bundle).toString().getBytes(StandardCharsets.UTF_8));}if(temporary.renameTo(cache))lastCacheElapsed=receivedElapsed;else temporary.delete();}catch(Exception ignored){}
         Consumer<JSONObject> callback=listener;if(callback!=null)callback.accept(bundle);
     }
     JSONObject query(String method,JSONArray args)throws Exception{

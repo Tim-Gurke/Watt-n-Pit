@@ -61,6 +61,9 @@ public final class LanSyncProof {
             JSONObject snapshot=new JSONObject(viewer.snapshot());check(viewer.viewer()&&viewer.state().getBoolean("connected"),"a real encrypted TCP handshake activates the intended plant viewer");
             check(snapshot.getJSONArray("readings").getJSONObject(0).getDouble("power")==-12,"viewer shows the source device rather than its independent -999 W database");
             check(!snapshot.toString().contains("PRIVATE-"),"device keys and PINs never leave the host snapshot");
+            Path savedDisplay=display.root.resolve("lan-display.json");Files.setLastModifiedTime(savedDisplay,java.nio.file.attribute.FileTime.fromMillis(1000000));
+            Method refresh=LanSync.class.getDeclaredMethod("refresh");refresh.setAccessible(true);refresh.invoke(viewer);
+            check(Files.getLastModifiedTime(savedDisplay).toMillis()==1000000,"frequent live refreshes do not rewrite the complete persistent display bundle");
             JSONArray history=viewer.query("history",new JSONArray().put(now-60000).put(now).put("batteryPower").put("all")).getJSONArray("points");
             check(history.length()>0&&history.getJSONObject(0).getDouble("v")==-12,"history queries use the same host database over actual TCP");
             check(own.db.last("AA:00:00:00:00:01").power==-999,"display and history reads preserve the viewer's own stored measurements");
