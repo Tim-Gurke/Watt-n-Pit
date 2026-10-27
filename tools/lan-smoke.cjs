@@ -3,6 +3,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  const browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.WATTPIT_CHROMIUM?{executablePath:process.env.WATTPIT_CHROMIUM}:{})});
  try{for(const theme of ['dark','light']){
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const until=async fn=>{for(let i=0;i<150;i++){try{if(await page.evaluate(fn))return;}catch(e){if(!/context was destroyed|Cannot find context/.test(e.message))throw e;}await page.waitForTimeout(100);}throw Error('LAN UI did not reach the expected state');};
   await page.addInitScript(theme=>{
    window.lanRole=sessionStorage.getItem('lanRole')||'off';window.connected=true;window.rev=1;window.power=28;window.asyncQueries=0;window.saved=[];
    window.fixture=()=>({running:true,historyRevision:window.rev,devices:[{mac:'DE:00:00:00:00:01',name:'Beispiel-Shunt',kind:'shunt',seen:Date.now(),hasKey:true},{mac:'DE:00:00:00:00:02',name:'Beispiel-Solar',kind:'solar',seen:Date.now(),hasKey:true}],found:[],readings:[{device:'DE:00:00:00:00:01',kind:'shunt',t:Date.now(),soc:76.4,voltage:12.94,current:-2.2,power:-window.power},{device:'DE:00:00:00:00:02',kind:'solar',t:Date.now(),solar:138,state:3}],stats:{count:2400},settings:{theme,palette:'classic',capacity:100,sampleSeconds:10},weather:{},...(window.lanRole==='viewer'?{lan:{connected:window.connected}}:{})});
@@ -16,11 +17,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.locator('#closeModal').click();await page.locator('[data-page="overview"]').click();assert.match(await page.locator('#lanStatus').textContent(),/Hauptgerät.*1 Anzeige/);
   await page.evaluate(()=>{window.lanRole='off';poll();});await page.locator('#lanOpen').isVisible();await page.locator('[data-page="settings"]').click();await page.locator('#lanManage').click();
   await page.locator('#lanInvitation').fill('WNP1.falsch');await page.locator('#lanJoin').click();assert.match(await page.locator('#lanError').textContent(),/nicht erreichbar/);assert.equal(await page.locator('#lanJoin').isEnabled(),true);
-  await page.locator('#lanInvitation').fill('WNP1.gultig');await page.locator('#lanJoin').click();await page.waitForFunction(()=>window.lanRole==='viewer');await page.locator('#lanBanner').waitFor();
+  await page.locator('#lanInvitation').fill('WNP1.gultig');await page.locator('#lanJoin').click();await until(()=>window.lanRole==='viewer');await page.locator('#lanBanner').waitFor();
   assert.match(await page.locator('#lanStatus').textContent(),/Anzeige.*Hauptgerät/);assert.equal(await page.locator('#overviewRecord').isDisabled(),true);assert.equal(await page.locator('#reloadArchive').isDisabled(),true);assert.equal(await page.locator('#editDashboard').isEnabled(),true);
-  await page.waitForFunction(()=>window.asyncQueries>0);
-  await page.locator('[data-page="history"]').click();await page.waitForFunction(()=>!historyPending&&points.length>0);assert.equal(await page.evaluate(()=>points[0].v),28);
-  await page.evaluate(()=>{window.power=37;window.rev++;poll();});await page.waitForFunction(()=>!historyPending&&points[0]?.v===37);
+  await until(()=>window.asyncQueries>0);
+  await page.locator('[data-page="history"]').click();await until(()=>!historyPending&&points.length>0);assert.equal(await page.evaluate(()=>points[0].v),28);
+  await page.evaluate(()=>{window.power=37;window.rev++;poll();});await until(()=>!historyPending&&points[0]?.v===37);
   await page.evaluate(()=>{window.connected=false;poll();});assert.match(await page.locator('#lanStatus').textContent(),/nicht erreichbar.*Stand/);
   await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#saveSettings').isDisabled(),true);assert.equal(await page.locator('#editEquipment').isDisabled(),true);assert.equal(await page.locator('#themeButtons button').first().isEnabled(),true);
   await page.locator('[data-page="overview"]').click();await page.evaluate(()=>{window.connected=true;poll();});
