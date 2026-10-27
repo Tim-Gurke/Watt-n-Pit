@@ -1,26 +1,27 @@
 {
-  "version": "1.3.9",
-  "versionCode": 30,
-  "compiledSource": "f799dda5bf72c3f084750039800aab24562c05b6",
-  "unsignedBuildCommit": "6593531eebdda3b39fde616fedeaa93bd8d64b65",
-  "unsignedBuildRun": 39614559024,
-  "publicationSource": "3464de14d3448cd0049c5625e355abc36846268b",
-  "apk": {
-    "file": "Watt-n-Pit-v1.3.9.apk",
-    "size": 190505,
-    "sha256": "512a4ba02937183b7882314f864105036d20b49e4c3363169e90b8f8553265bc",
-    "gitBlobSha": "f37bdafbb9024c8707e9b22f27ab555eb470b39c",
-    "base64Length": 254008,
-    "certificateSha256": "0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2"
-  },
-  "afterBuildChanges": [
-    "tools/mini-history-smoke.cjs"
+  "version": "1.6.1",
+  "versionCode": 50,
+  "sourceCommit": "32bdba78e92c0a5c1f0f75d99a57ef9851cfa409",
+  "workflowRunId": 40527133997,
+  "workflowUrl": "https://github.com/Tim-Gurke/Watt-n-Pit/actions/runs/40527133997",
+  "ciConclusion": "success",
+  "artifactId": 12744253446,
+  "artifactSha256": "8362c2f8957535a0d1ed9a7bd0284a7b7840cda48211f183730bcde975926f73",
+  "unsignedApkSha256": "0afafa0fd02595a7fae0205e017744b3ad6e8806305d5caf19d0aca843d40ea6",
+  "apkSha256": "c3d14e8f0cf9bd8ac898c2d74562006a519142bb09a1a198aaf51d9973c9d3b6",
+  "apkBytes": 576227,
+  "certificateSha256": "0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2",
+  "checks": [
+    "233 Java tests including real QR pixels and exact decoding, clipboard wrapping and malformed code errors",
+    "131 JavaScript tests",
+    "Android Lint and release build",
+    "20 SQLite proof phases",
+    "Production encrypted LAN host/client with wrapped invitations and readable nested-key rejection",
+    "Browser: actual QR rendering, camera-result/cancel handling, manual pairing, retry after errors, dark/light and 320/390/844px",
+    "Existing energy, archive, solar, roller and dashboard regressions"
   ],
-  "applicationInputsChangedAfterBuild": false,
-  "layoutProbe": {
-    "run": 39615757304,
-    "commit": "c59d79c378a97021a70cdd94fcd7a79208eb41d2",
-    "completeSuccessfulPasses": 3,
-    "scope": "Wait two animation frames for viewport resize and ResizeObserver; read both rectangles atomically. Keep overflow/minimum height checks; add profile assertion. No application change."
-  }
+  "limitations": [
+    "No physical camera or S20/G5/S10 hotspot test",
+    "Roller special-use assignment remains manual"
+  ]
 }
