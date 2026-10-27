@@ -2,7 +2,7 @@ name: Android prüfen und veröffentlichen
 
 on:
   push:
-    branches: [main, 'publish/*', 'test/1.5.0*', 'test/1.6.0*']
+    branches: [main, 'publish/*', 'test/1.5.0*', 'test/1.6.0*', 'test/1.6.1*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -33,6 +33,9 @@ jobs:
           curl --fail --location --retry 2 --max-time 120 https://repo.maven.apache.org/maven2/org/xerial/sqlite-jdbc/3.46.1.0/sqlite-jdbc-3.46.1.0.jar -o "$deps/sqlite-jdbc-3.46.1.0.jar"
           curl --fail --location --retry 2 --max-time 120 https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar -o "$deps/slf4j-api-1.7.36.jar"
           curl --fail --location --retry 2 --max-time 120 https://repo.maven.apache.org/maven2/org/robolectric/android-all/15-robolectric-12468137/android-all-15-robolectric-12468137.jar -o "$deps/android-api35.jar"
+          curl --fail --location --retry 2 --max-time 120 https://repo.maven.apache.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar -o "$deps/zxing-core.jar"
+          curl --fail --location --retry 2 --max-time 120 https://repo.maven.apache.org/maven2/com/journeyapps/zxing-android-embedded/4.3.0/zxing-android-embedded-4.3.0.aar -o "$deps/zxing-embedded.aar"
+          unzip -p "$deps/zxing-embedded.aar" classes.jar > "$deps/zxing-embedded.jar"
           python3 tools/prove-archive-delta.py --output app/build/reports/archive-delta-proof --sqlite-jar "$deps/sqlite-jdbc-3.46.1.0.jar" --slf4j-jar "$deps/slf4j-api-1.7.36.jar"
           python3 tools/prove-archive-storage.py --output app/build/reports/archive-storage-proof --android-jar "$deps/android-api35.jar" --sqlite-jar "$deps/sqlite-jdbc-3.46.1.0.jar" --slf4j-jar "$deps/slf4j-api-1.7.36.jar"
           mkdir -p "$RUNNER_TEMP/roller-proof"
@@ -46,12 +49,16 @@ jobs:
           WATTPIT_COVERAGE_FIXTURE: ${{ runner.temp }}/coverage-fixture.json
           WATTPIT_SCREENSHOT_DIR: app/build/reports/sync-coverage
           WATTPIT_WEATHER_FIXTURE: app/build/reports/archive-storage-proof/weather-contract-fixture.json
+          WATTPIT_QR_FIXTURE: ${{ runner.temp }}/pairing-qr-fixture.json
         run: |
           npm install --no-save --prefix "$RUNNER_TEMP/wattpit-ui" playwright@1.51.1
           mkdir -p "$RUNNER_TEMP/wattpit-java"
           classes=app/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes
           javac -cp "$classes" -d "$RUNNER_TEMP/wattpit-java" tools/SyncCoverageFixture.java
           java -cp "$RUNNER_TEMP/wattpit-java:$classes" de.wattpit.app.core.SyncCoverageFixture > "$WATTPIT_COVERAGE_FIXTURE"
+          qr_cp="$classes:$RUNNER_TEMP/wattpit-proof-deps/zxing-core.jar"
+          javac -cp "$qr_cp" -d "$RUNNER_TEMP/wattpit-java" tools/PairingQrFixture.java
+          java -cp "$RUNNER_TEMP/wattpit-java:$qr_cp" de.wattpit.app.core.PairingQrFixture > "$WATTPIT_QR_FIXTURE"
           export NODE_PATH="$RUNNER_TEMP/wattpit-ui/node_modules"
           node tools/sync-coverage-smoke.cjs
           node tools/energy-balance-smoke.cjs

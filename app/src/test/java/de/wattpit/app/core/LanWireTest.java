@@ -8,6 +8,18 @@ import java.util.Arrays;
 import java.util.concurrent.*;
 
 public final class LanWireTest {
+    @Test public void invitationSurvivesClipboardWrappingAndDuplicatedHeader(){
+        String json="{\"id\":\"test\",\"name\":\"Tims Wohnwagen – Süden\"}",code=LanWire.encodeInvitation(json);
+        assertEquals(json,LanWire.decodeInvitation(code));
+        String wrapped="\uFEFF„WNP1."+code.substring(0,30)+"\r\n\u00a0"+code.substring(30)+"\u200b”.";
+        assertEquals(json,LanWire.decodeInvitation(wrapped));
+        assertEquals(json,LanWire.decodeInvitation(code.replace("WNP1.","wnp1.")));
+    }
+    @Test public void invalidInvitationsGiveAnActionableErrorWithoutRawDecoderText(){
+        for(String code:new String[]{"WNP1.abc.def","WNP1.…","WNP1.%%%%","WNP1.e30WNP1.e30","https://example.com/","WNP1._w"}){
+            try{LanWire.decodeInvitation(code);fail("invalid invitation accepted");}catch(IllegalArgumentException expected){assertEquals(LanWire.INVALID_INVITATION,expected.getMessage());assertFalse(expected.getMessage().contains("base64"));}
+        }
+    }
     @Test public void authenticatedFramesRoundTripWithFreshNonces()throws Exception{
         byte[] key=LanWire.key(LanWire.random(32));ByteArrayOutputStream first=new ByteArrayOutputStream(),second=new ByteArrayOutputStream();
         LanWire.write(first,key,"Wohnwagen · 12,8 V",1024);LanWire.write(second,key,"Wohnwagen · 12,8 V",1024);

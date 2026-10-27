@@ -36,6 +36,7 @@ public final class MainActivity extends Activity {
     private volatile String pendingSettingsExport;
     private boolean pageReady;
     private JSONObject pendingSettingsPreview;
+    private JSONObject pendingLanScan;
     private boolean pendingStart;
     private String pendingArchive;
     private long stoppedAt;
@@ -66,6 +67,7 @@ public final class MainActivity extends Activity {
             @Override public void onPageFinished(WebView view,String url){
                 pageReady=true;
                 if(pendingSettingsPreview!=null){JSONObject result=pendingSettingsPreview;pendingSettingsPreview=null;call("onSettingsImportPreview",result);}
+                if(pendingLanScan!=null){JSONObject result=pendingLanScan;pendingLanScan=null;call("onLanScanned",result);}
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -187,6 +189,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
+        try{JSONObject scanned=LanQr.result(requestCode,resultCode,data);if(scanned!=null){if(pageReady)call("onLanScanned",scanned);else pendingLanScan=scanned;return;}}catch(Exception e){error(e);return;}
         if (requestCode == BLUETOOTH) {
             if (resultCode == RESULT_OK) startAfterPermissions();
             else { pendingStart = false; pendingArchive=null; repository.message("Bluetooth wurde nicht eingeschaltet."); }
@@ -282,6 +285,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String leaveLan(){try{boolean resume=lan.leave();runOnUiThread(()->{stopService(new Intent(MainActivity.this,LanService.class));if(resume)requestStart();});return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public String lanPairingCode(){try{return new JSONObject().put("code",lan.pairingCode()).toString();}catch(Exception e){try{return new JSONObject().put("error",Repository.safeError(e)).toString();}catch(Exception ignored){return "{}";}}}
         @JavascriptInterface public String copyLanCode(){try{String code=lan.pairingCode();runOnUiThread(()->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Watt’n’Pit-Verbindungscode",code)));return "";}catch(Exception e){return Repository.safeError(e);}}
+        @JavascriptInterface public String lanQrCode(){try{return new JSONObject().put("image",LanQr.image(lan.pairingCode())).toString();}catch(Exception e){try{return new JSONObject().put("error",e instanceof IllegalArgumentException?e.getMessage():"QR-Code konnte gerade nicht erstellt werden. Bitte erneut versuchen.").toString();}catch(Exception ignored){return "{}";}}}
+        @JavascriptInterface public void scanLanCode(){runOnUiThread(()->{try{LanQr.scan(MainActivity.this);}catch(Exception e){try{call("onLanScanned",new JSONObject().put("error","Kamera konnte nicht geöffnet werden. Du kannst den Textcode einfügen."));}catch(JSONException ignored){}}});}
         @JavascriptInterface public void refreshLan(){lan.refreshNow();}
         @JavascriptInterface public String rollerSnapshot(){if(lan.viewer())return lan.part("roller");try{return RollerStore.get(MainActivity.this).snapshot().toString();}catch(Exception e){return "{}";}}
         @JavascriptInterface public String saveRoller(String json){if(lan.viewer())return LanSync.READ_ONLY;try{RollerStore.get(MainActivity.this).configure(json);return "";}catch(Exception e){return Repository.safeError(e);}}

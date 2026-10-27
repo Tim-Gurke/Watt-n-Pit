@@ -1,0 +1,13 @@
+Watt’n’Pit – QR code components
+
+ZXing core 3.5.3
+Copyright ZXing authors and contributors.
+https://github.com/zxing/zxing
+
+ZXing Android Embedded 4.3.0
+Copyright ZXing authors, JourneyApps / Journey Mobile and contributors.
+https://github.com/journeyapps/zxing-android-embedded
+
+Both components are distributed under the Apache License, Version 2.0.
+A copy is included in APACHE-LICENSE-2.0.txt in this application's assets.
+No changes were made to the distributed third-party components.

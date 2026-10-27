@@ -7,4 +7,9 @@
 .lan-offline{border-color:var(--orange)}
 .lan-code,#lanInvitation{display:block;box-sizing:border-box;width:100%;max-width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--text);font:inherit;font-size:13px;overflow-wrap:anywhere;resize:vertical}
 .lan-code[hidden]{display:none}
+.lan-qr{margin:18px 0;text-align:center}
+.lan-qr[hidden]{display:none}
+.lan-qr img{display:block;width:100%;max-width:320px;height:auto;margin:0 auto 12px;background:#fff;border:8px solid #fff;border-radius:8px;box-sizing:border-box;image-rendering:pixelated}
+#lanScan{margin:0 0 16px}
+body.showing-pairing-qr #toast{visibility:hidden}
 @media(max-width:360px){.lan-banner{padding:10px;gap:8px}.lan-banner button{padding:8px}}

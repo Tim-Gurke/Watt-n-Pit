@@ -11,12 +11,14 @@ Auch Firmware-Updates deiner Victron-Geräte führst du weiterhin über die offi
 
 ## Mehrere Handys: Anlagenverbund ab 1.6.0
 
-Alle beteiligten Handys auf 1.6.0 aktualisieren und im selben WLAN beziehungsweise Hotspot verbinden.
+Alle beteiligten Handys auf 1.6.1 aktualisieren und im selben WLAN beziehungsweise Hotspot verbinden.
 
 1. Am Gerät bei der Anlage **Einstellungen → Anlagenverbund → Als Hauptgerät erstellen** wählen und einen Namen vergeben, z. B. „Mein Wohnwagen“. Die Bluetooth-Aufzeichnung auf diesem Gerät wie gewohnt starten.
-2. **Verbindungscode kopieren** wählen und den vollständigen Code auf das andere Handy übertragen.
-3. Dort **Einstellungen → Anlagenverbund → Als Anzeige beitreten** öffnen, den Code einfügen und beitreten. Erst eine erfolgreiche Verbindung aktiviert die Anzeige.
+2. **QR-Code anzeigen** wählen. Die Darstellung enthält den Zugang zum eigenen Anlagenverbund.
+3. Am anderen Handy **Einstellungen → Anlagenverbund → QR-Code scannen** wählen. Die Kameraberechtigung beim ersten Scan erlauben und die Kamera auf den Code des Hauptgeräts richten. Die App prüft die Verbindung und aktiviert nach erfolgreicher Antwort die Anzeige. Ein Abbruch erhält die bisherige Texteingabe.
 4. Die Übersicht nennt die Anlage und den Empfangsstatus. Anlagenangaben und Aufzeichnung am Hauptgerät ändern; Kacheln, Farben und Anordnung bleiben je Handy einstellbar.
+
+Alternativ am Hauptgerät **Verbindungscode kopieren** wählen, auf der Anzeige das gesamte Codefeld ersetzen und **Als Anzeige beitreten** antippen. Bei einer Meldung über einen unvollständigen oder veränderten Code frisch kopieren oder scannen. **QR-Code aktualisieren** verwendet die aktuelle Adresse des Hauptgeräts.
 
 Beispiel: Das S20 stellt den Hotspot bereit, das G5 bleibt als Hauptgerät am Wohnwagen, das S10 zeigt dessen Daten. Das S20 darf ebenfalls beitreten. Auch das Hotspot-Handy selbst kann stattdessen Hauptgerät sein.
 

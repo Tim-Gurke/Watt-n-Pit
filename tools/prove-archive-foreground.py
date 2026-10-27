@@ -60,8 +60,9 @@ version=re.search(r"versionName '([^']+)'",(production/'app/build.gradle').read_
 classes=out/'classes';classes.mkdir(exist_ok=True)
 sources=[x for x in (production/'app/src/main/java').rglob('*.java') if x!=repository]+list((production/'tools/testing').rglob('*.java'))+list(generated.glob('*.java'))+[root/'tools/ArchiveForegroundProof.java']
 deps=a.dependencies.resolve()
-subprocess.run(['java','com.sun.tools.javac.Main','-cp',str(deps/'android-api35.jar'),'-d',str(classes),*map(str,sources)],check=True)
-cp=os.pathsep.join(map(str,[classes,deps/'android-api35.jar',deps/'sqlite-jdbc-3.46.1.0.jar',deps/'slf4j-api-1.7.36.jar']))
+native_cp=os.pathsep.join(map(str,[deps/'android-api35.jar',*deps.glob('zxing-*.jar')]))
+subprocess.run(['java','com.sun.tools.javac.Main','-cp',native_cp,'-d',str(classes),*map(str,sources)],check=True)
+cp=os.pathsep.join(map(str,[classes,deps/'android-api35.jar',deps/'sqlite-jdbc-3.46.1.0.jar',deps/'slf4j-api-1.7.36.jar',*deps.glob('zxing-*.jar')]))
 database=out/'foreground.db'
 for x in out.glob('foreground.db*'):x.unlink()
 run=subprocess.run(['java','-cp',cp,'de.wattpit.app.ArchiveForegroundProof',str(database),a.mode],text=True,capture_output=True)

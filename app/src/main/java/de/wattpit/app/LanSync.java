@@ -65,14 +65,15 @@ final class LanSync {
         error="";
     }
     private static JSONObject invitation(String text)throws Exception{
-        text=text.trim();if(text.length()>3000||!text.startsWith("WNP1."))throw new IllegalArgumentException("Bitte den vollständigen WNP1-Verbindungscode einfügen.");
-        JSONObject input=new JSONObject(new String(Base64.getUrlDecoder().decode(text.substring(5)),StandardCharsets.UTF_8));
+        try{
+        JSONObject input=new JSONObject(LanWire.decodeInvitation(text));
         if(!input.optString("id").matches("[A-Za-z0-9_-]{22}")||input.optString("name").isEmpty()||input.optString("name").length()>60)throw new IllegalArgumentException("Ungültiger Verbindungscode.");
-        LanWire.key(input.getString("key"));int port=input.getInt("port");if(port<1024||port>65535)throw new IllegalArgumentException("Ungültige Hauptgerät-Adresse.");
+        try{LanWire.key(input.getString("key"));}catch(IllegalArgumentException e){throw new IllegalArgumentException(LanWire.INVALID_INVITATION);}int port=input.getInt("port");if(port<1024||port>65535)throw new IllegalArgumentException("Ungültige Hauptgerät-Adresse.");
         JSONArray addresses=input.getJSONArray("addresses");if(addresses.length()==0||addresses.length()>8)throw new IllegalArgumentException("Keine lokale Hauptgerät-Adresse im Code.");
         for(int i=0;i<addresses.length();i++)if(!LanWire.localAddress(addresses.getString(i)))throw new IllegalArgumentException("Nur lokale WLAN-Adressen sind erlaubt.");
         // Whitelist fields: invitations can never supply a command, path or external URL.
         return new JSONObject().put("role","viewer").put("id",input.getString("id")).put("name",input.getString("name")).put("key",input.getString("key")).put("port",port).put("addresses",addresses);
+        }catch(JSONException e){throw new IllegalArgumentException(LanWire.INVALID_INVITATION);}
     }
     synchronized void join(String code)throws Exception{
         if(host()||viewer())throw new IllegalArgumentException("Bitte den bestehenden Anlagenverbund zuerst verlassen.");
@@ -90,7 +91,7 @@ final class LanSync {
         if(!host()||!hosting)throw new IllegalArgumentException("Der Anlagenverbund ist noch nicht bereit.");
         JSONArray addresses=addresses();if(addresses.length()==0)throw new IllegalArgumentException("Bitte WLAN oder Hotspot einschalten.");
         JSONObject token=new JSONObject().put("id",config.getString("id")).put("name",config.getString("name")).put("key",config.getString("key")).put("port",server.getLocalPort()).put("addresses",addresses);
-        return "WNP1."+Base64.getUrlEncoder().withoutPadding().encodeToString(token.toString().getBytes(StandardCharsets.UTF_8));
+        return LanWire.encodeInvitation(token.toString());
     }
     private static JSONArray addresses()throws Exception{
         JSONArray out=new JSONArray();Enumeration<NetworkInterface> interfaces=NetworkInterface.getNetworkInterfaces();

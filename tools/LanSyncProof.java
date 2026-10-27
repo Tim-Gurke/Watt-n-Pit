@@ -57,7 +57,10 @@ public final class LanSyncProof {
             JSONObject invitation=new JSONObject(((JSONObject)configuration.get(host)).toString()).put("port",((java.net.ServerSocket)server.get(host)).getLocalPort());
             invitation.put("addresses",new JSONArray().put("127.0.0.1"));String code="WNP1."+Base64.getUrlEncoder().withoutPadding().encodeToString(invitation.toString().getBytes(StandardCharsets.UTF_8));
             TestContext display=new TestContext(root.resolve("viewer"));Repository own=repository(display);measurement(own,now-10000,-999);viewer=sync(display);
-            System.setProperty("wattpit.test.database",main.root.resolve("history.db").toString());viewer.join(code);
+            System.setProperty("wattpit.test.database",main.root.resolve("history.db").toString());
+            boolean badFormat=false;try{JSONObject bad=new JSONObject(invitation.toString()).put("key","WNP1.invalid.key");viewer.join(LanWire.encodeInvitation(bad.toString()));}catch(IllegalArgumentException expected){badFormat=expected.getMessage().equals(LanWire.INVALID_INVITATION);}
+            check(badFormat&&!viewer.viewer(),"a malformed nested key gives a readable format error before any pairing state is changed");
+            viewer.join("\uFEFF„WNP1."+code.substring(0,35)+"\n\u00a0"+code.substring(35)+"\u200b”.");
             JSONObject snapshot=new JSONObject(viewer.snapshot());check(viewer.viewer()&&viewer.state().getBoolean("connected"),"a real encrypted TCP handshake activates the intended plant viewer");
             check(snapshot.getJSONArray("readings").getJSONObject(0).getDouble("power")==-12,"viewer shows the source device rather than its independent -999 W database");
             check(!snapshot.toString().contains("PRIVATE-"),"device keys and PINs never leave the host snapshot");

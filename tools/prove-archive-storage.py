@@ -36,8 +36,9 @@ incoming=service[start:end]
 classes = out / 'classes'
 classes.mkdir(exist_ok=True)
 sources = list((root / 'app/src/main/java').rglob('*.java')) + list((root / 'tools/testing').rglob('*.java')) + list(generated.glob('*.java')) + [root / 'tools/ArchiveStorageProof.java', root / 'tools/ArchiveClockProof.java', root / 'tools/SolarPlanningProof.java', root / 'tools/WeatherContractProof.java', root / 'app/src/test/java/de/wattpit/app/core/CapturedVictronDevice.java']
-subprocess.run(['java', 'com.sun.tools.javac.Main', '-cp', str(args.android_jar.resolve()), '-d', str(classes), *map(str, sources)], check=True)
-classpath = os.pathsep.join(map(str, [classes, args.android_jar.resolve(), args.sqlite_jar.resolve(), args.slf4j_jar.resolve()]))
+native_cp=os.pathsep.join(map(str,[args.android_jar.resolve(),*args.android_jar.resolve().parent.glob('zxing-*.jar')]))
+subprocess.run(['java', 'com.sun.tools.javac.Main', '-cp', native_cp, '-d', str(classes), *map(str, sources)], check=True)
+classpath = os.pathsep.join(map(str, [classes, args.android_jar.resolve(), args.sqlite_jar.resolve(), args.slf4j_jar.resolve(),*args.android_jar.resolve().parent.glob('zxing-*.jar')]))
 database = Path(tempfile.mkdtemp(prefix='database-', dir=out)) / 'proof.db'
 log = []
 phases = {}
