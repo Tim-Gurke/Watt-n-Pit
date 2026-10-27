@@ -5,3 +5,5 @@ Neue Kacheln der Übersicht gehören in das gemeinsame Dashboard-Raster. Sie mü
 Die Verbundkachel verwendet denselben Katalog und dieselben Gesten wie die Mess- und Wetterkacheln. Umfangreiche Bereiche wie **Zusatzspeicher** erhalten einen eigenen Menüpunkt. Die genaue Standardanordnung der Kacheln wird separat mit dem Nutzer abgestimmt.
 
 Aktionen über den Anlagenverbund brauchen eine Bestätigung vom Hauptgerät. Vor dieser Antwort darf die Anzeige keinen erfolgreichen Zustandswechsel behaupten. Neue Netzwerkaktionen auf ihren benötigten Umfang begrenzen; wiederholte oder verspätete Anfragen dürfen keine zweite oder inzwischen ungültige Änderung auslösen.
+
+Für das nächste Layout-Update ist vorgemerkt: Die voreingestellte Schriftgröße beträgt maximal **20**.
