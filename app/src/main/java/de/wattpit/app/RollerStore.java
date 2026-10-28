@@ -9,6 +9,7 @@ final class RollerStore {
     private static RollerStore instance;
     static synchronized RollerStore get(Context c){if(instance==null)instance=new RollerStore(c.getApplicationContext());return instance;}
     private final SharedPreferences prefs,plantPrefs;
+    private final RollerLedger ledger;
     private JSONObject profile,live=new JSONObject();
     private RollerEnergy.Session session=new RollerEnergy.Session();
     private final RollerEnergy.AutoCharge detector=new RollerEnergy.AutoCharge();
@@ -20,6 +21,7 @@ final class RollerStore {
     private String lastCommand="";
     private String status="Nicht verbunden";
     private RollerStore(Context c){
+        ledger=RollerLedger.get(c);
         prefs=c.getSharedPreferences("wattpit-roller",Context.MODE_PRIVATE);plantPrefs=c.getSharedPreferences("wattpit",Context.MODE_PRIVATE);
         try{profile=checked(new JSONObject(prefs.getString("profile","{}")));JSONObject s=new JSONObject(prefs.getString("session","{}"));
             session.started=s.optLong("started");session.ended=s.optLong("ended");session.observedMillis=s.optLong("observedMillis");session.gapMillis=s.optLong("gapMillis");session.batteryWh=s.optDouble("batteryWh",0);session.inputWh=s.optDouble("inputWh",0);automatic=s.optBoolean("automatic");detector.suppressed=prefs.getBoolean("autoSuppressed",false);revision=prefs.getLong("sessionRevision",0);lastCommand=prefs.getString("lastCommand","");
@@ -59,6 +61,10 @@ final class RollerStore {
             // Finite observed intervals: a lost BMS never excludes hours of ordinary demand.
             if(autoWindowTo!=lastAcceptedAt)autoWindowFrom=lastAcceptedAt;
             autoWindowTo=now;
+        }
+        if(session.active&&continuousObservation&&lastAcceptedAt>=session.started&&now-lastAcceptedAt<=RollerEnergy.MAX_GAP_MS){
+            double input=(RollerEnergy.inputWatts(Math.max(0,lastAcceptedPower),idle,efficiency)+RollerEnergy.inputWatts(Math.max(0,watts),idle,efficiency))*.5*(now-lastAcceptedAt)/3600000.0;
+            try{ledger.add(RollerLedger.source(plantPrefs),mac(),session.started,lastAcceptedAt,now,input);}catch(RuntimeException failure){plantPrefs.edit().putBoolean("rollerInputStorageError",true).apply();}
         }
         status="BMS verbunden";session.sample(now,watts,idle,efficiency);
         lastAcceptedAt=now;lastAcceptedPower=watts;continuousObservation=true;

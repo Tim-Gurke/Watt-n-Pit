@@ -41,7 +41,7 @@ public final class RollerStoreProof {
     }
 
  public static void main(String[] args)throws Exception{
-  Path root=Path.of(args[0]);Files.createDirectories(root);TestContext c=new TestContext(root);RollerStore s=RollerStore.get(c);
+  Path root=Path.of(args[0]);Files.createDirectories(root);System.setProperty("wattpit.test.database",root.resolve("history.db").toString());System.setProperty("wattpit.test.namedDatabases","true");Class.forName("org.sqlite.JDBC");TestContext c=new TestContext(root);RollerStore s=RollerStore.get(c);
   JSONObject p=RollerStore.checked(new JSONObject());p.put("mac","AA:BB:CC:DD:EE:FF");s.configure(p.toString());
   require(s.mac().equals("AA:BB:CC:DD:EE:FF"),"roller profile stored");
   boolean rejected=false;try{s.toggle(true);}catch(IllegalArgumentException e){rejected=true;}require(rejected,"no charge session without a fresh BMS");

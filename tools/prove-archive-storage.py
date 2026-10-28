@@ -23,6 +23,7 @@ out = args.output.resolve()
 out.mkdir(parents=True, exist_ok=True)
 generated = out / 'generated/de/wattpit/app'
 generated.mkdir(parents=True, exist_ok=True)
+(generated / 'SystemClock.java').write_text('package android.os; public final class SystemClock { public static long elapsedRealtime(){return System.nanoTime()/1000000;} public static long uptimeMillis(){return elapsedRealtime();} public static long elapsedRealtimeNanos(){return System.nanoTime();} }')
 (generated / 'R.java').write_text('package de.wattpit.app; public final class R { public static final class drawable { public static final int ic_bolt=1; } }')
 version=re.search(r"versionName '([^']+)'",(root/'app/build.gradle').read_text()).group(1)
 (generated / 'BuildConfig.java').write_text('package de.wattpit.app; public final class BuildConfig { public static final String VERSION_NAME='+json.dumps(version)+'; }')

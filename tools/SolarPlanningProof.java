@@ -43,6 +43,13 @@ final class SolarPlanningProof {
             JSONObject special=row(ask(planning,replies).getJSONArray("observations"),start),usage=special.getJSONObject("usage");
             check(usage.getLong("duration")==21*hour/2&&usage.getLong("excludedRollerMillis")==hour/2,"roller special use excludes exactly the half-hour charge and retains both ordinary parts of its hour");
             check(Math.abs(usage.getDouble("wh")-126)<1e-8&&Math.abs(special.getDouble("consumption")-132)<1e-8,"roller charge stays in measured totals while the learned household rate remains 12 W");
+            RollerLedger ledger=RollerLedger.get(context);long chargeFrom=start+2*hour+hour/4,chargeTo=start+2*hour+3*hour/4;
+            for(long at=chargeFrom;at<chargeTo;at+=2000)ledger.add(source.toString(),"AA:BB:CC:DD:EE:FF",chargeFrom,at,at+2000,3.0*2000/hour);
+            JSONObject adjusted=row(ask(planning,replies).getJSONArray("observations"),start),adjustedUsage=adjusted.getJSONObject("usage");
+            check(adjustedUsage.getLong("duration")==11*hour&&adjustedUsage.getLong("rollerAdjustedDuration")==hour/2&&Math.abs(adjustedUsage.getDouble("wh")-130.5)<1e-6,"time-aligned BMS charger-input estimates retain household learning during the charge at weaker confidence");
+            check(Math.abs(adjustedUsage.getDouble("rollerInputWh")-1.5)<1e-6&&Math.abs(adjusted.getDouble("consumption")-132)<1e-8,"roller input is subtracted only from learning; actual whole-plant consumption stays unchanged");
+            JSONArray input=ledger.read(source.toString(),chargeFrom,chargeTo);
+            check(RollerLedger.estimate(input,chargeFrom-1000,chargeTo)==null&&RollerLedger.estimate(input,chargeFrom,chargeTo+1000)==null&&ledger.read("different-plant",chargeFrom,chargeTo).length()==0,"missing BMS time and a different plant never supply an invented roller load deduction");
             repo.prefs.edit().putString("rollerChargeWindows",new JSONArray().put(new JSONObject().put("from",start+10*hour+hour/2).put("to",0)).toString()).commit();
             special=row(ask(planning,replies).getJSONArray("observations"),start);
             check(special.getJSONObject("usage").getLong("duration")==21*hour/2&&special.getJSONObject("usage").getLong("excludedRollerMillis")==hour/2,"an ongoing special use remains excluded through the open end of its charging window");

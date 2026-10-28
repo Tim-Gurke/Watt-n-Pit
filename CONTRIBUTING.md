@@ -32,6 +32,17 @@ Der Nutzer hat Umsetzung, Build und Veröffentlichung freigegeben. Die Diagnose 
 - Bei veränderten Gewohnheiten ein ausreichend belegtes aktuelles Profil der letzten zwei Wochen stärker gewichten. Einzelne Sondertage abfangen; saisonale Erfahrungen getrennt erhalten. Lerndaten außerhalb des 400-Tage-Fensters nicht mehr verwenden, ohne den Messverlauf zu löschen.
 - Die G5-Layoutübernahme war **einmalig**. Ab jetzt bestehende Layouts jedes Geräts immer erhalten, auch ohne den früheren Migrationsmarker oder beim Überspringen älterer Releases. Das umfasst Anordnung, Größen und Gestaltung beider Ansichten. Neue Kacheln nur an freier Stelle ergänzen; kein automatischer Layoutwechsel beim Update.
 
-## Roller-BMS: Geräteaufteilung (offen)
+## Roller-BMS: Geräteaufteilung
 
 Auf der Zentrale **G5** läuft nur Watt’n’Pit; **ScootPit läuft auf dem S20**. Die vorhandene lokale BMS-Übergabe zwischen beiden Apps auf demselben Telefon deckt das nicht ab. Eine automatische Übergabe G5 → Fahrhandy S20 → G5 fehlt noch und gehört nicht zur Anzeigekorrektur in 1.6.4. Die Solaraufzeichnung soll bei einer späteren BMS-Übergabe weiterlaufen.
+
+## Freigegebener Umfang für 1.6.6 und ScootPit 1.6.14
+
+Der Nutzer hat die zusammengefasste Umsetzung, Builds und Veröffentlichung **beider Apps** am 28.10.2026 freigegeben. Geräteaufteilung bleibt G5 als Zentrale, S20 als Fahrhandy/Hotspot. Keine zusätzliche Übergabetaste: der vorhandene ausdrückliche Einschaltwunsch in ScootPit fordert automatisch die BMS-Verbindung über das lokal gekoppelte Watt’n’Pit an. Solaraufzeichnung dabei unverändert weiterführen.
+
+- Lastausgang ausschließlich durch ausdrücklichen Nutzerbefehl in ScootPit schalten; die Übergabe selbst liest nur. Wartende Einschaltwünsche verfallen und werden nie nach Neustart oder Abbruch nachgeholt.
+- Fahrtpausen und Sperren unterwegs behalten die Zuständigkeit des Fahrhandys. Für reguläre Rückgabe stabile Erreichbarkeit, beendete Fahrt und frische Bestätigung der Sperre verlangen. Bereits gesperrt genügt. Vor bestätigter Freigabe keine konkurrierende neue Verbindung starten; Erfolg erst durch frische Daten bestätigen.
+- Ausfallende Reservierungen begrenzen, verspätete/duplizierte Aktionen und frühere Dienstprozesse abweisen; Besitzer, Sperrstatus und Verlauf verständlich zeigen. Eine fehlende Zentrale darf das direkte Schalten unterwegs nicht blockieren.
+- Roller-Ladeanteile nur bei passender endlicher BMS-Abdeckung und eingefrorenem Verlustprofil vom Verbrauchslernen abziehen. Rohwerte und tatsächliche Gesamtsummen erhalten. Geschätzte Anteile schwächer gewichten, Empfangslücken niemals ergänzen.
+- Feste Messung nur vorsichtig als mobile Modellreferenz verwenden. Standortbezogene Korrekturen von begrenzter allgemeiner Anlagenerfahrung trennen; Schatten und aktuelle Reglerbegrenzung nicht blind übertragen. Mobile Energie bleibt eine Schätzung. Verlustfaktoren pro Kreis zulassen.
+- Gerätelayouts erhalten, neue Kacheln verschiebbar, Standardschrift höchstens 20. Tatsächliche Hardware-/Bluetooth-Tests nicht aus Softwareprüfungen behaupten.

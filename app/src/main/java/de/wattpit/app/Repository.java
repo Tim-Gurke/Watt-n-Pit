@@ -118,8 +118,9 @@ final class Repository {
     JSONArray automaticArchiveDevices()throws JSONException{
         return automaticArchiveDevices(false);
     }
-    JSONArray automaticArchiveDevices(boolean retriesOnly)throws JSONException{
-        JSONArray due=new JSONArray(),all=new JSONArray(prefs.getString("devices","[]"));long now=System.currentTimeMillis();
+    JSONArray automaticArchiveDevices(boolean retriesOnly)throws JSONException{return automaticArchiveDevices(retriesOnly,System.currentTimeMillis());}
+    JSONArray automaticArchiveDevices(boolean retriesOnly,long now)throws JSONException{
+        JSONArray due=new JSONArray(),all=new JSONArray(prefs.getString("devices","[]"));
         for(int i=0;i<all.length();i++){JSONObject cfg=all.getJSONObject(i);String mac=cfg.getString("mac");
             long next=prefs.getLong("archiveNext."+mac,0);
             if((retriesOnly&&(!prefs.getBoolean("archivePending."+mac,false)||!archiveReceptionRecovered(mac,now)))||!ArchiveSchedule.automaticDue(next,now))continue;
@@ -292,6 +293,7 @@ final class Repository {
         }
         SolarEquipment setup=new SolarEquipment(groups);JSONArray clean=new JSONArray();
         for(SolarEquipment.Group g:setup.groups)clean.put(new JSONObject().put("id",g.id).put("label",g.label).put("count",g.count).put("watts",g.watts).put("placement",g.placement).put("controller",g.controller).put("measurement",g.measurement).put("tilt",g.tilt==null?JSONObject.NULL:g.tilt).put("defaultActive",g.defaultActive));
+        for(int i=0;i<rows.length();i++)if(rows.getJSONObject(i).has("yieldFactor")){double factor=rows.getJSONObject(i).getDouble("yieldFactor");if(!Double.isFinite(factor)||factor<.1||factor>1)throw new IllegalArgumentException("Ertragsfaktor muss zwischen 0,1 und 1 liegen.");clean.getJSONObject(i).put("yieldFactor",factor);}
         return new JSONObject().put("version",1).put("groups",clean).put("ratedWatts",setup.ratedWatts());
     }
     synchronized void removeDevice(String mac) throws Exception {

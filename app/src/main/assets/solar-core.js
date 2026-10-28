@@ -39,21 +39,35 @@
   function part(hour){return hour<11?0:hour<16?1:2;}
   function setupKey(equipment,plan,place={},source=''){
     if(!finite(place.latitude)||!finite(place.longitude))return '';
-    const text=JSON.stringify([source,place.latitude.toFixed(3),place.longitude.toFixed(3),(equipment.groups||[]).map(g=>[g.id,g.count,g.watts,g.tilt,g.measurement,g.placement,plan.groups[g.id]?.active,plan.groups[g.id]?.azimuth,plan.groups[g.id]?.shade]).sort((a,b)=>a[0].localeCompare(b[0]))]);
+    const text=JSON.stringify([source,place.latitude.toFixed(3),place.longitude.toFixed(3),(equipment.groups||[]).map(g=>[g.id,g.count,g.watts,g.tilt,g.measurement,g.placement,plan.groups[g.id]?.active,plan.groups[g.id]?.azimuth,plan.groups[g.id]?.shade,...(g.yieldFactor==null?[]:[g.yieldFactor,g.controller||''])]).sort((a,b)=>a[0].localeCompare(b[0]))]);
     let a=2166136261,b=3339675911;for(let i=0;i<text.length;i++){a=Math.imul(a^text.charCodeAt(i),16777619);b=Math.imul(b^text.charCodeAt(i),2246822519);}return 'k-'+(a>>>0).toString(16).padStart(8,'0')+(b>>>0).toString(16).padStart(8,'0');
   }
   function calibrationKey(equipment,plan,place={},source=''){return setupKey({...equipment,groups:(equipment.groups||[]).filter(g=>g.measurement==='solar')},plan,place,source);}
   function median(values){const a=values.filter(finite).sort((a,b)=>a-b);return a.length?a.length%2?a[(a.length-1)/2]:(a[a.length/2-1]+a[a.length/2])/2:null;}
-  function calibration(observations=[],forecasts=[],key=''){
-    const output=PARTS.map(()=>({factor:1,days:0,spread:.3}));if(!key)return output;
+  function systemKey(equipment,source=''){
+    const groups=(equipment.groups||[]).filter(g=>g.measurement==='solar').map(g=>({...g,tilt:0,controller:String(g.controller||'')}));
+    // The controller and explicit loss factor belong to the hardware identity too.
+    const hardware={...equipment,groups:groups.map(g=>({...g,id:g.id+'|'+g.controller+'|'+(g.yieldFactor??.8)}))};
+    const settings={groups:Object.fromEntries(hardware.groups.map(g=>[g.id,{active:true,azimuth:180,shade:[0,0,0]}]))};
+    return setupKey(hardware,settings,{latitude:0,longitude:0},source);
+  }
+  function calibration(observations=[],forecasts=[],key='',hardware='',now=Date.now()){
+    const output=PARTS.map(()=>({factor:1,days:0,spread:.3,basis:'model',mobileFactor:1,mobileDays:0}));if(!key)return output;
     const predictions=new Map();
-    for(const f of forecasts){if(f.key!==key||!finite(f.wh)||f.wh<20||!finite(f.issued)||f.issued>f.from-12*HOUR||f.issued<f.from-3*DAY)continue;const id=f.from+':'+f.to,old=predictions.get(id);if(!old||f.issued<old.issued)predictions.set(id,f);}
+    for(const f of forecasts){if(!finite(f.wh)||f.wh<20||!finite(f.issued)||f.issued>f.from-12*HOUR||f.issued<f.from-3*DAY)continue;const id=f.key+':'+f.from+':'+f.to,old=predictions.get(id);if(!old||f.issued<old.issued)predictions.set(id,f);}
     for(let slot=0;slot<3;slot++){
-      const ratios=[],days=new Set();
-      for(const o of observations){const f=predictions.get(o.from+':'+o.to),eligible=o.learningVersion===2?o.solarEligible&&finite(o.solarCoverage)&&o.solarCoverage>=.98:o.mobileFree&&[o.coverage,o.solarCoverage,o.bulkCoverage].every(x=>finite(x)&&x>=.98);if((o.solarKey||o.key)!==key||o.slot!==slot||!f||!eligible||!finite(o.solar)||o.solar<0)continue;const ratio=o.solar/f.wh;if(ratio<.15||ratio>2)continue;ratios.push(ratio);days.add(o.day);}
-      if(days.size<3)continue;
-      const center=median(ratios),weight=Math.min(1,days.size/10),deviation=median(ratios.map(x=>Math.abs(x-center)));
-      output[slot]={factor:clamp(1+(center-1)*weight,.5,1.5),days:days.size,spread:clamp((deviation||0)*1.5,.15,.6)};
+      const local=[],portable=[],reference=[],days=new Set(),portableDays=new Set(),referenceDays=new Set();
+      for(const o of observations){
+        const actualKey=o.solarKey||o.key,f=predictions.get(actualKey+':'+o.from+':'+o.to),eligible=o.learningVersion===2?o.solarEligible&&finite(o.solarCoverage)&&o.solarCoverage>=.98:o.mobileFree&&[o.coverage,o.solarCoverage,o.bulkCoverage].every(x=>finite(x)&&x>=.98);
+        if(o.slot!==slot||!f||!eligible||!finite(o.solar)||o.solar<0)continue;const ratio=o.solar/f.wh;if(ratio<.15||ratio>2)continue;
+        if(actualKey===key){local.push(ratio);days.add(o.day);if(o.portableEligible){reference.push(ratio);referenceDays.add(o.day);}}
+        if(hardware&&o.systemKey===hardware&&f.systemKey===hardware&&o.portableEligible&&finite(o.to)&&o.to<=now&&now-o.to<=180*DAY){portable.push(ratio);portableDays.add(o.day);}
+      }
+      let result=output[slot];
+      if(days.size>=3){const center=median(local),weight=Math.min(1,days.size/10),deviation=median(local.map(x=>Math.abs(x-center)));result={...result,factor:clamp(1+(center-1)*weight,.5,1.5),days:days.size,spread:clamp((deviation||0)*1.5,.15,.6),basis:'site'};}
+      else if(portableDays.size>=5){const center=median(portable),weight=Math.min(.5,portableDays.size/20);result={...result,factor:clamp(1+(center-1)*weight,.75,1.25),days:portableDays.size,spread:.4,basis:'equipment'};}
+      if(referenceDays.size>=3){result.mobileFactor=clamp(1+(median(reference)-1)*Math.min(.5,referenceDays.size/20),.8,1.2);result.mobileDays=referenceDays.size;}
+      output[slot]=result;
     }return output;
   }
   function seasonPosition(day){const d=new Date(day+'T12:00:00Z');if(!Number.isFinite(+d))return null;return (Date.UTC(2000,d.getUTCMonth(),d.getUTCDate())-Date.UTC(2000,0,1))/DAY;}
@@ -78,7 +92,7 @@
       const reconstructedWh=o.usage?.reconstructedWh??0,reconstructedSplit=split&&finite(reconstructedWh)&&reconstructedWh>=0&&reconstructedWh<=estimatedWh+1e-8&&(reconstructed!==0||reconstructedWh===0)&&(reconstructed!==estimated||Math.abs(reconstructedWh-estimatedWh)<1e-8);
       const rate=reconstructedSplit?(wh-.6*Math.min(wh,estimatedWh)-.2*Math.min(estimatedWh,reconstructedWh))/effectiveHours:split?(wh-.6*Math.min(wh,estimatedWh))/(hours-.6*estimatedHours):wh/hours;
       const weight=(.08+.92*season)*Math.exp(-age/240)*effectiveHours;
-      samples.push({day:o.day,slot:o.slot,rate,hours,estimated:estimatedHours,reconstructed:reconstructedHours,effectiveHours,season,weight,age});
+      samples.push({day:o.day,slot:o.slot,rate,hours,estimated:estimatedHours,reconstructed:reconstructedHours,roller:(o.usage?.rollerAdjustedDuration||0)/HOUR,effectiveHours,season,weight,age});
     }
     const accepted=rows=>{const days=new Map();for(const x of rows){const d=days.get(x.day)||{sum:0,weight:0};d.sum+=x.rate*x.weight;d.weight+=x.weight;days.set(x.day,d);}if(days.size<7)return rows;const rates=new Map([...days].map(([day,x])=>[day,x.sum/x.weight])),typical=median([...rates.values()]);return rows.filter(x=>typical===0?rates.get(x.day)===0:rates.get(x.day)<=typical*3);};
     const average=rows=>{if(!rows.length)return null;const clean=accepted(rows),weight=clean.reduce((s,x)=>s+x.weight,0);return weight?clean.reduce((s,x)=>s+x.rate*x.weight,0)/weight:null;};
@@ -97,8 +111,8 @@
     const parts=rates.map((x,i)=>(x??fallback)===null?null:(x??fallback)*nominal[i]),hours=samples.reduce((s,x)=>s+x.hours,0),estimatedHours=samples.reduce((s,x)=>s+x.estimated,0),usedDays=new Set();
     const slotStats=nominal.map((nominalHours,slot)=>{
       const recent=recentProfiles[slot],rows=[...new Set([...accepted(samples.filter(x=>x.slot===slot)),...recent.rows])],byDay=new Map();
-      let hours=0,estimatedHours=0,reconstructedHours=0,effectiveHours=0;
-      for(const x of rows){hours+=x.hours;estimatedHours+=x.estimated;reconstructedHours+=x.reconstructed;effectiveHours+=x.effectiveHours;usedDays.add(x.day);const d=byDay.get(x.day)||{hours:0,estimated:0,reconstructed:0,season:x.season};d.hours+=x.hours;d.estimated+=x.estimated;d.reconstructed+=x.reconstructed;byDay.set(x.day,d);}
+      let hours=0,estimatedHours=0,reconstructedHours=0,rollerAdjustedHours=0,effectiveHours=0;
+      for(const x of rows){hours+=x.hours;estimatedHours+=x.estimated;rollerAdjustedHours+=x.roller||0;reconstructedHours+=x.reconstructed;effectiveHours+=x.effectiveHours;usedDays.add(x.day);const d=byDay.get(x.day)||{hours:0,estimated:0,reconstructed:0,season:x.season};d.hours+=x.hours;d.estimated+=x.estimated;d.reconstructed+=x.reconstructed;byDay.set(x.day,d);}
       const days=byDay.size,comparableDays=[...byDay.values()].reduce((s,x)=>s+x.season*(1-.6*x.estimated/x.hours-.2*x.reconstructed/x.hours),0),extrapolated=rates[slot]===null;
       const provisional=extrapolated||days<3||effectiveHours<nominalHours||comparableDays<2.5;
       let uncertainty=extrapolated?.8:Math.max(provisional?.5:.25,days<3?.8-.15*(days-1):0,hours?estimatedHours/hours*.6:0,hours?reconstructedHours/hours*.8:0);
@@ -107,7 +121,7 @@
       if(pending)parts[slot]=null;
       const rejected={};for(const o of observations||[])if(o.slot===slot&&finite(o.from)&&o.from<=now&&now-o.from<=400*DAY)for(const [reason,millis] of Object.entries(o.usage?.rejected||{}))if(finite(millis)&&millis>0)rejected[reason]=(rejected[reason]||0)+millis/HOUR;
       const outlierHours=samples.filter(x=>x.slot===slot).reduce((s,x)=>s+x.hours,0)-hours;if(outlierHours>1e-8)rejected.outlier=outlierHours;
-      return {slot,hours,estimatedHours,reconstructedHours,measuredHours:hours-estimatedHours,effectiveHours,days,comparableDays,extrapolated,provisional,uncertainty,pending,candidateWh,rejected,recentDays:recent.days,recentInfluence:recent.influence};
+      return {slot,hours,estimatedHours,reconstructedHours,rollerAdjustedHours,measuredHours:hours-estimatedHours,effectiveHours,days,comparableDays,extrapolated,provisional,uncertainty,pending,candidateWh,rejected,recentDays:recent.days,recentInfluence:recent.influence};
     });
     const days=usedDays.size,provisional=days<5||slotStats.some(x=>x.provisional);
     const pendingSlots=slotStats.filter(x=>x.pending).map(x=>x.slot);
@@ -118,7 +132,7 @@
     return day.code??null;
   }
   function forecast(weather,equipment,plan,knowledge={},now=Date.now()){
-    const today=stamp(now,weather.timezone)?.day,key=calibrationKey(equipment,plan,weather.place,knowledge.source||''),corrections=calibration(knowledge.observations,knowledge.forecasts,key),out=[];
+    const today=stamp(now,weather.timezone)?.day,key=calibrationKey(equipment,plan,weather.place,knowledge.source||''),corrections=calibration(knowledge.observations,knowledge.forecasts,key,systemKey(equipment,knowledge.source||''),now),out=[];
     const active=(equipment.groups||[]).filter(g=>plan.groups[g.id]?.active),mapped=new Map();
     for(const series of weather.solar||[])mapped.set(series.geometry,new Map((series.values||[]).map(p=>[p.t,p.v])));
     const byDay=new Map();for(const h of weather.hours||[]){const local=stamp(h.t-HOUR/2,weather.timezone);if(!local)continue;const list=byDay.get(local.day)||[];list.push({t:h.t,slot:part(local.hour)});byDay.set(local.day,list);}
@@ -136,7 +150,7 @@
         if(!geom){complete=false;if(measured)measuredComplete=false;add('direction',g);continue;}
         if(!series){complete=false;if(measured)measuredComplete=false;add('weather');continue;}let groupHours=0;
         if(!validWindows||counts.get(d.day)!==1){complete=false;add('time');}
-        for(const {t,slot} of byDay.get(d.day)||[]){const value=series.get(t);if(!finite(value)||value<0){complete=false;if(measured)measuredComplete=false;continue;}groupHours++;const shade=setting.shade[slot];unknownShade=unknownShade||shade===null;const wh=g.count*g.watts*value/1000*.8*[1,.8,.55,.25][shade??0],isMobile=g.placement==='mobile',factor=measured?corrections[slot].factor:1;
+        for(const {t,slot} of byDay.get(d.day)||[]){const value=series.get(t);if(!finite(value)||value<0){complete=false;if(measured)measuredComplete=false;continue;}groupHours++;const shade=setting.shade[slot];unknownShade=unknownShade||shade===null;const wh=g.count*g.watts*value/1000*(g.yieldFactor??.8)*[1,.8,.55,.25][shade??0],isMobile=g.placement==='mobile',referenceAllowed=active.filter(x=>x.measurement==='solar').every(x=>plan.groups[x.id]?.shade?.[slot]===0),factor=measured?corrections[slot].factor:referenceAllowed?corrections[slot].mobileFactor:1;
           bins[slot][isMobile?'mobile':'fixed']+=wh*factor;if(measured)bins[slot].raw+=wh;
           bins[slot].remaining+=wh*factor*clamp((t-now)/HOUR,0,1);
           timeline.get(t).wh+=wh*factor;
@@ -147,7 +161,7 @@
       const fixed=complete?bins.reduce((a,b)=>a+b.fixed,0):null,mobile=complete?bins.reduce((a,b)=>a+b.mobile,0):null,total=fixed===null?null:fixed+mobile,baseline=consumption(plan,knowledge.observations,d.day,now);
       const usageHours=validWindows?windows.map(w=>(w.to-w.from)/HOUR):[11,5,8],usage={...baseline,hours:usageHours,parts:baseline.parts.map((x,i)=>x===null?null:x*usageHours[i]/[11,5,8][i]),slotStats:baseline.slotStats?.map((s,i)=>({...s,candidateWh:s.candidateWh===null?null:s.candidateWh*usageHours[i]/[11,5,8][i]}))};usage.wh=baseline.wh===null?null:usage.parts.reduce((a,b)=>a+b,0);
       const spread=clamp(Math.max(...corrections.map(x=>x.spread))+.025*index+(unknownShade?.2:0),.2,.8);
-      out.push({...d,code:sunshineCode(d),index,complete,measuredComplete,issues,unknownShade,fixed,mobile,total,low:total===null?null:total*(1-spread),high:total===null?null:total*(1+spread),spread,timeline:[...timeline.values()],parts:bins,usage,balance:total===null||usage.wh===null?null:total-usage.wh,key,learningDays:Math.min(...corrections.map(x=>x.days))});
+      out.push({...d,code:sunshineCode(d),index,complete,measuredComplete,issues,unknownShade,fixed,mobile,total,low:total===null?null:total*(1-spread),high:total===null?null:total*(1+spread),spread,timeline:[...timeline.values()],parts:bins,usage,balance:total===null||usage.wh===null?null:total-usage.wh,key,calibration:corrections.map((x,i)=>({...x,mobileApplied:active.filter(g=>g.measurement==='solar').every(g=>plan.groups[g.id]?.shade?.[i]===0)&&x.mobileDays>=3})),learningDays:Math.min(...corrections.map(x=>x.days))});
     }return out;
   }
   function nextDay(day){const t=Date.parse(day+'T12:00:00Z');return finite(t)?new Date(t+DAY).toISOString().slice(0,10):'';}
@@ -181,7 +195,7 @@
   function trainingRows(weather,equipment,plan,days,source=''){
     const key=calibrationKey(equipment,plan,weather.place,source),groups=(equipment.groups||[]).filter(g=>plan.groups[g.id]?.active&&g.measurement==='solar');
     if(!groups.length||groups.some(g=>!geometry(g,plan.groups[g.id])))return [];
-    const rows=[];for(const d of days){if(!d.measuredComplete)continue;for(let slot=0;slot<3;slot++){const bounds=(weather.windows||[]).find(w=>w.day===d.day&&w.slot===slot);if(bounds&&bounds.from>weather.updated)rows.push({key,from:bounds.from,to:bounds.to,issued:weather.updated,wh:d.parts[slot].raw});}}return rows;
+    const rows=[];for(const d of days){if(!d.measuredComplete)continue;for(let slot=0;slot<3;slot++){const bounds=(weather.windows||[]).find(w=>w.day===d.day&&w.slot===slot);if(bounds&&bounds.from>weather.updated)rows.push({key,systemKey:systemKey(equipment,source),from:bounds.from,to:bounds.to,issued:weather.updated,wh:d.parts[slot].raw});}}return rows;
   }
-  return {HOUR,DAY,DIRECTIONS,PARTS,bearing,direction,panelHeading,geometry,normalize,newSite,stamp,part,setupKey,calibrationKey,median,seasonWeights,consumption,calibration,sunshineCode,forecast,batteryForecast,trainingRows};
+  return {HOUR,DAY,DIRECTIONS,PARTS,bearing,direction,panelHeading,geometry,normalize,newSite,stamp,part,setupKey,calibrationKey,systemKey,median,seasonWeights,consumption,calibration,sunshineCode,forecast,batteryForecast,trainingRows};
 });

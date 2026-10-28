@@ -32,6 +32,7 @@
         <service android:name=".ArchiveService" android:exported="false" android:foregroundServiceType="connectedDevice|location" />
         <service android:name=".MonitorService" android:exported="false" android:foregroundServiceType="connectedDevice|location" />
         <service android:name=".LanService" android:exported="false" android:foregroundServiceType="connectedDevice" />
+        <provider android:name=".RollerLinkProvider" android:authorities="de.wattpit.app.roller-link" android:exported="true" android:grantUriPermissions="false" />
         <activity android:name="com.journeyapps.barcodescanner.CaptureActivity" android:exported="false" android:screenOrientation="fullSensor" tools:replace="android:screenOrientation" />
         <activity android:name=".LanScanActivity" android:exported="false" android:screenOrientation="fullSensor" android:stateNotNeeded="true" android:theme="@style/zxing_CaptureTheme" android:windowSoftInputMode="stateAlwaysHidden" />
     </application>

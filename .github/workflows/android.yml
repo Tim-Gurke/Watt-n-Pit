@@ -2,7 +2,7 @@ name: Android prüfen und veröffentlichen
 
 on:
   push:
-    branches: [main, 'publish/*', 'test/1.5.0*', 'test/1.6.0*', 'test/1.6.1*']
+    branches: [main, 'publish/*', 'test/1.5.0*', 'test/1.6.0*', 'test/1.6.1*', 'test/1.6.6*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -39,8 +39,8 @@ jobs:
           python3 tools/prove-archive-delta.py --output app/build/reports/archive-delta-proof --sqlite-jar "$deps/sqlite-jdbc-3.46.1.0.jar" --slf4j-jar "$deps/slf4j-api-1.7.36.jar"
           python3 tools/prove-archive-storage.py --output app/build/reports/archive-storage-proof --android-jar "$deps/android-api35.jar" --sqlite-jar "$deps/sqlite-jdbc-3.46.1.0.jar" --slf4j-jar "$deps/slf4j-api-1.7.36.jar"
           mkdir -p "$RUNNER_TEMP/roller-proof"
-          java com.sun.tools.javac.Main -cp "$deps/android-api35.jar" -d "$RUNNER_TEMP/roller-proof" app/src/main/java/de/wattpit/app/core/BmsPacket.java app/src/main/java/de/wattpit/app/core/RollerEnergy.java app/src/main/java/de/wattpit/app/RollerStore.java tools/RollerStoreProof.java
-          java -cp "$RUNNER_TEMP/roller-proof:$deps/android-api35.jar" de.wattpit.app.RollerStoreProof "$RUNNER_TEMP/roller-preferences"
+          java com.sun.tools.javac.Main -cp "$deps/android-api35.jar" -d "$RUNNER_TEMP/roller-proof" app/src/main/java/de/wattpit/app/core/BmsPacket.java app/src/main/java/de/wattpit/app/core/RollerEnergy.java app/src/main/java/de/wattpit/app/RollerStore.java app/src/main/java/de/wattpit/app/RollerLedger.java tools/testing/android/database/Cursor.java tools/testing/android/database/sqlite/SQLiteDatabase.java tools/testing/android/database/sqlite/SQLiteOpenHelper.java tools/RollerStoreProof.java
+          java -cp "$RUNNER_TEMP/roller-proof:$deps/android-api35.jar:$deps/sqlite-jdbc-3.46.1.0.jar:$deps/slf4j-api-1.7.36.jar" de.wattpit.app.RollerStoreProof "$RUNNER_TEMP/roller-preferences"
           python3 tools/prove-archive-foreground.py --dependencies "$deps" --output app/build/reports/archive-foreground-proof --mode fixed
           python3 tools/prove-lan.py --output app/build/reports/lan-proof --android-jar "$deps/android-api35.jar" --sqlite-jar "$deps/sqlite-jdbc-3.46.1.0.jar" --slf4j-jar "$deps/slf4j-api-1.7.36.jar"
       - name: Native Abdeckung in allen Kurven prüfen

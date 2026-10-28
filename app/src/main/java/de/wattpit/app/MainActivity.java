@@ -306,7 +306,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String lanQrCode(){try{return new JSONObject().put("image",LanQr.image(lan.pairingCode())).toString();}catch(Exception e){try{return new JSONObject().put("error",e instanceof IllegalArgumentException?e.getMessage():"QR-Code konnte gerade nicht erstellt werden. Bitte erneut versuchen.").toString();}catch(Exception ignored){return "{}";}}}
         @JavascriptInterface public void scanLanCode(){runOnUiThread(()->{try{LanQr.scan(MainActivity.this);}catch(Exception e){try{call("onLanScanned",new JSONObject().put("error","Kamera konnte nicht geöffnet werden. Du kannst den Textcode einfügen."));}catch(JSONException ignored){}}});}
         @JavascriptInterface public void refreshLan(){lan.refreshNow();}
-        @JavascriptInterface public String rollerSnapshot(){if(lan.viewer())return lan.part("roller");try{return RollerStore.get(MainActivity.this).snapshot().toString();}catch(Exception e){return "{}";}}
+        @JavascriptInterface public String rollerSnapshot(){if(lan.viewer())return lan.part("roller");try{return RollerHandover.view(MainActivity.this).toString();}catch(Exception e){return "{}";}}
+        @JavascriptInterface public String rollerReconnect(){return localControl("rollerReconnect",new JSONArray());}
         @JavascriptInterface public String saveRoller(String json){return localControl("saveRoller",new JSONArray().put(json));}
         @JavascriptInterface public String rollerSession(boolean start){if(lan.viewer())return LanSync.READ_ONLY;try{RollerStore.get(MainActivity.this).toggle(start);repository.invalidateStats();solarPlanning.request();return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public void requestRollerSession(boolean start,long expectedRevision){Object plant=lan.identity();files.execute(()->{

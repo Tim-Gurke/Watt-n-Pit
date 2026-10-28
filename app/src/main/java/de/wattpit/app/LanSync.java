@@ -30,6 +30,7 @@ final class LanSync {
     private final LinkedHashMap<String,Boolean> requests=new LinkedHashMap<>();
     private volatile JSONObject config,remote=new JSONObject();
     private volatile long receivedAt,receivedElapsed,lastPlanRequest,lastCacheElapsed;
+    private volatile long rollerDiscoveryUntil;
     private volatile String error="",resolvedHost="";
     private volatile int resolvedPort;
     private volatile boolean visible,hosting;
@@ -194,6 +195,12 @@ final class LanSync {
     JSONObject query(String method,JSONArray args)throws Exception{
         if(!viewer())throw new IllegalStateException();JSONObject active=config;JSONObject result=rpc(active,method,args);if(active!=config)throw new IOException("Anlage wurde gewechselt.");return result;
     }
+    JSONObject rollerLink(String action,JSONObject data)throws Exception{
+        if(!viewer())return new JSONObject().put("available",false);
+        rollerDiscoveryUntil=SystemClock.elapsedRealtime()+30000;discover();
+        if(!data.has("operation"))data=new JSONObject(data.toString()).put("operation",SystemClock.elapsedRealtimeNanos());
+        return query("rollerLink",new JSONArray().put(action).put(data));
+    }
     JSONObject rollerSession(boolean start)throws Exception{
         JSONObject roller=remote.optJSONObject("roller");return rollerSession(start,roller==null?-1:roller.optLong("sessionRevision",-1));
     }
@@ -208,8 +215,8 @@ final class LanSync {
         List<String> hosts=new ArrayList<>();int port=target.getInt("port");
         if(target==config&&LanWire.localAddress(resolvedHost)){hosts.add(resolvedHost);if(resolvedPort>0)port=resolvedPort;}
         JSONArray listed=target.getJSONArray("addresses");for(int i=0;i<listed.length();i++)if(!hosts.contains(listed.getString(i)))hosts.add(listed.getString(i));
-        long deadline=SystemClock.elapsedRealtime()+10000;
-        boolean command=method.equals("rollerSession")||method.equals("control");
+        long deadline=SystemClock.elapsedRealtime()+(method.equals("rollerLink")?3000:10000);
+        boolean command=method.equals("rollerSession")||method.equals("control")||method.equals("rollerLink");
         for(String host:hosts){long remaining=deadline-SystemClock.elapsedRealtime();if(remaining<=0)break;if(!LanWire.localAddress(host))continue;try(Socket socket=new Socket()){
             socket.connect(new InetSocketAddress(host,port),(int)Math.min(1800,remaining));remaining=deadline-SystemClock.elapsedRealtime();if(remaining<=0)break;socket.setSoTimeout((int)Math.min(command?4000:10000,remaining));
             String nonce=LanWire.random(18);JSONObject request=new JSONObject().put("group",target.getString("id")).put("nonce",nonce).put("at",System.currentTimeMillis())
@@ -239,9 +246,10 @@ final class LanSync {
             if(!host()||!active.getString("id").equals(request.optString("group"))||!nonce.matches("[A-Za-z0-9_-]{24}")||Math.abs(System.currentTimeMillis()-request.optLong("at"))>120000)return;
             synchronized(requests){if(requests.containsKey(nonce))return;requests.put(nonce,true);if(requests.size()>512)requests.remove(requests.keySet().iterator().next());}
             JSONObject response=new JSONObject().put("nonce",nonce);try{
-                if(request.optString("method").equals("rollerSession")||request.optString("method").equals("control")||request.optString("method").equals("bundle")){synchronized(this){if(active!=config||!host())return;response.put("data",read(request.getString("method"),request.getJSONArray("args")));}}
+                if(request.optString("method").equals("rollerLink")){synchronized(this){if(active!=config||!host())return;response.put("data",RollerHandover.get(context).handle(request.optString("peer"),request.getJSONArray("args").getString(0),request.getJSONArray("args").getJSONObject(1)));}}
+                else if(request.optString("method").equals("rollerSession")||request.optString("method").equals("control")||request.optString("method").equals("bundle")){synchronized(this){if(active!=config||!host())return;response.put("data",read(request.getString("method"),request.getJSONArray("args")));}}
                 else response.put("data",read(request.getString("method"),request.getJSONArray("args")));
-            }catch(Exception e){response.put("error",(request.optString("method").equals("rollerSession")||request.optString("method").equals("control"))&&e instanceof IllegalArgumentException?e.getMessage():"Die Anfrage konnte gerade nicht abgeschlossen werden. Bitte erneut versuchen.");}
+            }catch(Exception e){response.put("error",(request.optString("method").equals("rollerSession")||request.optString("method").equals("control")||request.optString("method").equals("rollerLink"))&&e instanceof IllegalArgumentException?e.getMessage():"Die Anfrage konnte gerade nicht abgeschlossen werden. Bitte erneut versuchen.");}
             if(!host()||active!=config)return;
             LanWire.write(open.getOutputStream(),key,response.toString(),LanWire.MAX_RESPONSE);
             if(peers.size()<20||peers.containsKey(request.optString("peer")))peers.put(request.optString("peer"),new JSONObject().put("name",request.optString("name").substring(0,Math.min(60,request.optString("name").length()))).put("seen",SystemClock.elapsedRealtime()));
@@ -256,7 +264,7 @@ final class LanSync {
         if(method.equals("bundle")){
             long now=System.currentTimeMillis();if(!repository.archiveBusy&&now-lastPlanRequest>30000){lastPlanRequest=now;planning.request();}
             JSONObject snapshot=repository.archiveBusy?new JSONObject(repository.backgroundSnapshot()):repository.snapshot();snapshot.remove("archiveDiagnostics");snapshot.remove("event");snapshot.remove("eventId");
-            return new JSONObject().put("snapshot",snapshot).put("setup",planning.setup()).put("planning",new JSONObject(SolarPlanning.sharedKnowledge)).put("roller",RollerStore.get(context).snapshot())
+            return new JSONObject().put("snapshot",snapshot).put("setup",planning.setup()).put("planning",new JSONObject(SolarPlanning.sharedKnowledge)).put("roller",RollerHandover.view(context))
                 .put("controlProtocol",1).put("controlRevision",currentControlRevision()).put("sync",new JSONObject(repository.syncState())).put("bonded",PlantCommands.bonded(context));
         }
         long from=args.getLong(0);if(method.equals("sunsetSoc")){
@@ -278,6 +286,7 @@ final class LanSync {
         }
     }
     synchronized void stopHost(){
+        if(host())RollerHandover.get(context).reset();
         hosting=false;if(server!=null)try{server.close();}catch(IOException ignored){}
         if(acceptor!=null)acceptor.shutdownNow();if(connections!=null)connections.shutdownNow();if(planning!=null){planning.shutdown();planning=null;}
         if(registration!=null&&nsd!=null)try{nsd.unregisterService(registration);}catch(Exception ignored){}registration=null;peers.clear();synchronized(requests){requests.clear();}
@@ -289,7 +298,7 @@ final class LanSync {
     }
     @SuppressWarnings("deprecation")
     private synchronized void discover(){
-        if(nsd==null||discovery!=null||!viewer()||!visible)return;
+        if(nsd==null||discovery!=null||!viewer()||!visible&&SystemClock.elapsedRealtime()>rollerDiscoveryUntil)return;
         discovery=new NsdManager.DiscoveryListener(){
             public void onDiscoveryStarted(String type){}public void onDiscoveryStopped(String type){}public void onStartDiscoveryFailed(String type,int code){stopDiscovery();}public void onStopDiscoveryFailed(String type,int code){}public void onServiceLost(NsdServiceInfo info){}
             public void onServiceFound(NsdServiceInfo info){if(!viewer()||!info.getServiceName().startsWith("WattPit-"+config.optString("id").substring(0,8))||!resolving.compareAndSet(false,true))return;

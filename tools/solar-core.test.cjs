@@ -212,3 +212,34 @@ test('planned roller charging is subtracted once from the remaining battery fore
  const charged=C.batteryForecast(f.days,f.w,battery,at,[{from:at,to:at+3600000,watts:138}])[0].evening;
  assert.ok(Math.abs(baseline.soc-charged.soc-13.8)<1e-8);
 });
+
+function referenceHistory(eq,p,key,count=5){
+ const hw=C.systemKey(eq,'s'),obs=[],forecasts=[];
+ for(let i=1;i<=count;i++){const o=observations(`2026-10-${String(i).padStart(2,'0')}`,100,{solar:50,solarKey:key,systemKey:hw,portableEligible:true,learningVersion:2,solarEligible:true})[1];obs.push(o);forecasts.push({key,systemKey:hw,from:o.from,to:o.to,issued:o.from-D,wh:100});}
+ return {obs,forecasts,hw};
+}
+test('hardware identity travels across site, heading and shade but changes with panel or controller losses',()=>{
+ const eq=equipment(),p=plan(eq),hw=C.systemKey(eq,'s');p.groups.roof.azimuth=90;p.groups.roof.shade=[3,3,3];assert.equal(C.systemKey(eq,'s'),hw);
+ const replacement=structuredClone(eq);replacement.groups[0].controller='Replacement MPPT';assert.notEqual(C.systemKey(replacement,'s'),hw);replacement.groups[0].controller=eq.groups[0].controller;replacement.groups[0].yieldFactor=.7;assert.notEqual(C.systemKey(replacement,'s'),hw);assert.notEqual(C.systemKey(eq,'another-plant'),hw);
+});
+test('unshaded hardware experience supplies only a bounded provisional prior at a new site',()=>{
+ const eq=equipment(),p=plan(eq),old='k-0123456789abcdef',fresh='k-fedcba9876543210',h=referenceHistory(eq,p,old);
+ assert.equal(C.calibration(h.obs.slice(0,4),h.forecasts,fresh,h.hw,now)[1].factor,1);
+ const result=C.calibration(h.obs,h.forecasts,fresh,h.hw,now)[1];assert.equal(result.basis,'equipment');assert.equal(result.days,5);assert.equal(result.factor,.875);assert.equal(result.mobileFactor,1);
+ for(const invalid of [{portableEligible:false},{solarEligible:false},{systemKey:'different'}])assert.equal(C.calibration(h.obs.map(o=>({...o,...invalid})),h.forecasts,fresh,h.hw,now)[1].factor,1);
+ assert.equal(C.calibration(h.obs,h.forecasts,fresh,h.hw,now+181*D)[1].factor,1);
+});
+test('new local comparisons replace the portable prior and mobile reference is smaller than fixed calibration',()=>{
+ const eq=equipment(),p=plan(eq),key='k-0123456789abcdef',h=referenceHistory(eq,p,key),r=C.calibration(h.obs,h.forecasts,key,h.hw,now)[1];
+ assert.equal(r.basis,'site');assert.equal(r.factor,.75);assert.equal(r.mobileFactor,.875);assert.equal(r.mobileDays,5);
+ const shaded=C.calibration(h.obs.map(o=>({...o,portableEligible:false})),h.forecasts,key,h.hw,now)[1];assert.equal(shaded.factor,.75);assert.equal(shaded.mobileFactor,1);
+});
+test('mobile reference changes only forecasted unmetered contribution and is withheld for currently shaded fixed panels',()=>{
+ const eq=equipment([{...equipment().groups[0],id:'case',count:1,placement:'mobile',measurement:'shunt'}]),p=plan(eq),w=weather();p.groups.case={active:true,azimuth:180,shade:[0,0,0]};
+ const key=C.calibrationKey(eq,p,w.place,'s'),h=referenceHistory(eq,p,key),knowledge={source:'s',observations:h.obs,forecasts:h.forecasts};
+ const base=C.forecast(w,eq,p,{},now)[0],learned=C.forecast(w,eq,p,knowledge,now)[0];assert.equal(learned.parts[1].mobile,base.parts[1].mobile*.875);assert.equal(learned.parts[1].raw,base.parts[1].raw);assert.ok(learned.calibration[1].mobileApplied);
+ p.groups.roof.shade[1]=2;const shaded=C.forecast(w,eq,p,knowledge,now)[0];assert.equal(shaded.parts[1].mobile,base.parts[1].mobile);assert.equal(shaded.calibration[1].mobileApplied,false);
+});
+test('explicit per-circuit loss factors alter modeled yield and training baselines without fabricating readings',()=>{
+ const eq=equipment(),p=plan(eq),w=weather(),before=C.forecast(w,eq,p,{},now)[0];eq.groups[0].yieldFactor=.6;const after=C.forecast(w,eq,p,{},now)[0];assert.equal(after.total,before.total*.75);assert.notEqual(C.calibrationKey(eq,p,w.place),C.calibrationKey(equipment(),p,w.place));
+});

@@ -134,6 +134,40 @@ public final class LanSyncProof {
             check(rejected&&!roller.snapshot().getJSONObject("session").getBoolean("active"),"a stale delayed start is rejected with a readable state-change explanation");
             roller.disconnected();rejected=false;try{viewer.rollerSession(true);}catch(IllegalArgumentException expected){rejected=expected.getMessage().contains("BMS");}
             check(rejected&&!roller.snapshot().getJSONObject("session").getBoolean("active"),"the host rejects a remote start without fresh BMS readings");
+            Field singleton=Repository.class.getDeclaredField("instance");singleton.setAccessible(true);singleton.set(null,source);source.running=true;
+            RollerHandover handover=RollerHandover.get(main);JSONObject link=new JSONObject().put("mac",profile.getString("mac")).put("token","01234567-89ab-cdef-0123-456789abcdef").put("epoch",1);
+            JSONObject reply=viewer.rollerLink("take",link);
+            check(!reply.getBoolean("granted")&&handover.remoteOwns()&&source.running,"a remote take reserves only the roller reader and waits for the host BLE close while solar recording stays active");
+            handover.hostSample(BmsPacket.decode(frame));check(handover.remoteOwns(),"a final in-flight host packet cannot cancel a pending handover");
+            boolean other=false;try{viewer.rollerLink("take",new JSONObject(link.toString()).put("token","11234567-89ab-cdef-0123-456789abcdef"));}catch(IllegalArgumentException expected){other=true;}
+            check(other,"a second ownership token cannot steal the active reader lease");
+            handover.hostClosed();Thread.sleep(1600);reply=viewer.rollerLink("take",link);
+            check(reply.getBoolean("granted"),"the riding phone is granted ownership only after the host close and radio settling interval");
+            link.put("frame",Base64.getEncoder().encodeToString(frame)).put("sequence",1).put("age",0);
+            viewer.rollerLink("take",link);long remoteAt=roller.snapshot().getJSONObject("live").getLong("at");
+            viewer.rollerLink("take",link);
+            check(roller.snapshot().getJSONObject("live").getLong("at")==remoteAt&&handover.snapshot().getString("phase").equals("s20"),"fresh remote BMS frames cross the real encrypted LAN once; duplicate frames cannot create energy");
+            Field since=RollerHandover.class.getDeclaredField("homeSince");since.setAccessible(true);since.setLong(handover,android.os.SystemClock.elapsedRealtime()-9000);
+            other=false;try{viewer.rollerLink("offer",new JSONObject(link.toString()).put("tripEnded",false));}catch(IllegalArgumentException expected){other=true;}
+            check(other&&handover.remoteOwns(),"a paused or ongoing ride never returns ownership merely because its output is locked");
+            byte[] unlocked=frame.clone();unlocked[24]=3;sum=0;for(int i=2;i<27;i++)sum+=unlocked[i]&255;checksum=(-sum)&65535;unlocked[27]=(byte)(checksum>>8);unlocked[28]=(byte)checksum;
+            viewer.rollerLink("take",new JSONObject(link.toString()).put("frame",Base64.getEncoder().encodeToString(unlocked)).put("sequence",2));
+            other=false;try{viewer.rollerLink("offer",new JSONObject(link.toString()).put("sequence",2).put("tripEnded",true));}catch(IllegalArgumentException expected){other=true;}
+            check(other,"return is refused until fresh BMS data actually confirms the discharge output is locked");
+            reply=viewer.rollerLink("offer",new JSONObject(link.toString()).put("sequence",3).put("tripEnded",true));
+            check(reply.getBoolean("returnRequested")&&handover.remoteOwns(),"a previously locked roller can be returned after ride end and stable home contact without another lock command");
+            viewer.rollerLink("released",link);check(handover.remoteOwns(),"return waits for confirmed rider disconnect and a settling interval");Thread.sleep(1600);
+            check(!handover.remoteOwns(),"the host can reconnect after the rider has released the link");
+            handover.hostSample(BmsPacket.decode(frame));reply=viewer.rollerLink("inspect",link);
+            check(reply.getBoolean("hostFresh")&&reply.getString("phase").equals("host")&&source.running,"only a fresh host BMS sample completes the return; solar recording remains active throughout");
+            other=false;try{viewer.rollerLink("take",new JSONObject(link.toString()).put("operation",1));}catch(IllegalArgumentException expected){other=true;}
+            check(other&&handover.snapshot().getString("phase").equals("host"),"a late authenticated take cannot undo a newer completed return");
+            viewer.rollerLink("take",new JSONObject(link.toString()).put("epoch",2).put("token","21234567-89ab-cdef-0123-456789abcdef"));
+            other=false;try{viewer.rollerLink("take",link);}catch(IllegalArgumentException expected){other=true;}
+            check(other,"a delayed request from an earlier service process cannot replace the new reader epoch");
+            Field expiry=RollerHandover.class.getDeclaredField("expires");expiry.setAccessible(true);expiry.setLong(handover,android.os.SystemClock.elapsedRealtime()-1);
+            check(!handover.remoteOwns(),"an unreachable or crashed riding app cannot leave a permanent reader reservation");
+            check(!viewer.rollerLink("inspect",new JSONObject(link.toString()).put("mac","02:00:00:00:00:01")).optBoolean("available"),"a different scooter remains independent of this plant's BMS ownership");
             TestContext rejectedContext=new TestContext(root.resolve("wrong-key"));repository(rejectedContext);wrong=sync(rejectedContext);JSONObject wrongCode=new JSONObject(invitation.toString()).put("key",LanWire.random(32));
             rejected=false;try{wrong.join("WNP1."+Base64.getUrlEncoder().withoutPadding().encodeToString(wrongCode.toString().getBytes(StandardCharsets.UTF_8)));}catch(IOException expected){rejected=true;}
             check(rejected&&!wrong.viewer(),"an invalid key cannot pair or replace the independent local data source");

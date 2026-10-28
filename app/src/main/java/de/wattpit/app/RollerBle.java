@@ -17,6 +17,7 @@ final class RollerBle {
     private final Context context;
     private final RollerStore store;
     private final ScootLink scoot;
+    private final RollerHandover handover;
     private long lastSharedAt;
     private boolean shared;
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -26,16 +27,23 @@ final class RollerBle {
     private byte[] pending=new byte[0];
     private boolean running,ready,busy;
     private long connectedAt,lastPacket;
-    RollerBle(Context c){context=c;store=RollerStore.get(c);scoot=new ScootLink(c);}
+    private long retryAt,reconnectVersion;
+    private int failures;
+    RollerBle(Context c){context=c;store=RollerStore.get(c);scoot=new ScootLink(c);handover=RollerHandover.get(c);reconnectVersion=handover.reconnectRevision();}
     void start(){if(running)return;running=true;handler.post(tick);}
-    void stop(){running=false;handler.removeCallbacksAndMessages(null);store.pause();close();scoot.release();store.status("Aufzeichnung pausiert");}
+    void stop(){running=false;handler.removeCallbacksAndMessages(null);store.pause();close();scoot.release();handover.hostClosed();store.status("Aufzeichnung pausiert");}
     private void close(){BluetoothGatt previous=gatt;gatt=null;ready=busy=false;write=null;pending=new byte[0];lastPacket=0;store.disconnected();if(previous!=null){try{previous.disconnect();previous.close();}catch(SecurityException ignored){}}}
     private final Runnable tick=new Runnable(){public void run(){
         if(!running)return;
         try{
             String mac=store.mac();if(!mac.equals(address)){close();scoot.release();lastSharedAt=0;shared=false;address=mac;}
             long now=SystemClock.elapsedRealtime();
+            if(reconnectVersion!=handover.reconnectRevision()){reconnectVersion=handover.reconnectRevision();close();scoot.release();retryAt=0;failures=0;}
             if(!mac.isEmpty()){
+                if(handover.remoteOwns()){
+                    if(gatt!=null)close();scoot.release();handover.hostClosed();
+                    store.status(handover.snapshot().optString("status"));handler.postDelayed(this,2000);return;
+                }
                 ScootLink.State remote=scoot.read(mac);
                 if(remote.failed){if(gatt!=null)close();scoot.release();store.disconnected();store.status("Lokale ScootPit-Verbindung unterbrochen · warte auf Freigabe");handler.postDelayed(this,2000);return;}
                 if(remote.supported&&remote.internal){
@@ -50,20 +58,20 @@ final class RollerBle {
                 if(remote.supported&&!scoot.acquire(mac)){if(gatt!=null)close();store.status("Warte auf Freigabe der BMS-Verbindung");handler.postDelayed(this,2000);return;}
                 BluetoothManager manager=context.getSystemService(BluetoothManager.class);BluetoothAdapter adapter=manager==null?null:manager.getAdapter();
                 if(adapter==null||!adapter.isEnabled()){close();store.status("Bluetooth ausgeschaltet");}
-                else if(gatt==null){store.status("Verbinde Roller-BMS …");connectedAt=now;gatt=adapter.getRemoteDevice(mac).connectGatt(context,false,callback,BluetoothDevice.TRANSPORT_LE);}
-                else if(now-(lastPacket>0?lastPacket:connectedAt)>20000){close();store.status("Kein BMS-Empfang · neuer Verbindungsversuch folgt");}
+                else if(gatt==null&&now>=retryAt){store.status("Verbinde Roller-BMS …");connectedAt=now;gatt=adapter.getRemoteDevice(mac).connectGatt(context,false,callback,BluetoothDevice.TRANSPORT_LE);if(gatt==null)failed("Android konnte die BMS-Verbindung nicht öffnen");}
+                else if(gatt!=null&&now-(lastPacket>0?lastPacket:connectedAt)>20000){failed("Zeitüberschreitung beim BMS-Empfang");}
                 else if(ready&&!busy){busy=true;boolean accepted;
                     if(Build.VERSION.SDK_INT>=33)accepted=gatt.writeCharacteristic(write,REQUEST,BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)==BluetoothStatusCodes.SUCCESS;
                     else{write.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);write.setValue(REQUEST);accepted=gatt.writeCharacteristic(write);}
                     if(!accepted)busy=false;
                 }
             }else store.status("Noch kein Roller-BMS ausgewählt");
-        }catch(SecurityException e){close();store.status("Bluetooth-Berechtigung fehlt");}catch(IllegalArgumentException|IllegalStateException e){close();store.status("BMS-Verbindung nicht verfügbar");}
+        }catch(SecurityException e){failed("Bluetooth-Berechtigung fehlt");}catch(Exception e){failed("BMS-Verbindung nicht verfügbar");}
         handler.postDelayed(this,2000);
     }};
-    private void failed(String message){close();store.status(message);}
+    private void failed(String message){close();long delay=Math.min(30000,2000L<<Math.min(4,failures++));retryAt=SystemClock.elapsedRealtime()+delay;store.status(message+" · neuer Versuch in "+delay/1000+" s");}
     private final BluetoothGattCallback callback=new BluetoothGattCallback(){
-        @Override public void onConnectionStateChange(BluetoothGatt g,int status,int state){handler.post(()->{if(g!=gatt||!running)return;if(status==BluetoothGatt.GATT_SUCCESS&&state==BluetoothProfile.STATE_CONNECTED){if(!g.discoverServices())failed("BMS-Dienstsuche fehlgeschlagen");}else if(state==BluetoothProfile.STATE_DISCONNECTED||status!=BluetoothGatt.GATT_SUCCESS)failed("BMS getrennt · neuer Versuch folgt");});}
+        @Override public void onConnectionStateChange(BluetoothGatt g,int status,int state){handler.post(()->{if(g!=gatt||!running)return;if(status==BluetoothGatt.GATT_SUCCESS&&state==BluetoothProfile.STATE_CONNECTED){store.status("Roller-BMS verbunden · Dienste werden gesucht");if(!g.discoverServices())failed("BMS-Dienstsuche fehlgeschlagen");}else if(state==BluetoothProfile.STATE_DISCONNECTED||status!=BluetoothGatt.GATT_SUCCESS)failed("BMS getrennt · Bluetooth-Status "+status);});}
         @Override public void onServicesDiscovered(BluetoothGatt g,int status){handler.post(()->{
             if(g!=gatt||!running)return;
             BluetoothGattService service=status==BluetoothGatt.GATT_SUCCESS?g.getService(SERVICE):null;
@@ -86,7 +94,7 @@ final class RollerBle {
         byte[] all=Arrays.copyOf(pending,pending.length+value.length);System.arraycopy(value,0,all,pending.length,value.length);int cursor=0;
         while(cursor+4<=all.length){if((all[cursor]&255)!=0xdd){cursor++;continue;}int size=(all[cursor+3]&255)+7;if(cursor+size>all.length)break;
             BmsPacket packet=BmsPacket.decode(Arrays.copyOfRange(all,cursor,cursor+size));
-            if(packet!=null){lastPacket=SystemClock.elapsedRealtime();store.accept(packet,System.currentTimeMillis());cursor+=size;}else cursor++;
+                if(packet!=null){lastPacket=SystemClock.elapsedRealtime();failures=0;retryAt=0;store.accept(packet,System.currentTimeMillis());handover.hostSample(packet);cursor+=size;}else cursor++;
         }
         pending=Arrays.copyOfRange(all,cursor,all.length);
     });}
