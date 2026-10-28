@@ -7,3 +7,7 @@
 #weatherNote[role=button]{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}#weatherNote[role=button]:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
 
 .solar-table td small{display:block;white-space:normal;font-size:10px;line-height:1.4;margin-top:4px;max-width:12rem}
+
+.solar-learning-exclusions{margin:12px 0}.solar-learning-exclusions>div{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border)}.solar-learning-exclusions dt{overflow-wrap:anywhere}.solar-learning-exclusions dd{margin:0;white-space:nowrap}
+
+.solar-learning-table{table-layout:fixed}.solar-learning-table th,.solar-learning-table td{white-space:normal;overflow-wrap:anywhere;padding:10px 4px;font-size:11px}.solar-learning-table th:first-child{width:25%}.solar-learning-table th:nth-child(2){width:42%}.solar-learning-table th:nth-child(3){width:33%}

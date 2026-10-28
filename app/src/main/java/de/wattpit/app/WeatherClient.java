@@ -61,9 +61,10 @@ final class WeatherClient {
         NETWORK.execute(()->{
             try {
                 JSONObject cached=new JSONObject(repository.prefs.getString("weatherCache","{}"));
-                if(!force&&cached.optInt("version")==5&&signature.equals(cached.optString("signature"))&&System.currentTimeMillis()-cached.optLong("updated")<6*3600000L)return;
+                int pastDays=pastDays(repository.prefs.getLong("planningWeatherSince",0),System.currentTimeMillis(),cached.optString("timezone","Europe/Berlin"));
+                if(!force&&cached.optInt("version")==5&&cached.optInt("pastDays",7)>=pastDays&&signature.equals(cached.optString("signature"))&&System.currentTimeMillis()-cached.optLong("updated")<6*3600000L)return;
                 JSONObject p=new JSONObject(place);long updated=System.currentTimeMillis();
-                String base="https://api.open-meteo.com/v1/forecast?latitude="+p.getDouble("latitude")+"&longitude="+p.getDouble("longitude")+"&forecast_days=15&past_days=7&timeformat=unixtime&timezone=auto";
+                String base="https://api.open-meteo.com/v1/forecast?latitude="+p.getDouble("latitude")+"&longitude="+p.getDouble("longitude")+"&forecast_days=15&past_days="+pastDays+"&timeformat=unixtime&timezone=auto";
                 JSONObject result=get(base+"&daily=weather_code,sunshine_duration,sunrise,sunset,shortwave_radiation_sum&hourly=shortwave_radiation,sunshine_duration");
                 JSONObject cache=timeline(result);JSONArray series=new JSONArray();
                 JSONObject eq=new JSONObject(equipment),plan=SolarPlanning.checked(new JSONObject(setup),eq);JSONArray groups=eq.getJSONArray("groups");java.util.Set<String> requested=new java.util.LinkedHashSet<>();boolean partial=false;
@@ -76,11 +77,16 @@ final class WeatherClient {
                         String[] angles=geometry.split(":");series.put(irradiance(geometry,get(base+"&hourly=global_tilted_irradiance&tilt="+angles[0]+"&azimuth="+angles[1])));
                     }catch(Exception e){partial=true;}
                 }
-                cache.put("signature",signature).put("place",p).put("updated",updated).put("solar",series).put("partial",partial);
+                cache.put("signature",signature).put("place",p).put("updated",updated).put("solar",series).put("partial",partial).put("pastDays",pastDays);
                 if(place.equals(repository.prefs.getString("weatherPlace",""))&&equipment.equals(repository.prefs.getString("equipment-v1","{\"version\":1,\"groups\":[]}"))&&setup.equals(repository.prefs.getString("solar-setup-v1","{}")))repository.prefs.edit().putString("weatherCache",cache.toString()).remove("weatherError").apply();
             }catch(Exception e){if(place.equals(repository.prefs.getString("weatherPlace","")))repository.prefs.edit().putString("weatherError","Solarvorschau gerade nicht erreichbar. Gespeicherte Daten bleiben verfügbar.").apply();}
             finally {BUSY.set(false);if(!place.equals(repository.prefs.getString("weatherPlace",""))||!equipment.equals(repository.prefs.getString("equipment-v1","{\"version\":1,\"groups\":[]}"))||!setup.equals(repository.prefs.getString("solar-setup-v1","{}")))refresh(repository,false);}
         });
+    }
+    static int pastDays(long since,long now,String timezone){
+        if(since<=0||since>now)return 7;java.time.ZoneId zone;try{zone=java.time.ZoneId.of(timezone);}catch(Exception e){zone=java.time.ZoneId.of("Europe/Berlin");}
+        long days=java.time.temporal.ChronoUnit.DAYS.between(java.time.Instant.ofEpochMilli(since).atZone(zone).toLocalDate(),java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate());
+        return (int)Math.max(7,Math.min(92,days+1));
     }
     static JSONObject irradiance(String geometry,JSONObject result)throws Exception{
         JSONObject tilted=result.getJSONObject("hourly");JSONArray t=tilted.getJSONArray("time"),v=tilted.getJSONArray("global_tilted_irradiance"),values=new JSONArray();

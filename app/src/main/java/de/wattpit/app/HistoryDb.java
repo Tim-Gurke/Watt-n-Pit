@@ -390,7 +390,7 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
     private static JSONObject planningSegment(long from,long to,long rise,long set,List<SampleTimeline.Interval> solar,List<SampleTimeline.Interval> battery,List<SampleTimeline.Interval> states,List<SampleTimeline.Interval> volts,List<SampleTimeline.Interval> amps,List<SampleTimeline.Interval> errors)throws Exception{
         JSONObject segment=planningFlow(from,to,rise,set,solar,battery,states);
-        planningRange(segment,"voltage",volts,from,to);planningRange(segment,"current",amps,from,to);planningRange(segment,"error",errors,from,to);return segment;
+        planningRange(segment,"voltage",volts,from,to);planningRange(segment,"current",amps,from,to);planningRange(segment,"error",errors,from,to);planningRange(segment,"state",states,from,to);return segment;
     }
     private static JSONObject planningFlow(long a,long b,long rise,long set,List<SampleTimeline.Interval> solar,List<SampleTimeline.Interval> battery,List<SampleTimeline.Interval> states)throws Exception{
         long sunFrom=Math.max(a,Math.min(b,rise)),sunTo=Math.max(sunFrom,Math.min(b,set));

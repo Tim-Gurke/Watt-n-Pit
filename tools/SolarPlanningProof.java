@@ -65,6 +65,10 @@ final class SolarPlanningProof {
             check(diagnostic.getString("format").equals("Watt-n-Pit-Diagnose")&&diagnostic.getJSONArray("observations").length()>0&&diagnostic.getJSONArray("contexts").length()>0,"diagnostic snapshot retains the actual learning observations and setup timeline");
             check(diagnostic.getJSONArray("forecasts").getJSONObject(0).getDouble("wh")==321&&diagnostic.getJSONArray("devices").length()==2&&diagnostic.has("weather")&&diagnostic.has("history"),"diagnostic snapshot includes original forecasts, weather, device profiles and measurement inventory");
             check(!diagnostic.toString().contains("DIAGNOSTIC-SECRET-SENTINEL"),"diagnostic snapshot never serializes arbitrary private preferences");
+            String previousOld=row(result.getJSONArray("observations"),oldStart).toString();JSONObject shortWeather=new JSONObject(weather.toString()).put("days",new JSONArray().put(weather.getJSONArray("days").getJSONObject(0)));
+            repo.prefs.edit().putString("weatherCache",shortWeather.toString()).putInt("planningEnergyVersion."+source,0).commit();
+            check(row(ask(planning,replies).getJSONArray("observations"),oldStart).toString().equals(previousOld),"an algorithm rebuild with a shorter rolling weather cache preserves an older valid observation until its weather is available");
+            repo.prefs.edit().putString("weatherCache",weather.toString()).commit();
             db.execSQL("INSERT INTO contexts(at,key,mobile_free,source) VALUES(?,?,0,?)",new Object[]{System.currentTimeMillis(),"k-fedcba9876543210",source.toString()});
             repo.db.getWritableDatabase().execSQL("UPDATE readings SET solar=600 WHERE device='planning-solar'");planning.request();result=replies.poll(20,TimeUnit.SECONDS);
             check(result!=null&&row(result.getJSONArray("observations"),start).getDouble("consumption")==132,"a changed site/setup cannot overwrite an earlier site's learned observations with current weather windows");
@@ -128,6 +132,7 @@ final class SolarPlanningProof {
         result=ask(planning,replies);mid=row(result.getJSONArray("observations"),start+11*hour);
         check(mid.getJSONObject("usage").getLong("duration")==0&&!mid.getBoolean("solarEligible"),"unknown historical settings do not imply uncurtailed mobile production");
         check(row(result.getJSONArray("observations"),start).getJSONObject("usage").getLong("duration")>=6*hour,"missing controller settings do not block measured night learning");
+        confirmedHistory(repo,planning,db,replies,start,end,source,key,solarKey,payload,weather);
         repo.db.deviceSettings("planning-solar",new JSONObject().put("at",start).put("values",profile));
         repo.db.deviceSettings("planning-solar",new JSONObject().put("at",start+hour).put("values",profile));
         JSONObject gentle=new JSONObject(profile.toString()).put("absorptionVoltage",13.6);
@@ -140,6 +145,30 @@ final class SolarPlanningProof {
         long before;try(Cursor c=history.rawQuery("SELECT COUNT(*) FROM readings",null)){c.moveToFirst();before=c.getLong(0);}
         history.execSQL("DROP TABLE device_settings");repo.db.onUpgrade(history,5,6);
         try(Cursor c=history.rawQuery("SELECT COUNT(*) FROM readings",null)){c.moveToFirst();check(c.getLong(0)==before,"history v5 migration adds profile storage without changing or rebuilding measurements");}
+    }
+    private static void confirmedHistory(Repository repo,SolarPlanning planning,SQLiteDatabase db,BlockingQueue<JSONObject> replies,long start,long end,String source,String key,String solarKey,JSONObject payload,JSONObject weather)throws Exception{
+        long hour=3600000L;SQLiteDatabase history=repo.db.getWritableDatabase();
+        db.execSQL("DELETE FROM contexts");db.execSQL("INSERT INTO contexts(at,key,mobile_free,source,solar_key,payload) VALUES(?,?,0,?,?,?)",new Object[]{end+1,key,source,solarKey,payload.toString()});
+        String selector=PlanningConfirmation.fingerprint(source,end+1,key);
+        check(!PlanningConfirmation.install(db,"different-source","fixture",selector,start,end)&&!PlanningConfirmation.installApproved(db,source),"a historical confirmation is never applied to a different installation or an unapproved context");
+        check(PlanningConfirmation.install(db,source,"fixture",selector,start,end)&&!PlanningConfirmation.install(db,source,"fixture",selector,start,end),"an explicit bounded confirmation is persisted exactly once against its original local context");
+        PlanningConfirmation.Result saved=PlanningConfirmation.read(db,source,weather);
+        check(saved.entries.size()==1&&saved.entries.get(0).contains(start,end)&&!saved.entries.get(0).contains(start-1,end)&&!saved.entries.get(0).contains(start,end+1)&&saved.entries.get(0).weather.optBoolean("complete"),"confirmation boundaries and matching historical irradiance are retained, without extending to neighbouring days");
+        String frozen=saved.entries.get(0).weather.toString();JSONObject changed=new JSONObject(weather.toString());changed.getJSONArray("solar").getJSONObject(0).getJSONArray("values").getJSONObject(12).put("v",900);
+        check(PlanningConfirmation.read(db,source,changed).entries.get(0).weather.toString().equals(frozen),"a complete historical weather snapshot is not replaced by later rolling weather responses");
+        JSONObject result=ask(planning,replies),mid=row(result.getJSONArray("observations"),start+11*hour),usage=mid.getJSONObject("usage");
+        check(usage.getLong("duration")==5*hour&&usage.getLong("reconstructedDuration")==5*hour&&Math.abs(usage.getDouble("wh")-50)<1e-8,"confirmed archive intervals with missing controller evidence use the model-range midpoint as a labelled consumption estimate");
+        check(Math.abs(mid.getDouble("consumption")-30)<1e-8&&!mid.getBoolean("solarEligible")&&result.getJSONArray("confirmedSetups").length()==1,"historical estimates leave measured totals unchanged, never calibrate solar yield and report their confirmation");
+        history.execSQL("UPDATE readings SET state=5,voltage=13.6 WHERE device='planning-solar' AND ts>=? AND ts<=?",new Object[]{start+11*hour,start+16*hour});
+        usage=row(ask(planning,replies).getJSONArray("observations"),start+11*hour).getJSONObject("usage");
+        check(usage.getLong("duration")==0&&usage.getJSONObject("rejected").getLong("chargeLimit")==5*hour,"a confirmed setup does not turn an actually observed limited phase into uncurtailed solar generation");
+        JSONObject off=new JSONObject(payload.toString());off.getJSONObject("setup").getJSONObject("groups").getJSONObject("case").put("active",false);
+        db.execSQL("INSERT INTO contexts(at,key,mobile_free,source,solar_key,payload) VALUES(?,?,1,?,?,?)",new Object[]{start-1,key,source,solarKey,off.toString()});
+        usage=row(ask(planning,replies).getJSONArray("observations"),start+11*hour).getJSONObject("usage");
+        check(usage.getLong("duration")==5*hour&&usage.getLong("reconstructedDuration")==0&&Math.abs(usage.getDouble("wh")-30)<1e-8,"a genuinely documented historical setup takes precedence over the later confirmation");
+        history.execSQL("UPDATE readings SET state=3,voltage=13 WHERE device='planning-solar'");
+        db.execSQL("DELETE FROM contexts");db.execSQL("INSERT INTO contexts(at,key,mobile_free,source,solar_key,payload) VALUES(?,?,0,?,?,?)",new Object[]{start-1,key,source,solarKey,payload.toString()});
+        check(WeatherClient.pastDays(Instant.parse("2026-10-19T22:00:00Z").toEpochMilli(),Instant.parse("2026-10-28T04:00:00Z").toEpochMilli(),"Europe/Berlin")==9&&WeatherClient.pastDays(1,System.currentTimeMillis(),"Europe/Berlin")==92,"historical weather requests include the confirmed date across DST and stay within the provider's 92-day limit");
     }
     private static void fragmentedLearning(Repository repo,SolarPlanning planning,BlockingQueue<JSONObject> replies,long start)throws Exception{
         long hour=3600000L,from=start+11*hour,to=from+hour;SQLiteDatabase history=repo.db.getWritableDatabase();

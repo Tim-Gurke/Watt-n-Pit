@@ -20,18 +20,53 @@ test('many measured nights cannot promote one estimated midday to a settled seas
  assert.equal(u.days,8);assert.equal(u.extrapolated,false);assert.equal(u.provisional,true);
  assert.equal(u.slotStats[0].provisional,false);assert.equal(u.slotStats[2].provisional,false);
  assert.equal(u.slotStats[1].days,1);assert.equal(u.slotStats[1].provisional,true);assert.equal(u.slotStats[1].uncertainty,.8);
- assert.ok(Math.abs(u.parts[1]-100)<1e-8,'an unsupported night-based prior does not replace the midday rate');
+ assert.equal(u.parts[1],null);assert.equal(u.wh,null);assert.deepEqual(u.pendingSlots,[1]);
+ assert.ok(Math.abs(u.slotStats[1].candidateWh-100)<1e-8,'the original midday estimate stays visible without an unsupported night-based replacement');
 });
 test('measured and estimated Wh in one daypart get separate weights without changing their raw totals',()=>{
  const usage={wh:100,measuredWh:20,estimatedWh:80,duration:4*H,estimatedDuration:2*H,latest:now-H};
  const u=C.consumption({usageMode:'auto'},[{day:'2026-10-23',slot:1,learningVersion:2,usage}],'2026-10-23',now);
- assert.ok(Math.abs(u.parts[1]-(20+.4*80)/(2+.4*2)*5)<1e-8);
+ assert.ok(Math.abs(u.slotStats[1].candidateWh-(20+.4*80)/(2+.4*2)*5)<1e-8);
  assert.equal(u.slotStats[1].measuredHours,2);assert.equal(u.slotStats[1].estimatedHours,2);
  assert.equal(usage.wh,100);assert.equal(usage.estimatedWh,80);
 });
 test('multiple fragments from one date do not count as several comparable days',()=>{
  const rows=Array.from({length:8},(_,i)=>({day:'2026-10-22',slot:1,learningVersion:2,usage:{wh:10,duration:H,estimatedDuration:0,latest:now-(i+1)*H}}));
  const s=C.consumption({usageMode:'auto'},rows,'2026-10-23',now).slotStats[1];assert.equal(s.days,1);assert.equal(s.provisional,true);assert.equal(s.uncertainty,.8);
+});
+test('three sufficiently observed estimated middays support a forecast without shrinking a repeated real load to the night rate',()=>{
+ const rows=Array.from({length:3},(_,i)=>{const day=`2026-10-${20+i}`;return {day,slot:1,learningVersion:2,usage:{wh:400,duration:5*H,estimatedDuration:5*H,estimatedWh:400,latest:Date.parse(day+'T16:00:00Z')}};});
+ const result=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.deepEqual(result.pendingSlots,[]);assert.equal(result.parts[1],400);assert.equal(result.slotStats[1].days,3);assert.ok(result.slotStats[1].uncertainty>=.6);
+});
+test('confirmed historical estimates need more effective time and keep their uncertainty after several days',()=>{
+ const rows=Array.from({length:6},(_,i)=>{const day=`2026-10-${15+i}`;return {day,slot:1,learningVersion:2,usage:{wh:50,duration:5*H,estimatedDuration:5*H,estimatedWh:50,reconstructedDuration:5*H,reconstructedWh:50,latest:Date.parse(day+'T16:00:00Z')}};});
+ const weak=C.consumption({usageMode:'auto'},rows.slice(0,3),'2026-10-23',now);assert.equal(weak.parts[1],null);assert.equal(weak.slotStats[1].reconstructedHours,15);
+ const enough=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.ok(Math.abs(enough.parts[1]-50)<1e-8);assert.ok(enough.slotStats[1].uncertainty>=.8);assert.equal(enough.provisional,true);
+});
+test('the diagnostic pattern uses historical middays and does not let one high partial day dominate them',()=>{
+ const rows=[];for(let i=15;i<=20;i++){const day=`2026-10-${i}`;rows.push({day,slot:1,learningVersion:2,usage:{wh:50,duration:5*H,estimatedDuration:5*H,estimatedWh:50,reconstructedDuration:5*H,reconstructedWh:50,latest:Date.parse(day+'T16:00:00Z')}});}
+ rows.push({day:'2026-10-22',slot:1,learningVersion:2,usage:{wh:207.3943,duration:2.5784686*H,estimatedDuration:2.5784686*H,estimatedWh:207.3943,latest:now-H}});
+ const result=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.ok(Math.abs(result.parts[1]-50)<1e-8);assert.equal(result.slotStats[1].days,6);assert.ok(result.slotStats[1].rejected.outlier>2.5);
+});
+test('exclusion reasons remain available even if no learning sample survives',()=>{
+ const from=now-D,rows=[{day:'2026-10-22',slot:1,from,to:from+5*H,learningVersion:2,usage:{wh:0,duration:0,estimatedDuration:0,latest:0,rejected:{unknownSetup:5*H}}}];
+ const result=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.equal(result.wh,null);assert.equal(result.slotStats[1].rejected.unknownSetup,5);assert.equal(result.usedHours,0);
+});
+test('repeated new habits can change the forecast even when the old seasonal profile calls them outliers',()=>{
+ const rows=[];for(const age of [60,59,58,57,56,55,54,3,2,1,0]){const at=now-age*D,day=new Date(at).toISOString().slice(0,10);rows.push({day,slot:1,learningVersion:2,usage:{wh:age>14?50:400,duration:5*H,estimatedDuration:0,estimatedWh:0,latest:at}});}
+ const u=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.ok(u.parts[1]>250&&u.parts[1]<400);assert.equal(u.slotStats[1].recentDays,4);assert.ok(u.slotStats[1].recentInfluence>.6);assert.equal(u.slotStats[1].rejected.outlier||0,0);assert.ok(u.slotStats[1].uncertainty>.4);
+});
+test('one exceptional recent day cannot replace the established consumption profile',()=>{
+ const rows=[];for(const age of [26,25,24,23,22,21,20,0]){const at=now-age*D,day=new Date(at).toISOString().slice(0,10);rows.push({day,slot:1,learningVersion:2,usage:{wh:age?50:400,duration:5*H,estimatedDuration:0,estimatedWh:0,latest:at}});}
+ const u=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.ok(Math.abs(u.parts[1]-50)<1e-8);assert.equal(u.slotStats[1].recentInfluence,0);assert.equal(u.slotStats[1].rejected.outlier,5);
+});
+test('two tiny fragments on other dates do not qualify one exceptional full day as a new habit',()=>{
+ const rows=[];for(const age of [26,25,24,23,22,21,20,2,1,0]){const at=now-age*D,day=new Date(at).toISOString().slice(0,10),hours=age===1||age===2?.25:5;rows.push({day,slot:1,learningVersion:2,usage:{wh:(age===0?80:10)*hours,duration:hours*H,estimatedDuration:0,estimatedWh:0,latest:at}});}
+ const u=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.equal(u.slotStats[1].recentInfluence,0);assert.ok(Math.abs(u.parts[1]-50)<1e-8);
+});
+test('the previous matching season remains available within 400 days while older learning evidence expires',()=>{
+ const run=day=>C.consumption({usageMode:'auto'},observations(day,600),'2026-10-23',now);
+ assert.equal(run('2025-10-24').wh,600);assert.equal(run('2025-06-01').wh,null);
 });
 const equipment=(extra=[])=>E.normalize({version:1,groups:[{id:'roof',label:'Dach',count:2,watts:100,tilt:30,placement:'fixed',measurement:'solar',controller:'MPPT'},...extra]});
 const plan=eq=>C.normalize({groups:{roof:{azimuth:180,shade:[0,0,0]}}},eq);
@@ -132,13 +167,17 @@ test('reserve uncertainty follows the daypart being consumed instead of unrelate
  const r=C.batteryForecast(days,weather,{soc:50,capacity:100,voltage:10,t:at},at)[0].evening;
  assert.equal(r.soc,49);assert.equal(r.low,48.75);assert.equal(r.high,49.25);
 });
+test('wide uncertainty during a change in habits cannot turn lower household demand into invented charging',()=>{
+ const at=Date.parse('2026-10-23T00:00:00Z'),weather={days:[{day:'2026-10-23',sunset:at+H}]},days=[{day:'2026-10-23',sunset:at+H,complete:true,spread:0,usage:{parts:[110,50,80],slotStats:[{uncertainty:2}]},timeline:[{from:at,to:at+H,wh:0,slot:0}]}];
+ const r=C.batteryForecast(days,weather,{soc:50,capacity:100,voltage:10,t:at},at)[0].evening;assert.equal(r.soc,49);assert.equal(r.high,50);assert.equal(r.low,47);
+});
 test('partial mobile days learn without complete-day veto; missing dayparts remain provisional',()=>{
  const p=plan(equipment()),rows=observations('2026-10-22',240,{mobileFree:false,learningVersion:2});
  rows[0].usage={wh:20,duration:2*H,estimatedDuration:0,latest:rows[0].from+2*H};
  rows[1].usage={wh:60,duration:3*H,estimatedDuration:3*H,latest:rows[1].from+3*H};
  rows[2].usage={wh:0,duration:0,estimatedDuration:0,latest:0};
  const r=C.consumption(p,rows,'2026-10-23',now);assert.equal(r.days,1);assert.equal(r.sampleHours,5);assert.equal(r.estimatedHours,3);assert.equal(r.provisional,true);assert.equal(r.extrapolated,true);
- assert.equal(r.parts[0],110);assert.equal(r.parts[1],100);assert.ok(r.parts[2]>80&&r.parts[2]<160);
+ assert.equal(r.parts[0],110);assert.equal(r.parts[1],null);assert.equal(r.slotStats[1].candidateWh,100);assert.ok(r.parts[2]>80&&r.parts[2]<160);
  const night=C.consumption(p,rows.slice(0,1),'2026-10-23',now);assert.equal(night.wh,240);assert.equal(night.uncertainty,.8);
  const future=structuredClone(rows);future[0].usage.latest=now+1;future[1].usage.duration=0;assert.equal(C.consumption(p,future,'2026-10-23',now).wh,null);
 });

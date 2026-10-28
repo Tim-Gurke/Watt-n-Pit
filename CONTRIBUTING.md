@@ -22,6 +22,16 @@ Bereits erfolgreich geladene historische Werte und Kurven bleiben beim Nachladen
 
 Kalenderabfragen für das Solar-Tagesarchiv enthalten das Monatsende, auch wenn es noch in der Zukunft liegt. Hauptgerät und Anzeige müssen dafür dieselbe begrenzte Tagesberechnung verwenden. Reale Nullwerte und unbekannte Werte unterscheiden.
 
+## Freigegebener Umfang für 1.6.5
+
+Der Nutzer hat Umsetzung, Build und Veröffentlichung freigegeben. Die Diagnose der Version 1.6.4 zeigte einen nur aus einem teilweise geschätzten Mittag hochgerechneten Tagesbedarf.
+
+- Die Aufstellung vom **20.–26. Oktober 2026** war laut ausdrücklicher nachträglicher Bestätigung unverändert. Diese Bestätigung ausschließlich der passenden lokal gespeicherten Anlage zuordnen, als eigenen begrenzten Zeitraum dokumentieren und deren vorhandene Messdaten erneut auswerten. Andere Installationen und bereits dokumentierte Aufstellungen nicht überschreiben. Keine Geräteadressen, Koordinaten oder private Anlagenkonfiguration im öffentlichen Quelltext ablegen.
+- Historisch ungemessene mobile Beiträge bleiben Schätzungen. Fehlende frühere Ladephasen oder Reglereinstellungen nicht als erwiesene unbeschränkte Erzeugung behandeln. Rekonstruierte Archivbeiträge schwächer gewichten und mit größerer Unsicherheit anzeigen; die Solar-Ertragskalibrierung damit nicht trainieren.
+- Ein einzelner nur geschätzter Tagesabschnitt darf keinen scheinbar belastbaren üblichen Tagesbedarf festlegen. Für solche Abschnitte mehrere Tage und ausreichend wirksame Messzeit verlangen. Fehlende belastbare Werte als offen ausweisen; Messwerte nicht auf einen gewünschten Zielverbrauch zurechtrechnen. Ausschlussgründe und Beiträge je Tagesabschnitt sichtbar machen.
+- Bei veränderten Gewohnheiten ein ausreichend belegtes aktuelles Profil der letzten zwei Wochen stärker gewichten. Einzelne Sondertage abfangen; saisonale Erfahrungen getrennt erhalten. Lerndaten außerhalb des 400-Tage-Fensters nicht mehr verwenden, ohne den Messverlauf zu löschen.
+- Die G5-Layoutübernahme war **einmalig**. Ab jetzt bestehende Layouts jedes Geräts immer erhalten, auch ohne den früheren Migrationsmarker oder beim Überspringen älterer Releases. Das umfasst Anordnung, Größen und Gestaltung beider Ansichten. Neue Kacheln nur an freier Stelle ergänzen; kein automatischer Layoutwechsel beim Update.
+
 ## Roller-BMS: Geräteaufteilung (offen)
 
 Auf der Zentrale **G5** läuft nur Watt’n’Pit; **ScootPit läuft auf dem S20**. Die vorhandene lokale BMS-Übergabe zwischen beiden Apps auf demselben Telefon deckt das nicht ab. Eine automatische Übergabe G5 → Fahrhandy S20 → G5 fehlt noch und gehört nicht zur Anzeigekorrektur in 1.6.4. Die Solaraufzeichnung soll bei einer späteren BMS-Übergabe weiterlaufen.

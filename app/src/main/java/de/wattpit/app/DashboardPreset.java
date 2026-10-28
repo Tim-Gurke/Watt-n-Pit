@@ -5,7 +5,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import org.json.*;
 
-/** The explicitly requested layout rollout runs once per installation, on every role. */
+/** Defaults for new installations. Updates never replace an existing device layout. */
 final class DashboardPreset {
     static final String MARKER="dashboard-preset-163";
     static String read(Context context)throws IOException{
@@ -17,6 +17,11 @@ final class DashboardPreset {
     }
     static void install(SharedPreferences prefs,String json)throws Exception{
         if(prefs.getBoolean(MARKER,false))return;
+        // The 1.6.3 rollout is over, including for devices that skip that release.
+        if(prefs.contains("dashboard-v1")){
+            if(!prefs.edit().putBoolean(MARKER,true).commit())throw new IOException("Die Übersicht konnte nicht gespeichert werden.");
+            return;
+        }
         JSONObject board=new JSONObject(json);JSONArray tiles=board.getJSONArray("tiles");
         if(board.getInt("version")!=1||tiles.length()>64)throw new IllegalArgumentException("Ungültige Layoutvorlage.");
         for(int i=0;i<tiles.length();i++){JSONObject t=tiles.getJSONObject(i);t.put("fontSize",Math.max(18,Math.min(20,t.optDouble("fontSize",20))));}

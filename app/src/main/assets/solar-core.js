@@ -67,34 +67,51 @@
     const samples=[],nominal=[11,5,8],target=seasonPosition(day);
     for(const o of observations||[]){
       if(!Number.isInteger(o.slot)||o.slot<0||o.slot>2||seasonPosition(o.day)===null)continue;
-      let wh,duration,estimated=0,latest;
-      if(o.learningVersion===2){const u=o.usage||{};({wh,duration,latest}=u);estimated=u.estimatedDuration;if(!finite(estimated)||estimated<0||estimated>duration)continue;}
+      let wh,duration,estimated=0,reconstructed=0,latest;
+      if(o.learningVersion===2){const u=o.usage||{};({wh,duration,latest}=u);estimated=u.estimatedDuration;reconstructed=u.reconstructedDuration??0;if(!finite(estimated)||estimated<0||estimated>duration||!finite(reconstructed)||reconstructed<0||reconstructed>estimated)continue;}
       else{if(!o.mobileFree||!finite(o.coverage)||o.coverage<.98)continue;wh=o.consumption;duration=o.to-o.from;latest=o.to;}
       if(!finite(wh)||wh<0||!finite(duration)||duration<15*60000||duration>13*HOUR||!finite(latest)||latest>now||now-latest>400*DAY)continue;
       const gap=Math.abs(seasonPosition(o.day)-target),distance=Math.min(gap,366-gap),season=Math.exp(-.5*(distance/45)**2),age=Math.max(0,(now-latest)/DAY);
-      const hours=duration/HOUR,estimatedHours=estimated/HOUR,effectiveHours=hours-.6*estimatedHours;
+      const hours=duration/HOUR,estimatedHours=estimated/HOUR,reconstructedHours=reconstructed/HOUR,effectiveHours=hours-.6*estimatedHours-.2*reconstructedHours;
       const estimatedWh=o.usage?.estimatedWh,split=o.learningVersion===2&&finite(estimatedWh)&&estimatedWh>=0&&estimatedWh<=wh+1e-8
         &&(estimated!==0||estimatedWh===0)&&(estimated!==duration||Math.abs(estimatedWh-wh)<1e-8);
-      const rate=split?(wh-.6*Math.min(wh,estimatedWh))/effectiveHours:wh/hours;
+      const reconstructedWh=o.usage?.reconstructedWh??0,reconstructedSplit=split&&finite(reconstructedWh)&&reconstructedWh>=0&&reconstructedWh<=estimatedWh+1e-8&&(reconstructed!==0||reconstructedWh===0)&&(reconstructed!==estimated||Math.abs(reconstructedWh-estimatedWh)<1e-8);
+      const rate=reconstructedSplit?(wh-.6*Math.min(wh,estimatedWh)-.2*Math.min(estimatedWh,reconstructedWh))/effectiveHours:split?(wh-.6*Math.min(wh,estimatedWh))/(hours-.6*estimatedHours):wh/hours;
       const weight=(.08+.92*season)*Math.exp(-age/240)*effectiveHours;
-      samples.push({day:o.day,slot:o.slot,rate,hours,estimated:estimatedHours,effectiveHours,season,weight});
+      samples.push({day:o.day,slot:o.slot,rate,hours,estimated:estimatedHours,reconstructed:reconstructedHours,effectiveHours,season,weight,age});
     }
-    if(!samples.length)return {wh:null,parts:[null,null,null],days:0,manual:false,provisional:true};
-    const accepted=rows=>{const typical=median(rows.map(x=>x.rate));return rows.length<7?rows:rows.filter(x=>typical===0?x.rate===0:x.rate<=typical*3);};
+    const accepted=rows=>{const days=new Map();for(const x of rows){const d=days.get(x.day)||{sum:0,weight:0};d.sum+=x.rate*x.weight;d.weight+=x.weight;days.set(x.day,d);}if(days.size<7)return rows;const rates=new Map([...days].map(([day,x])=>[day,x.sum/x.weight])),typical=median([...rates.values()]);return rows.filter(x=>typical===0?rates.get(x.day)===0:rates.get(x.day)<=typical*3);};
     const average=rows=>{if(!rows.length)return null;const clean=accepted(rows),weight=clean.reduce((s,x)=>s+x.weight,0);return weight?clean.reduce((s,x)=>s+x.rate*x.weight,0)/weight:null;};
-    const fallback=average(samples),rates=nominal.map((_,slot)=>average(samples.filter(x=>x.slot===slot))),extrapolated=rates.some(x=>x===null);
-    const parts=rates.map((x,i)=>(x??fallback)*nominal[i]),hours=samples.reduce((s,x)=>s+x.hours,0),estimatedHours=samples.reduce((s,x)=>s+x.estimated,0),usedDays=new Set();
+    // A separate recent profile can learn a sustained change even when the old
+    // seasonal profile would classify those new days as unusually high.
+    const recentProfiles=nominal.map((nominalHours,slot)=>{
+      let rows=samples.filter(x=>x.slot===slot&&x.age<=14).map(x=>({...x,original:x,weight:x.effectiveHours*Math.exp(-x.age/5)}));
+      const byDay=new Map();for(const x of rows){const d=byDay.get(x.day)||{sum:0,weight:0,hours:0};d.sum+=x.rate*x.weight;d.weight+=x.weight;d.hours+=x.effectiveHours;byDay.set(x.day,d);}
+      if(byDay.size>=3){const sorted=[...byDay.values()].map(d=>({rate:d.sum/d.weight,weight:d.weight})).sort((a,b)=>a.rate-b.rate),total=sorted.reduce((s,x)=>s+x.weight,0);let sum=0,typical=sorted[0].rate;for(const x of sorted){sum+=x.weight;typical=x.rate;if(sum>=total/2)break;}rows=rows.filter(x=>{const d=byDay.get(x.day),rate=d.sum/d.weight;return typical===0?rate===0:rate<=typical*3;});}
+      const used=new Set(rows.map(x=>x.day)),days=[...used].filter(day=>byDay.get(day).hours>=nominalHours/5-1e-8).length,effectiveHours=rows.reduce((s,x)=>s+x.effectiveHours,0),weight=rows.reduce((s,x)=>s+x.weight,0),rate=weight?rows.reduce((s,x)=>s+x.rate*x.weight,0)/weight:null;
+      const today=seasonPosition(stamp(now,'UTC')?.day),gap=Math.abs(target-today),distance=Math.min(gap,366-gap),season=Math.exp(-.5*(distance/30)**2);
+      const influence=days>=3&&effectiveHours>=nominalHours?.8*Math.min(1,days/5,effectiveHours/(2*nominalHours))*season:0;
+      return {rows:influence?rows.map(x=>x.original):[],days:influence?days:0,influence,rate};
+    });
+    const fallback=average(samples),rates=nominal.map((_,slot)=>{const seasonal=average(samples.filter(x=>x.slot===slot)),recent=recentProfiles[slot];return seasonal===null?null:seasonal*(1-recent.influence)+(recent.rate??seasonal)*recent.influence;}),extrapolated=rates.some(x=>x===null);
+    const parts=rates.map((x,i)=>(x??fallback)===null?null:(x??fallback)*nominal[i]),hours=samples.reduce((s,x)=>s+x.hours,0),estimatedHours=samples.reduce((s,x)=>s+x.estimated,0),usedDays=new Set();
     const slotStats=nominal.map((nominalHours,slot)=>{
-      const rows=accepted(samples.filter(x=>x.slot===slot)),byDay=new Map();
-      let hours=0,estimatedHours=0,effectiveHours=0;
-      for(const x of rows){hours+=x.hours;estimatedHours+=x.estimated;effectiveHours+=x.effectiveHours;usedDays.add(x.day);const d=byDay.get(x.day)||{hours:0,estimated:0,season:x.season};d.hours+=x.hours;d.estimated+=x.estimated;byDay.set(x.day,d);}
-      const days=byDay.size,comparableDays=[...byDay.values()].reduce((s,x)=>s+x.season*(1-.6*x.estimated/x.hours),0),extrapolated=rates[slot]===null;
+      const recent=recentProfiles[slot],rows=[...new Set([...accepted(samples.filter(x=>x.slot===slot)),...recent.rows])],byDay=new Map();
+      let hours=0,estimatedHours=0,reconstructedHours=0,effectiveHours=0;
+      for(const x of rows){hours+=x.hours;estimatedHours+=x.estimated;reconstructedHours+=x.reconstructed;effectiveHours+=x.effectiveHours;usedDays.add(x.day);const d=byDay.get(x.day)||{hours:0,estimated:0,reconstructed:0,season:x.season};d.hours+=x.hours;d.estimated+=x.estimated;d.reconstructed+=x.reconstructed;byDay.set(x.day,d);}
+      const days=byDay.size,comparableDays=[...byDay.values()].reduce((s,x)=>s+x.season*(1-.6*x.estimated/x.hours-.2*x.reconstructed/x.hours),0),extrapolated=rates[slot]===null;
       const provisional=extrapolated||days<3||effectiveHours<nominalHours||comparableDays<2.5;
-      const uncertainty=extrapolated?.8:Math.max(provisional?.5:.25,days<3?.8-.15*(days-1):0,estimatedHours/hours*.6);
-      return {slot,hours,estimatedHours,measuredHours:hours-estimatedHours,effectiveHours,days,comparableDays,extrapolated,provisional,uncertainty};
+      let uncertainty=extrapolated?.8:Math.max(provisional?.5:.25,days<3?.8-.15*(days-1):0,hours?estimatedHours/hours*.6:0,hours?reconstructedHours/hours*.8:0);
+      if(recent.influence)uncertainty=Math.max(uncertainty,Math.min(2,Math.abs(recent.rate-rates[slot])/Math.max(.01,rates[slot])));
+      const pending=estimatedHours>0&&hours-estimatedHours<nominalHours&&(days<3||effectiveHours<nominalHours),candidateWh=parts[slot];
+      if(pending)parts[slot]=null;
+      const rejected={};for(const o of observations||[])if(o.slot===slot&&finite(o.from)&&o.from<=now&&now-o.from<=400*DAY)for(const [reason,millis] of Object.entries(o.usage?.rejected||{}))if(finite(millis)&&millis>0)rejected[reason]=(rejected[reason]||0)+millis/HOUR;
+      const outlierHours=samples.filter(x=>x.slot===slot).reduce((s,x)=>s+x.hours,0)-hours;if(outlierHours>1e-8)rejected.outlier=outlierHours;
+      return {slot,hours,estimatedHours,reconstructedHours,measuredHours:hours-estimatedHours,effectiveHours,days,comparableDays,extrapolated,provisional,uncertainty,pending,candidateWh,rejected,recentDays:recent.days,recentInfluence:recent.influence};
     });
     const days=usedDays.size,provisional=days<5||slotStats.some(x=>x.provisional);
-    return {wh:parts.reduce((a,b)=>a+b,0),parts,days,manual:false,provisional,extrapolated,sampleHours:hours,estimatedHours,slotStats,usedHours:slotStats.reduce((s,x)=>s+x.hours,0),usedEstimatedHours:slotStats.reduce((s,x)=>s+x.estimatedHours,0),uncertainty:Math.max(...slotStats.map(x=>x.uncertainty))};
+    const pendingSlots=slotStats.filter(x=>x.pending).map(x=>x.slot);
+    return {wh:parts.some(x=>x===null)?null:parts.reduce((a,b)=>a+b,0),parts,days,manual:false,provisional,extrapolated,pendingSlots,sampleHours:hours,estimatedHours,slotStats,usedHours:slotStats.reduce((s,x)=>s+x.hours,0),usedEstimatedHours:slotStats.reduce((s,x)=>s+x.estimatedHours,0),uncertainty:Math.max(...slotStats.map(x=>x.uncertainty))};
   }
   function sunshineCode(day){
     if(finite(day.hours)&&finite(day.sunrise)&&finite(day.sunset)&&day.sunset>day.sunrise){const share=clamp(day.hours/((day.sunset-day.sunrise)/HOUR),0,1);return share>=.75?0:share>=.2?2:3;}
@@ -128,7 +145,7 @@
       }
       if(active.length&&!seen)complete=false;
       const fixed=complete?bins.reduce((a,b)=>a+b.fixed,0):null,mobile=complete?bins.reduce((a,b)=>a+b.mobile,0):null,total=fixed===null?null:fixed+mobile,baseline=consumption(plan,knowledge.observations,d.day,now);
-      const usageHours=validWindows?windows.map(w=>(w.to-w.from)/HOUR):[11,5,8],usage={...baseline,hours:usageHours,parts:baseline.parts.map((x,i)=>x===null?null:x*usageHours[i]/[11,5,8][i])};usage.wh=baseline.wh===null?null:usage.parts.reduce((a,b)=>a+b,0);
+      const usageHours=validWindows?windows.map(w=>(w.to-w.from)/HOUR):[11,5,8],usage={...baseline,hours:usageHours,parts:baseline.parts.map((x,i)=>x===null?null:x*usageHours[i]/[11,5,8][i]),slotStats:baseline.slotStats?.map((s,i)=>({...s,candidateWh:s.candidateWh===null?null:s.candidateWh*usageHours[i]/[11,5,8][i]}))};usage.wh=baseline.wh===null?null:usage.parts.reduce((a,b)=>a+b,0);
       const spread=clamp(Math.max(...corrections.map(x=>x.spread))+.025*index+(unknownShade?.2:0),.2,.8);
       out.push({...d,code:sunshineCode(d),index,complete,measuredComplete,issues,unknownShade,fixed,mobile,total,low:total===null?null:total*(1-spread),high:total===null?null:total*(1+spread),spread,timeline:[...timeline.values()],parts:bins,usage,balance:total===null||usage.wh===null?null:total-usage.wh,key,learningDays:Math.min(...corrections.map(x=>x.days))});
     }return out;
@@ -152,7 +169,7 @@
         if(!h||h.from>cursor||!h.complete||!finite(h.wh)||h.wh<0){reasonCode='weather';problem='Für die Akkuprognose fehlen durchgängige Ertragsdaten bis zu diesem Zeitpunkt.';break;}
         if(!finite(h.load)||h.load<0){reasonCode='consumption';problem='Der übliche Verbrauch wird noch aus geeigneten Messabschnitten ermittelt. Auch Nachtabschnitte bei gemeldeter mobiler Aufstellung können helfen. Eigene saisonale Vorgaben sind freiwillig.';break;}
         const end=Math.min(target.at,h.to),fraction=(end-cursor)/HOUR,load=h.load/h.loadHours*fraction+extraLoads.reduce((sum,l)=>sum+Math.max(0,Math.min(end,l.to)-Math.max(cursor,l.from))/HOUR*l.watts,0),solar=h.wh*fraction;
-        for(let i=0;i<3;i++){const s=scenarios[i],generation=solar*(i===1?1-h.spread:i===2?1+h.spread:1),use=load*(i===1?1+h.usageSpread:i===2?1-h.usageSpread:1),raw=s.energy+generation-use;s.excess+=Math.max(0,raw-cap);s.shortfall+=Math.max(0,-raw);s.energy=clamp(raw,0,cap);}
+        for(let i=0;i<3;i++){const s=scenarios[i],generation=solar*(i===1?1-h.spread:i===2?1+h.spread:1),use=load*(i===1?1+h.usageSpread:i===2?Math.max(0,1-h.usageSpread):1),raw=s.energy+generation-use;s.excess+=Math.max(0,raw-cap);s.shortfall+=Math.max(0,-raw);s.energy=clamp(raw,0,cap);}
         cursor=end;
       }
       if(problem){target.reason=problem;target.reasonCode=reasonCode;}
