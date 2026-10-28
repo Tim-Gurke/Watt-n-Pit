@@ -1,3 +1,4 @@
+const waitForPage=require('./browser-wait.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const preset=require('../app/src/main/assets/dashboard-preset.json');
 (async()=>{
@@ -21,7 +22,7 @@ const preset=require('../app/src/main/assets/dashboard-preset.json');
   for(const id of ['saveSettings','editEquipment','solarSetupSettings','weatherOff','rollerSettings'])assert.equal(await page.locator('#'+id).isEnabled(),true,id);
   await page.locator('#capacitySetting').fill('120');await page.locator('#saveSettings').click();
   assert.equal(await page.evaluate(()=>host.capacity),100);assert.match(await page.locator('#plantActionStatus').textContent(),/erwartet/);
-  await page.evaluate(()=>finishControl());await page.waitForFunction(()=>!controls.pending);assert.equal(await page.evaluate(()=>snapshot.settings.capacity),120);assert.match(await page.locator('#plantActionStatus').textContent(),/bestätigt/);
+  await page.evaluate(()=>finishControl());await waitForPage(page,()=>!controls.pending);assert.equal(await page.evaluate(()=>snapshot.settings.capacity),120);assert.match(await page.locator('#plantActionStatus').textContent(),/bestätigt/);
   await page.locator('#capacitySetting').fill('135');await page.locator('#saveSettings').click();await page.evaluate(()=>finishControl('Hauptgerät nicht erreichbar.'));assert.equal(await page.evaluate(()=>host.capacity),120);assert.match(await page.locator('#plantActionStatus').textContent(),/nicht erreichbar/);
   await page.locator('#editEquipment').click();await page.locator('[data-field="watts"]').fill('110');await page.locator('#saveSolarEquipment').click();assert.equal(await page.evaluate(()=>requests.at(-1).action),'saveEquipment');assert.equal(await page.locator('#modal').isVisible(),true);await page.evaluate(()=>finishControl());await page.locator('#modal').waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>host.equipment.groups[0].watts),110);
   await page.locator('#solarSetupSettings').click();await page.locator('[data-solar-active]').check();await page.locator('#solarSetupSave').click();assert.equal(await page.evaluate(()=>requests.at(-1).action),'saveSolarSite');await page.evaluate(()=>finishControl());await page.locator('#modal').waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>host.setup.groups.mobile.active),true);

@@ -1,3 +1,4 @@
+const waitForPage=require('./browser-wait.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
 (async()=>{
  const browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.WATTPIT_CHROMIUM?{executablePath:process.env.WATTPIT_CHROMIUM}:{})});
@@ -32,7 +33,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   await page.evaluate(()=>showPage('overview'));
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   await page.evaluate(()=>{dashboard.editing=false;snapshot.devices=[{mac:'AA:BB:CC:DD:EE:FF',kind:'shunt'}];window.pullCount=0;pullReload.a.reload=()=>window.pullCount++;scrollTo(0,0);});
-  await page.waitForFunction(()=>window.scrollY<=1&&pullReload.a.canStart());
+  await waitForPage(page,()=>window.scrollY<=1&&pullReload.a.canStart());
   const gesture=async(dy=100,dx=0,cancel=false)=>page.evaluate(({dy,dx,cancel})=>{const el=document.getElementById('overviewHeader'),touch=(type,x,y)=>{const e=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(e,'touches',{value:type==='touchend'||type==='touchcancel'?[]:[{clientX:x,clientY:y}]});el.dispatchEvent(e);};touch('touchstart',100,100);touch('touchmove',100+dx,100+dy);touch(cancel?'touchcancel':'touchend',100+dx,100+dy);},{dy,dx,cancel});
   await gesture();assert.equal(await page.evaluate(()=>pullCount),1);await gesture(30);await gesture(100,200);await gesture(100,0,true);assert.equal(await page.evaluate(()=>pullCount),1);
   await page.evaluate(()=>lifecycle.busy=true);await gesture();assert.equal(await page.evaluate(()=>pullCount),1);await page.evaluate(()=>lifecycle.busy=false);

@@ -1,3 +1,4 @@
+const waitForPage=require('./browser-wait.cjs');
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -25,7 +26,8 @@ const path=require('node:path');
   const query=await page.evaluate(()=>window.miniCalls.at(-1));assert.deepEqual([query.from,query.to],bounds.map(Date.parse));assert.equal(query.metric,'power');
   assert.ok((await page.locator('#miniPeriodLabel').textContent()).length>0);
  }
- await page.locator('#miniRange').selectOption('month');await page.reload();assert.equal(await page.locator('#miniRange').inputValue(),'month');
+ await page.locator('#miniRange').selectOption('month');assert.equal(await page.evaluate(()=>localStorage.getItem('mini-range')),'month');await page.reload();
+ await waitForPage(page,()=>document.getElementById('miniRange').value==='month');assert.equal(await page.locator('#miniRange').inputValue(),'month');
  const card=page.locator('#miniHistory'),handle=page.locator('#miniHistoryResize');assert.equal(await handle.isVisible(),false);
  const verifyCurves=async()=>{
   const colors=await page.locator('#miniChart').evaluate(el=>{const ctx=el.getContext('2d'),data=ctx.getImageData(0,0,el.width,el.height).data;let solar=0,battery=0;for(let y=25;y<el.height-40;y++)for(let x=60;x<el.width-15;x++){const i=(y*el.width+x)*4,r=data[i],g=data[i+1],b=data[i+2];if(r>150&&g>70&&g<200&&b<140)solar++;if(g>120&&g>r*1.2&&b>r*1.1)battery++;}return {solar,battery};});
@@ -53,7 +55,7 @@ const path=require('node:path');
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('detail-board')).historyHeight.wide),1000,'the bridge must have persisted the wide height before navigation');
  await page.reload();
  // Reload can finish before the ResizeObserver has applied the restored profile.
- await page.waitForFunction(()=>dashboard.profile==='wide'&&document.getElementById('miniHistory').offsetHeight===1000);
+ await waitForPage(page,()=>dashboard.profile==='wide'&&document.getElementById('miniHistory').offsetHeight===1000);
  assert.equal(await card.evaluate(el=>el.offsetHeight),1000);await page.setViewportSize({width:390,height:844});await page.locator('#layoutProfile').filter({hasText:'Schmale Ansicht'}).waitFor();assert.equal(await card.evaluate(el=>el.offsetHeight),before.height+110);
  const layoutBounds=()=>page.evaluate(()=>{
   const bounds=document.getElementById('miniChart').getBoundingClientRect(),outer=document.getElementById('miniHistory').getBoundingClientRect();
