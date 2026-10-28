@@ -1,26 +1,30 @@
 {
-  "version": "1.3.9",
-  "versionCode": 30,
-  "compiledSource": "f799dda5bf72c3f084750039800aab24562c05b6",
-  "unsignedBuildCommit": "6593531eebdda3b39fde616fedeaa93bd8d64b65",
-  "unsignedBuildRun": 39614559024,
-  "publicationSource": "3464de14d3448cd0049c5625e355abc36846268b",
-  "apk": {
-    "file": "Watt-n-Pit-v1.3.9.apk",
-    "size": 190505,
-    "sha256": "512a4ba02937183b7882314f864105036d20b49e4c3363169e90b8f8553265bc",
-    "gitBlobSha": "f37bdafbb9024c8707e9b22f27ab555eb470b39c",
-    "base64Length": 254008,
-    "certificateSha256": "0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2"
+  "schemaVersion": 1,
+  "version": "1.6.5",
+  "sourceSha": "2986659a299d2ecdfeebeff0574e1561c20391c7",
+  "sourceTree": "d7e90ab26939dd63b9a808b15db0fa6da3d4dc50",
+  "sourceChecks": {
+    "runId": 40634963202,
+    "url": "https://github.com/Tim-Gurke/Watt-n-Pit/actions/runs/40634963202",
+    "conclusion": "success",
+    "unsignedArtifactId": 12793590753,
+    "unsignedArtifactZipSha256": "6300d0266dc95e8b8f5524ceaf4b67c14b944fb6b88f4331d8930294b5d0362a"
   },
-  "afterBuildChanges": [
-    "tools/mini-history-smoke.cjs"
-  ],
-  "applicationInputsChangedAfterBuild": false,
-  "layoutProbe": {
-    "run": 39615757304,
-    "commit": "c59d79c378a97021a70cdd94fcd7a79208eb41d2",
-    "completeSuccessfulPasses": 3,
-    "scope": "Wait two animation frames for viewport resize and ResizeObserver; read both rectangles atomically. Keep overflow/minimum height checks; add profile assertion. No application change."
-  }
+  "signedApk": {
+    "package": "de.wattpit.app",
+    "versionName": "1.6.5",
+    "versionCode": 54,
+    "sha256": "8185b5bf1b165a027652d47dd3a7abf8549fecb3b41c9afbe0c5355d0ce5e07e",
+    "bytes": 596851,
+    "certificateSha256": "0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2",
+    "v2Verified": true
+  },
+  "checks": {
+    "nodeTests": 155,
+    "productionLanTcpChecks": 35,
+    "storagePhases": 20,
+    "android": "testDebugUnitTest lintDebug assembleDebug assembleRelease",
+    "browser": "all workflow browser checks; planning UI at narrow widths in both themes"
+  },
+  "limits": "Physical Android Bluetooth, sensors, WLAN and hotspot behavior are not emulated by these checks. Private diagnostic input is not included in this repository."
 }
