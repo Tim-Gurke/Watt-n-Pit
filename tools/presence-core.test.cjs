@@ -36,3 +36,9 @@ test('legacy comparisons remain available as the original baseline without being
 test('three calendar years include leap days and expire at the actual anniversary',()=>{
  assert.equal(new Date(C.learningSince(Date.parse('2024-02-29T12:00:00Z'))).toISOString(),'2021-02-28T12:00:00.000Z');assert.equal(new Date(C.learningSince(now)).toISOString(),'2023-10-29T10:00:00.000Z');
 });
+
+test('missing past consumption in the current hour cannot block a fully known remaining battery forecast',()=>{
+ const d={...day(),sunset:now+H/2,timeline:[{from:now-H/2,to:now+H/2,slot:1,wh:0}]},home={...profile(100),parts:[null,null,null]};
+ P.apply(d,{home,away:profile(10)},{state:'away',plans:[],history:[{at:now-H,state:'home'},{at:now,state:'away'}]},now);
+ const r=C.batteryForecast([d],{days:[]},{soc:50,t:now,capacity:100,voltage:10},now);assert.ok(Math.abs(r[0].evening.soc-49.5)<1e-8);
+});
