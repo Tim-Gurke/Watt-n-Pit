@@ -45,11 +45,11 @@ final class PresenceStore extends SQLiteOpenHelper {
         if(!signal.equals(candidate)){candidate=signal;candidateElapsed=elapsed;candidateWall=now;}
         long delay=mode.equals("auto")?(signal.equals("home")?30000:signal.equals("away")?300000:0):0;
         if(elapsed-candidateElapsed>=delay&&!signal.equals(lastState)){
-            String before=lastState;event(candidateWall,signal);lastState=signal;
+            event(candidateWall,signal);lastState=signal;
             JSONArray plans=plans();boolean changed=false;
             for(int i=0;i<plans.length();i++){JSONObject p=plans.getJSONObject(i);String status=p.optString("status");
                 if(signal.equals("away")&&p.getLong("from")<=now&&p.getLong("to")>now&&!status.equals("cancelled")&&!status.equals("returned")){p.put("status","active");changed=true;}
-                if(signal.equals("home")&&before.equals("away")&&status.equals("active")){p.put("status","returned").put("returnedAt",candidateWall);changed=true;}
+                if(signal.equals("home")&&status.equals("active")){p.put("status","returned").put("returnedAt",candidateWall);changed=true;}
             }
             if(changed)savePlans(plans);
         }
