@@ -52,7 +52,7 @@ let toastTimer, previousToast = '', previousToastTime = 0, deviceRenderKey = '';
 let metric = 'power', source = 'all', range = 'today', baseFrom, baseTo, viewFrom, viewTo, points = [], manualY = null, scale = null, loadTimer, selectedPoint = null;
 let settingsRevision=-1;
 let currentImport = null, lastHistoryRevision=-1, historyPending=false, archiveRequestedUntil=0, lastLanConnection, lastLanSource;
-let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null, solar = null, roller = null, lanUi = null;
+let dashboard = null, extras = null, equipment = null, configuration = null, lifecycle = null, solar = null, roller = null, lanUi = null, presence = null;
 const overviewLandscape = window.matchMedia('(orientation: landscape)');
 
 function syncOverviewHeader() {
@@ -87,7 +87,7 @@ function showPage(next) {
   window.scrollTo(0,0);
   if (page === 'history') loadHistory();
   dashboard?.updateChargeEstimate();
-  extras?.render();equipment?.render();roller?.render();
+  presence?.render();extras?.render();equipment?.render();roller?.render();
   if (page === 'overview') loadMini(true);
   if (page === 'devices') renderDevices(true);
   if (page === 'settings') renderSettings();
@@ -171,7 +171,7 @@ function poll() {
       if (document.documentElement.dataset.theme !== snapshot.settings.theme) theme(snapshot.settings.theme,false);
     } catch (error) { console.error('Snapshot unavailable',error); }
   }
-  extras?.render();equipment?.render();roller?.render();
+  presence?.render();extras?.render();equipment?.render();roller?.render();
   if (page === 'overview') { renderOverview(); loadMini(); }
   if (page === 'devices') renderDevices();
   if (page === 'settings') renderSettings();
@@ -493,7 +493,7 @@ lifecycle.poll();
 dashboard = new window.WattDashboard({native,read:historyRead,resizeMini:drawMini,isBlocked:()=>lifecycle.blocked,dataTime,getSnapshot:()=>snapshot,reading,isDemo:()=>demo,openModal,closeModal,toast});
 equipment = new window.WattEquipment({native,getSnapshot:()=>snapshot,openModal,closeModal,toast,poll,repaint:()=>dashboard?.update()});
 extras = new window.WattExtras({native,renderSolar:()=>solar?.render(),getSnapshot:()=>snapshot,isDemo:()=>demo,toast,poll,cancelArchive:()=>lifecycle.confirmCancellation(),repaint:()=>{dashboard?.update();drawHistory();drawMini();},imported:()=>{dashboard?.clearCache();if(page==='history')loadHistory();lastMiniLoad=0;}});
-solar = new window.WattSolarPlan({native:deviceNative,equipment,getSnapshot:()=>snapshot,getReading:reading,openModal,closeModal,toast,poll,symbol:code=>extras.symbol(code)});
+solar = new window.WattSolarPlan({native:deviceNative,equipment,getSnapshot:()=>snapshot,getReading:reading,getPresence:()=>presence?.state,openModal,closeModal,toast,poll,symbol:code=>extras.symbol(code)});
 roller = new window.WattRoller({native:deviceNative,isDemo:()=>demo,getSolar:()=>solar,openModal,closeModal,toast,poll});
 configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,dashboard,equipment,openModal,closeModal,toast,applied:backup=>{
   settingsDirty=false;poll();
@@ -502,6 +502,7 @@ configuration = new window.WattSettingsBackup({native,getSnapshot:()=>snapshot,d
 }});
 theme(!native?localStorage.getItem('wattpit-preview-theme')||'dark':'dark',false);
 lanUi=new window.WattLan({native:deviceNative,toast,openModal,closeModal});
+presence=new window.WattPresence({native:deviceNative,toast,openModal,closeModal,poll,refresh:()=>{if(solar){solar.renderKey='';solar.render();}}});
 selectRange('today');poll();renderSettings();
 if(new URLSearchParams(location.search).get('demo')==='1')setDemo(true);
 window.pullReload=new window.WattPullReload({element:$('overview'),canStart:()=>page==='overview'&&!demo&&!dashboard.editing&&!lifecycle.blocked&&!lifecycle.busy&&!snapshot.archiveBusy&&snapshot.devices.length>0&&Date.now()>=archiveRequestedUntil&&$('modal').hidden,reload:reloadMissingData});

@@ -23,6 +23,9 @@ final class PlantCommands {
             case "weatherPlace":arity(args,1);WeatherClient.place(repo,new JSONObject(args.getString(0)));break;
             case "refreshWeather":arity(args,0);WeatherClient.refresh(repo,true);break;
             case "saveEquipment":arity(args,1);if(args.getString(0).length()>20000)throw new IllegalArgumentException("Die Anlagenkonfiguration ist zu groß.");repo.saveEquipment(new JSONObject(args.getString(0)));WeatherClient.refresh(repo,true);break;
+            case "savePresence":arity(args,1);PresenceStore.get(context).mode(args.getString(0));break;
+            case "saveAbsence":arity(args,1);PresenceStore.get(context).save(args.getString(0));break;
+            case "resolveAbsence":arity(args,2);PresenceStore.get(context).resolve(args.getString(0),args.getString(1));break;
             case "saveRoller":arity(args,1);RollerStore.get(context).configure(args.getString(0));break;
             case "rollerReconnect":arity(args,0);RollerHandover.get(context).reconnect();break;
             case "saveDevice":arity(args,1);repo.saveDevice(new JSONObject(args.getString(0)));break;

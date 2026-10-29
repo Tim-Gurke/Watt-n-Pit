@@ -14,10 +14,10 @@ import de.wattpit.app.core.VictronSettings;
 
 /** Forecast history is separate from measurements. All history work runs off the UI/bridge thread. */
 final class SolarPlanning extends SQLiteOpenHelper {
-    private static final int ALGORITHM=1660;
+    private static final int ALGORITHM=1670;
     private final RollerLedger rollerLedger;
     private final Context context;
-    private JSONArray rollerInputs=new JSONArray();
+    private JSONArray rollerInputs=new JSONArray(),presenceHistory=new JSONArray();
     static volatile String sharedKnowledge="{}";
     private final Repository repository;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
@@ -112,7 +112,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
                 JSONObject row=rows.getJSONObject(i);String key=row.getString("key");long from=row.getLong("from"),to=row.getLong("to"),issued=row.getLong("issued");double wh=row.getDouble("wh");
                 if(!key.matches("k-[a-f0-9]{16}")||!Double.isFinite(wh)||wh<0||wh>10000000||issued>now+60000||issued<now-86400000||from<issued||from>issued+16L*86400000||to<=from||to-from>12L*3600000)throw new IllegalArgumentException();
                 ContentValues v=new ContentValues();v.put("key",key);v.put("start",from);v.put("end",to);v.put("issued",issued);v.put("payload",row.toString());db.insertWithOnConflict("forecasts",null,v,SQLiteDatabase.CONFLICT_IGNORE);
-            }db.delete("forecasts","start<?",new String[]{""+(now-400L*86400000)});db.setTransactionSuccessful();
+            }db.delete("forecasts","start<?",new String[]{""+(LearningWindow.since(now))});db.setTransactionSuccessful();
         }catch(Exception ignored){}finally{if(db!=null&&db.inTransaction())db.endTransaction();}});
     }
     private static final class ContextEntry {
@@ -173,7 +173,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
         return !limit.equals("voltage")&&!limit.equals("current");
     }
     private boolean annotate(JSONObject row,NavigableMap<Long,ContextEntry> contexts,JSONArray profiles,JSONObject weather,String currentKey,String solarKey,long now,JSONArray specialUses,List<PlanningConfirmation.Entry> confirmations)throws Exception{
-        JSONArray segments=row.getJSONArray("segments");double wh=0,estimatedWh=0,reconstructedWh=0,rollerInputWh=0;long duration=0,estimated=0,latest=0,excluded=0,reconstructed=0,confirmedMillis=0,rollerAdjustedMillis=0;boolean solarEligible=true,portableEligible=true,free=true;String rowKey="",rowSolarKey="",rowSystemKey="";JSONObject rejected=new JSONObject();
+        JSONArray segments=row.getJSONArray("segments");double wh=0,estimatedWh=0,reconstructedWh=0,rollerInputWh=0;long duration=0,estimated=0,latest=0,excluded=0,reconstructed=0,confirmedMillis=0,rollerAdjustedMillis=0;boolean solarEligible=true,portableEligible=true,free=true;String rowKey="",rowSolarKey="",rowSystemKey="";JSONObject rejected=new JSONObject(),presenceUsage=new JSONObject();
         JSONObject current=new JSONObject().put("equipment",repository.equipment()).put("setup",setup());
         for(int i=0;i<segments.length();i++){
             JSONObject segment=segments.getJSONObject(i);long from=segment.getLong("from"),to=segment.getLong("to");ContextEntry context=at(contexts,from);
@@ -236,9 +236,14 @@ final class SolarPlanning extends SQLiteOpenHelper {
             }
             rollerAdjustedMillis+=sectionRollerMillis;rollerInputWh+=sectionRollerWh;wh+=sectionWh;duration+=sectionDuration;estimated+=sectionEstimated;estimatedWh+=sectionEstimatedWh;latest=Math.max(latest,sectionLatest);
             if(confirmation!=null)confirmedMillis+=sectionDuration;
+            if(sectionDuration>0){String occupancy=PresenceStore.at(presenceHistory,from,to);JSONObject u=presenceUsage.optJSONObject(occupancy);if(u==null){u=new JSONObject();presenceUsage.put(occupancy,u);}
+                String[] fields={"wh","duration","estimatedDuration","estimatedWh","measuredWh","reconstructedDuration","reconstructedWh","rollerAdjustedDuration","rollerInputWh"};
+                double[] amounts={sectionWh,sectionDuration,sectionEstimated,sectionEstimatedWh,sectionWh-sectionEstimatedWh,sectionReconstructed,sectionReconstructed>0?sectionEstimatedWh:0,sectionRollerMillis,sectionRollerWh};
+                for(int k=0;k<fields.length;k++)u.put(fields[k],u.optDouble(fields[k],0)+amounts[k]);u.put("latest",Math.max(u.optLong("latest"),sectionLatest));
+            }
         }
         row.remove("segments");row.put("key",rowKey).put("solarKey",rowSolarKey.isEmpty()?solarKey:rowSolarKey).put("systemKey",rowSystemKey).put("portableEligible",portableEligible&&solarEligible&&!rowSystemKey.isEmpty()).put("mobileFree",free&&!row.optBoolean("extraCharging"))
-            .put("learningVersion",2).put("solarEligible",solarEligible&&row.getLong("to")<=now)
+            .put("usageByPresence",presenceUsage).put("learningVersion",2).put("solarEligible",solarEligible&&row.getLong("to")<=now)
             .put("usage",new JSONObject().put("wh",wh).put("duration",duration).put("excludedRollerMillis",excluded).put("estimatedDuration",estimated).put("estimatedWh",estimatedWh).put("measuredWh",wh-estimatedWh).put("rollerAdjustedDuration",rollerAdjustedMillis).put("rollerInputWh",rollerInputWh).put("reconstructedDuration",reconstructed).put("reconstructedWh",reconstructedWh).put("confirmedDuration",confirmedMillis).put("rejected",rejected).put("latest",latest));return true;
     }
     void request(){
@@ -254,11 +259,11 @@ final class SolarPlanning extends SQLiteOpenHelper {
             JSONObject observationWeather=new JSONObject(weather.toString()).put("days",days);
             String timeRevision=repository.db.archiveClockRevision();
             boolean rebuild=confirmed||repository.prefs.getInt("planningEnergyVersion."+source,0)<ALGORITHM||!timeRevision.equals(repository.prefs.getString("planningArchiveTimeRevision."+source,""));
-            if(rebuild){try(Cursor c=db.rawQuery("SELECT MIN(start) FROM observations WHERE source=?",new String[]{source})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(now-400L*86400000,Math.min(since,c.getLong(0)));}}
+            if(rebuild){long first=repository.db.stats().optLong("from",0);if(first>0)since=Math.max(LearningWindow.since(now),Math.min(since,first));try(Cursor c=db.rawQuery("SELECT MIN(start) FROM observations WHERE source=?",new String[]{source})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(LearningWindow.since(now),Math.min(since,c.getLong(0)));}}
             else try(Cursor c=db.rawQuery("SELECT MAX(end) FROM observations WHERE source=? AND end<=?",new String[]{source,""+now})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(since,c.getLong(0)-2L*86400000);}
-            if(confirmations.changedFrom!=Long.MAX_VALUE)since=Math.max(now-400L*86400000,Math.min(since,confirmations.changedFrom));
+            if(confirmations.changedFrom!=Long.MAX_VALUE)since=Math.max(LearningWindow.since(now),Math.min(since,confirmations.changedFrom));
             long[] inputRange=rollerLedger.range(source);long previousInputEnd=repository.prefs.getLong("planningRollerInputEnd."+source,0);
-            if(inputRange[1]>previousInputEnd)since=Math.max(now-400L*86400000,Math.min(since,previousInputEnd>0?previousInputEnd-3600000:inputRange[0]));
+            if(inputRange[1]>previousInputEnd)since=Math.max(LearningWindow.since(now),Math.min(since,previousInputEnd>0?previousInputEnd-3600000:inputRange[0]));
             try{java.time.ZoneId zone=java.time.ZoneId.of(weather.optString("timezone",java.time.ZoneId.systemDefault().getId()));since=java.time.Instant.ofEpochMilli(since).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();}catch(Exception ignored){}
             JSONArray specialUses=new JSONArray(repository.prefs.getString("rollerChargeWindows","[]")),previousUses=new JSONArray(repository.prefs.getString("planningSpecialUsage."+source,"[]"));
             Map<Long,Long> previousWindows=new HashMap<>(),nextWindows=new HashMap<>();
@@ -267,11 +272,13 @@ final class SolarPlanning extends SQLiteOpenHelper {
             long changedAt=now;Set<Long> starts=new HashSet<>(previousWindows.keySet());starts.addAll(nextWindows.keySet());
             for(long at:starts)if(!Objects.equals(previousWindows.get(at),nextWindows.get(at)))changedAt=Math.min(changedAt,at);
             if(changedAt<now){java.time.ZoneId zone;try{zone=java.time.ZoneId.of(weather.optString("timezone",java.time.ZoneId.systemDefault().getId()));}catch(Exception e){zone=java.time.ZoneId.systemDefault();}
-                long dayStart=java.time.Instant.ofEpochMilli(changedAt).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();since=Math.max(now-400L*86400000,Math.min(since,dayStart));}
+                long dayStart=java.time.Instant.ofEpochMilli(changedAt).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();since=Math.max(LearningWindow.since(now),Math.min(since,dayStart));}
             NavigableMap<Long,ContextEntry> contexts=new TreeMap<>();List<Long> changes=new ArrayList<>();
             try(Cursor c=db.rawQuery("SELECT at,key,mobile_free,solar_key,payload FROM contexts WHERE source=? ORDER BY at",new String[]{source})){while(c.moveToNext()){ContextEntry entry=new ContextEntry(c);contexts.put(entry.at,entry);changes.add(entry.at);}}
             for(PlanningConfirmation.Entry e:confirmations.entries){changes.add(e.from);changes.add(e.to);}
             ContextEntry latest=contexts.isEmpty()?null:contexts.lastEntry().getValue();String currentKey=latest==null?"":latest.key,solarKey=latest==null?"":latest.solarKey;
+            presenceHistory=PresenceStore.get(context).history(since);
+            for(int i=0;i<presenceHistory.length();i++)changes.add(presenceHistory.getJSONObject(i).getLong("at"));
             JSONArray profiles=repository.db.deviceSettingsHistory(devices[0],since,now);
             for(int i=0;i<profiles.length();i++){JSONObject p=profiles.getJSONObject(i);changes.add(p.getLong("since"));changes.add(p.getLong("until"));changes.add(p.getLong("until")+VictronSettings.MAX_AGE);}
             // Split at actual special-use boundaries; preserve ordinary household evidence
@@ -287,17 +294,18 @@ final class SolarPlanning extends SQLiteOpenHelper {
                 // observation before its missing historical weather is restored.
                 if(!dated.contains(row.getString("day"))&&!rollerCharging(specialUses,from,to))try(Cursor c=db.rawQuery("SELECT 1 FROM observations WHERE source=? AND start=? AND end=?",new String[]{source,""+from,""+to})){if(c.moveToFirst())continue;}
                 if(!annotate(row,contexts,profiles,weather,currentKey,solarKey,now,specialUses,confirmations.entries))continue;
+                if(row.getJSONObject("usage").optLong("duration")==0&&row.optDouble("solarCoverage",0)<=0)continue;
                 ContentValues v=new ContentValues();v.put("start",from);v.put("end",to);v.put("source",source);v.put("payload",row.toString());db.insertWithOnConflict("observations",null,v,SQLiteDatabase.CONFLICT_REPLACE);
-            }db.delete("observations","end<?",new String[]{""+(now-400L*86400000)});db.delete("contexts","at<?",new String[]{""+(now-410L*86400000)});db.setTransactionSuccessful();}finally{db.endTransaction();}
+            }db.delete("observations","end<?",new String[]{""+(LearningWindow.since(now))});db.delete("contexts","at<? AND at NOT IN (SELECT MAX(at) FROM contexts WHERE at<? GROUP BY source)",new String[]{""+(LearningWindow.since(now)-10L*86400000),""+(LearningWindow.since(now)-10L*86400000)});db.setTransactionSuccessful();}finally{db.endTransaction();}
             if(observations.length()>0)repository.prefs.edit().putInt("planningEnergyVersion."+source,ALGORITHM).putLong("planningRollerInputEnd."+source,inputRange[1]).putString("planningArchiveTimeRevision."+source,timeRevision).putString("planningSpecialUsage."+source,specialUses.toString()).apply();
             JSONArray samples=new JSONArray(),forecasts=new JSONArray();
-            try(Cursor c=db.rawQuery("SELECT payload FROM observations WHERE source=? ORDER BY start DESC LIMIT 1300",new String[]{source})){while(c.moveToNext()){JSONObject row=new JSONObject(c.getString(0));if(!row.has("solarKey")&&currentKey.equals(row.optString("key")))row.put("solarKey",solarKey);samples.put(row);}}
+            try(Cursor c=db.rawQuery("SELECT payload FROM observations WHERE source=? ORDER BY start DESC LIMIT 3500",new String[]{source})){while(c.moveToNext()){JSONObject row=new JSONObject(c.getString(0));if(!row.has("solarKey")&&currentKey.equals(row.optString("key")))row.put("solarKey",solarKey);samples.put(row);}}
             // One original eligible prediction per interval keeps the bridge payload small.
             // SQLite's single MIN aggregate selects payload from that same earliest row.
             Set<String> forecastKeys=new HashSet<>();for(ContextEntry entry:contexts.values()){forecastKeys.add(entry.key);forecastKeys.add(entry.solarKey);}for(PlanningConfirmation.Entry e:confirmations.entries){forecastKeys.add(e.key);forecastKeys.add(e.solarKey);}
-            try(Cursor c=db.rawQuery("SELECT payload,MIN(issued) FROM forecasts WHERE issued<=start-43200000 AND issued>=start-259200000 GROUP BY key,start,end ORDER BY start DESC LIMIT 5000",null)){while(c.moveToNext()&&forecasts.length()<1200){JSONObject f=new JSONObject(c.getString(0));if(forecastKeys.contains(f.optString("key")))forecasts.put(f);}}
+            try(Cursor c=db.rawQuery("SELECT payload,MIN(issued) FROM forecasts WHERE issued<=start-43200000 AND issued>=start-259200000 GROUP BY key,start,end ORDER BY start DESC LIMIT 15000",null)){while(c.moveToNext()&&forecasts.length()<3500){JSONObject f=new JSONObject(c.getString(0));if(forecastKeys.contains(f.optString("key")))forecasts.put(f);}}
             JSONArray notices=new JSONArray();for(PlanningConfirmation.Entry e:confirmations.entries)notices.put(e.notice());
-            result.put("source",source).put("observations",samples).put("forecasts",forecasts).put("confirmedSetups",notices).put("updated",now);
+            result.put("source",source).put("observations",samples).put("forecasts",forecasts).put("confirmedSetups",notices).put("presence",PresenceStore.get(context).snapshot()).put("updated",now);
         }catch(Exception e){try{result.put("error","Lerndaten gerade nicht verfügbar. Die Solarvorschau bleibt nutzbar.");}catch(JSONException ignored){}}
         finally{busy.set(false);if(!closed&&result.length()>0){if(!result.has("error"))sharedKnowledge=result.toString();callback.accept(result);}if(!closed&&requestedAgain.getAndSet(false))request();}});
     }
@@ -311,9 +319,9 @@ final class SolarPlanning extends SQLiteOpenHelper {
         try(Cursor c=db.rawQuery("SELECT payload FROM observations WHERE source=? ORDER BY start",new String[]{currentSource})){while(c.moveToNext())observations.put(new JSONObject(c.getString(0)));}
         try(Cursor c=db.rawQuery("SELECT payload FROM forecasts ORDER BY start,issued",null)){while(c.moveToNext())forecasts.put(new JSONObject(c.getString(0)));}
         try(Cursor c=db.rawQuery("SELECT at,key,mobile_free,solar_key,payload FROM contexts WHERE source=? ORDER BY at",new String[]{currentSource})){while(c.moveToNext())contexts.put(new JSONObject().put("at",c.getLong(0)).put("key",c.getString(1)).put("mobileFree",c.getInt(2)==1).put("solarKey",c.getString(3)).put("payload",new JSONObject(c.getString(4))));}
-        for(int i=0;i<selected.length;i++)if(!selected[i].isEmpty())devices.put(new JSONObject().put("kind",i==0?"solar":"shunt").put("device",selected[i]).put("profiles",repository.db.deviceSettingsHistory(selected[i],now-410L*86400000,now)).put("archiveTime",repository.archiveTimeDiagnostic(selected[i])));
+        for(int i=0;i<selected.length;i++)if(!selected[i].isEmpty())devices.put(new JSONObject().put("kind",i==0?"solar":"shunt").put("device",selected[i]).put("profiles",repository.db.deviceSettingsHistory(selected[i],LearningWindow.since(now)-10L*86400000,now)).put("archiveTime",repository.archiveTimeDiagnostic(selected[i])));
         JSONArray confirmations=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,start,end,key,solar_key,payload,weather FROM confirmed_setups WHERE source=? ORDER BY start",new String[]{currentSource})){while(c.moveToNext()){PlanningConfirmation.Entry e=new PlanningConfirmation.Entry(c);confirmations.put(e.notice().put("id",e.id).put("key",e.key).put("solarKey",e.solarKey).put("payload",e.payload).put("weather",e.weather));}}
-        return result.put("rollerInputIntervals",rollerLedger.read(currentSource,now-400L*86400000,now)).put("rollerHandover",RollerHandover.get(context).snapshot()).put("observations",observations).put("forecasts",forecasts).put("contexts",contexts).put("confirmedSetups",confirmations).put("devices",devices);
+        return result.put("rollerInputIntervals",rollerLedger.read(currentSource,LearningWindow.since(now),now)).put("rollerHandover",RollerHandover.get(context).snapshot()).put("observations",observations).put("forecasts",forecasts).put("contexts",contexts).put("confirmedSetups",confirmations).put("devices",devices);
     });}
     void shutdown(){closed=true;worker.shutdown();/* Existing jobs finish before the process releases SQLite. */}
 }

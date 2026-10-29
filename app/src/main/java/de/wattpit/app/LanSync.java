@@ -33,7 +33,8 @@ final class LanSync {
     private volatile long rollerDiscoveryUntil;
     private volatile String error="",resolvedHost="";
     private volatile int resolvedPort;
-    private volatile boolean visible,hosting;
+    private volatile boolean visible,hosting,backgroundViewer;
+    private volatile long backgroundRefresh;
     private volatile Consumer<JSONObject> listener;
     private ServerSocket server;
     private ExecutorService acceptor;
@@ -53,13 +54,14 @@ final class LanSync {
         cache=new File(context.getFilesDir(),"lan-display.json");
         controlRevision=prefs.getLong("controlRevision",0);
         if(viewer()&&cache.length()<=LanWire.MAX_RESPONSE)try(InputStream in=new FileInputStream(cache)){ByteArrayOutputStream bytes=new ByteArrayOutputStream();byte[] block=new byte[8192];int n;while((n=in.read(block))!=-1){if(bytes.size()+n>LanWire.MAX_RESPONSE)throw new IOException();bytes.write(block,0,n);}JSONObject saved=new JSONObject(bytes.toString("UTF-8"));if(config.optString("id").equals(saved.optString("id"))){remote=saved.getJSONObject("bundle");receivedAt=saved.optLong("at");}}catch(Exception ignored){}
-        client.scheduleWithFixedDelay(()->{if(visible&&viewer())refresh();},0,3,TimeUnit.SECONDS);
+        client.scheduleWithFixedDelay(()->{if(viewer()&&(visible||backgroundViewer&&SystemClock.elapsedRealtime()-backgroundRefresh>=15000)){backgroundRefresh=SystemClock.elapsedRealtime();refresh();}},0,3,TimeUnit.SECONDS);
     }
     boolean viewer(){return "viewer".equals(config.optString("role"));}
     boolean host(){return "host".equals(config.optString("role"));}
     void hostFailed(){error="Anlagenverbund konnte nicht gestartet werden. App erneut öffnen und WLAN prüfen.";}
     void foreground(Consumer<JSONObject> callback){visible=true;listener=callback;if(viewer()){discover();client.execute(this::refresh);}}
-    void background(){visible=false;listener=null;if(viewer())stopDiscovery();}
+    void background(){visible=false;listener=null;if(viewer()&&!backgroundViewer)stopDiscovery();}
+    void backgroundViewer(boolean enabled){backgroundViewer=enabled;if(enabled&&viewer())discover();else if(!visible)stopDiscovery();}
     private void save(JSONObject next)throws Exception{
         if(!prefs.edit().putString("config",next.toString()).putBoolean("joinedNotice","viewer".equals(next.optString("role"))).commit())throw new IOException();config=next;
     }
@@ -121,7 +123,7 @@ final class LanSync {
             return result.put("controlRevision",remote.optLong("controlRevision",-1)).put("lan",state()).toString();
         }catch(Exception e){return "{}";}
     }
-    String part(String name){JSONObject value=remote.optJSONObject(name);if(value==null)return "{}";try{JSONObject result=new JSONObject(value.toString());if(name.equals("roller")&&!state().optBoolean("connected"))result.put("fresh",false).put("status","Hauptgerät nicht erreichbar");return result.toString();}catch(Exception e){return "{}";}}
+    String part(String name){JSONObject value=remote.optJSONObject(name);if(value==null)return "{}";try{JSONObject result=new JSONObject(value.toString());if(name.equals("presence")&&!state().optBoolean("connected"))result.put("state","unknown").put("stale",true).put("pending",new JSONArray());if(name.equals("roller")&&!state().optBoolean("connected"))result.put("fresh",false).put("status","Hauptgerät nicht erreichbar");return result.toString();}catch(Exception e){return "{}";}}
     String bondedDevices(){return viewer()?remote.optJSONArray("bonded")==null?"[]":remote.optJSONArray("bonded").toString():PlantCommands.bonded(context).toString();}
     long controlRevision(){if(viewer())return remote.optLong("controlRevision",-1);synchronized(this){try{return currentControlRevision();}catch(Exception e){return -1;}}}
     String remoteSyncState(){JSONObject sync=remote.optJSONObject("sync");try{
@@ -135,7 +137,7 @@ final class LanSync {
         JSONArray values=new JSONArray();Map<String,?> all=repository.prefs.getAll();
         for(String key:new String[]{"devices","equipment-v1","solar-setup-v1","weatherPlace","capacity","sampleSeconds","recording"})values.put(all.get(key));
         ArchiveRun.State run=repository.archiveRun.state();values.put(run.id).put(run.startedAt).put(run.busy);
-        values.put(RollerStore.get(context).snapshot().optJSONObject("profile"));return digest(values.toString());
+        values.put(RollerStore.get(context).snapshot().optJSONObject("profile"));values.put(context.getSharedPreferences("wattpit-presence",Context.MODE_PRIVATE).getLong("revision",0));return digest(values.toString());
     }
     private static String digest(String value)throws Exception{return java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}
     private long currentControlRevision()throws Exception{
@@ -185,6 +187,7 @@ final class LanSync {
         // A slower background poll must not undo a newer, acknowledged charge command.
         JSONObject oldRoller=remote.optJSONObject("roller"),newRoller=bundle.optJSONObject("roller");
         if(oldRoller!=null&&newRoller!=null&&oldRoller.optLong("sessionRevision")>newRoller.optLong("sessionRevision"))try{bundle.put("roller",oldRoller);}catch(JSONException ignored){}
+        try{JSONObject presence=bundle.optJSONObject("presence");if(presence!=null)PresenceStore.notifySnapshot(context,presence,config.optString("id"));}catch(Exception ignored){}
         remote=bundle;receivedAt=System.currentTimeMillis();receivedElapsed=SystemClock.elapsedRealtime();error="";
         // A cached display never becomes live merely because the Activity or process restarts.
         // Live refreshes stay in memory; avoid rewriting the full weather/learning bundle
@@ -265,7 +268,7 @@ final class LanSync {
             long now=System.currentTimeMillis();if(!repository.archiveBusy&&now-lastPlanRequest>30000){lastPlanRequest=now;planning.request();}
             JSONObject snapshot=repository.archiveBusy?new JSONObject(repository.backgroundSnapshot()):repository.snapshot();snapshot.remove("archiveDiagnostics");snapshot.remove("event");snapshot.remove("eventId");
             return new JSONObject().put("snapshot",snapshot).put("setup",planning.setup()).put("planning",new JSONObject(SolarPlanning.sharedKnowledge)).put("roller",RollerHandover.view(context))
-                .put("controlProtocol",1).put("controlRevision",currentControlRevision()).put("sync",new JSONObject(repository.syncState())).put("bonded",PlantCommands.bonded(context));
+                .put("presence",PresenceStore.get(context).snapshot()).put("controlProtocol",1).put("controlRevision",currentControlRevision()).put("sync",new JSONObject(repository.syncState())).put("bonded",PlantCommands.bonded(context));
         }
         long from=args.getLong(0);if(method.equals("sunsetSoc")){
             if(from<=0||from>System.currentTimeMillis())throw new IllegalArgumentException();String shunt="";JSONArray devices=repository.configs();
@@ -298,7 +301,7 @@ final class LanSync {
     }
     @SuppressWarnings("deprecation")
     private synchronized void discover(){
-        if(nsd==null||discovery!=null||!viewer()||!visible&&SystemClock.elapsedRealtime()>rollerDiscoveryUntil)return;
+        if(nsd==null||discovery!=null||!viewer()||!visible&&!backgroundViewer&&SystemClock.elapsedRealtime()>rollerDiscoveryUntil)return;
         discovery=new NsdManager.DiscoveryListener(){
             public void onDiscoveryStarted(String type){}public void onDiscoveryStopped(String type){}public void onStartDiscoveryFailed(String type,int code){stopDiscovery();}public void onStopDiscoveryFailed(String type,int code){}public void onServiceLost(NsdServiceInfo info){}
             public void onServiceFound(NsdServiceInfo info){if(!viewer()||!info.getServiceName().startsWith("WattPit-"+config.optString("id").substring(0,8))||!resolving.compareAndSet(false,true))return;

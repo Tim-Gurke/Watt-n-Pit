@@ -48,6 +48,13 @@ final class SolarPlanningProof {
             JSONObject adjusted=row(ask(planning,replies).getJSONArray("observations"),start),adjustedUsage=adjusted.getJSONObject("usage");
             check(adjustedUsage.getLong("duration")==11*hour&&adjustedUsage.getLong("rollerAdjustedDuration")==hour/2&&Math.abs(adjustedUsage.getDouble("wh")-130.5)<1e-6,"time-aligned BMS charger-input estimates retain household learning during the charge at weaker confidence");
             check(Math.abs(adjustedUsage.getDouble("rollerInputWh")-1.5)<1e-6&&Math.abs(adjusted.getDouble("consumption")-132)<1e-8,"roller input is subtracted only from learning; actual whole-plant consumption stays unchanged");
+            SQLiteDatabase presenceDb=PresenceStore.get(context).getWritableDatabase();
+            presenceDb.execSQL("INSERT INTO events(at,state) VALUES(?, 'home')",new Object[]{start});
+            presenceDb.execSQL("INSERT INTO events(at,state) VALUES(?, 'away')",new Object[]{start+5*hour});
+            repo.prefs.edit().putInt("planningEnergyVersion."+source,0).commit();
+            JSONObject separated=row(ask(planning,replies).getJSONArray("observations"),start).getJSONObject("usageByPresence");
+            check(Math.abs(separated.getJSONObject("home").getDouble("wh")-58.5)<1e-6&&Math.abs(separated.getJSONObject("away").getDouble("wh")-72)<1e-6,"actual occupancy boundaries split learned Wh exactly, including the roller deduction, without changing measured totals");
+            presenceDb.execSQL("DELETE FROM events");
             JSONArray input=ledger.read(source.toString(),chargeFrom,chargeTo);
             check(RollerLedger.estimate(input,chargeFrom-1000,chargeTo)==null&&RollerLedger.estimate(input,chargeFrom,chargeTo+1000)==null&&ledger.read("different-plant",chargeFrom,chargeTo).length()==0,"missing BMS time and a different plant never supply an invented roller load deduction");
             repo.prefs.edit().putString("rollerChargeWindows",new JSONArray().put(new JSONObject().put("from",start+10*hour+hour/2).put("to",0)).toString()).commit();

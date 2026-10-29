@@ -94,7 +94,7 @@ final class HistoryDb extends SQLiteOpenHelper {
             if(c.moveToFirst()&&at>=c.getLong(1)&&at-c.getLong(1)<=VictronSettings.MAX_AGE&&new JSONObject(c.getString(2)).getJSONObject("values").toString().equals(snapshot.getJSONObject("values").toString()))start=c.getLong(0);
         }
         ContentValues v=new ContentValues();v.put("device",device);v.put("start",start);v.put("end",at);v.put("payload",snapshot.toString());db.insertWithOnConflict("device_settings",null,v,SQLiteDatabase.CONFLICT_REPLACE);
-        db.delete("device_settings","end<?",new String[]{""+(at-410L*86400000)});
+        db.delete("device_settings","end<?",new String[]{""+(LearningWindow.since(at)-10L*86400000)});
     }
     JSONArray deviceSettingsHistory(String device,long from,long to)throws Exception{
         JSONArray result=new JSONArray();

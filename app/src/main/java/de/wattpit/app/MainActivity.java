@@ -51,6 +51,7 @@ public final class MainActivity extends Activity {
         try{DashboardPreset.install(repository.prefs,DashboardPreset.read(this));}catch(Exception e){repository.message(Repository.safeError(e));}
         lan=LanSync.get(this);
         solarPlanning=new SolarPlanning(this,repository,value->call("onSolarPlanData",value));
+        if(!lan.viewer())PresenceStore.get(this).tick();
         siteSensors=new SiteSensors(this,repository,this::call);
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(13,18,27));
@@ -93,7 +94,7 @@ public final class MainActivity extends Activity {
         super.onStart();
         foreground=true;
         lan.foreground(bundle->{if(lan.viewer()&&bundle.optJSONObject("planning")!=null)call("onSolarPlanData",bundle.optJSONObject("planning"));});
-        if(lan.host()&&!lan.state().optBoolean("hosting"))try{startForegroundService(new Intent(this,LanService.class));}catch(Exception ignored){}
+        if(lan.viewer()||lan.host()&&!lan.state().optBoolean("hosting"))try{startForegroundService(new Intent(this,LanService.class));}catch(Exception ignored){}
         web.removeCallbacks(retryIncompleteArchive);web.postDelayed(retryIncompleteArchive,15000);
         // Refresh on each foreground entry; WeatherClient skips disabled weather
         // and coalesces an already running request. Cached data stays available.
@@ -299,7 +300,7 @@ public final class MainActivity extends Activity {
             try{lan.create(name);runOnUiThread(()->{try{startForegroundService(new Intent(MainActivity.this,LanService.class));}catch(Exception e){error(e);}});return "";}
             catch(Exception e){return Repository.safeError(e);}
         }
-        @JavascriptInterface public void joinLan(String code){files.execute(()->{JSONObject result=new JSONObject();try{lan.join(code);result.put("ok",true);}catch(Exception e){try{result.put("error",e instanceof IllegalArgumentException?e.getMessage():"Hauptgerät nicht erreichbar. Beide Geräte im selben WLAN, Hauptgerät geöffnet und Code vollständig?");}catch(JSONException ignored){}}call("onLanResult",result);});}
+        @JavascriptInterface public void joinLan(String code){files.execute(()->{JSONObject result=new JSONObject();try{lan.join(code);runOnUiThread(()->{try{startForegroundService(new Intent(MainActivity.this,LanService.class));}catch(Exception ignored){}});result.put("ok",true);}catch(Exception e){try{result.put("error",e instanceof IllegalArgumentException?e.getMessage():"Hauptgerät nicht erreichbar. Beide Geräte im selben WLAN, Hauptgerät geöffnet und Code vollständig?");}catch(JSONException ignored){}}call("onLanResult",result);});}
         @JavascriptInterface public String leaveLan(){try{boolean resume=lan.leave();runOnUiThread(()->{stopService(new Intent(MainActivity.this,LanService.class));if(resume)requestStart();});return "";}catch(Exception e){return Repository.safeError(e);}}
         @JavascriptInterface public String lanPairingCode(){try{return new JSONObject().put("code",lan.pairingCode()).toString();}catch(Exception e){try{return new JSONObject().put("error",Repository.safeError(e)).toString();}catch(Exception ignored){return "{}";}}}
         @JavascriptInterface public String copyLanCode(){try{String code=lan.pairingCode();runOnUiThread(()->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Watt’n’Pit-Verbindungscode",code)));return "";}catch(Exception e){return Repository.safeError(e);}}
@@ -307,6 +308,11 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void scanLanCode(){runOnUiThread(()->{try{LanQr.scan(MainActivity.this);}catch(Exception e){try{call("onLanScanned",new JSONObject().put("error","Kamera konnte nicht geöffnet werden. Du kannst den Textcode einfügen."));}catch(JSONException ignored){}}});}
         @JavascriptInterface public void refreshLan(){lan.refreshNow();}
         @JavascriptInterface public String rollerSnapshot(){if(lan.viewer())return lan.part("roller");try{return RollerHandover.view(MainActivity.this).toString();}catch(Exception e){return "{}";}}
+        @JavascriptInterface public void presenceNotifications(){runOnUiThread(()->{if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},27);else try{startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));}catch(Exception ignored){}});}
+        @JavascriptInterface public String presenceSnapshot(){if(lan.viewer())return lan.part("presence");try{PresenceStore.get(MainActivity.this).tick();return PresenceStore.get(MainActivity.this).snapshot().toString();}catch(Exception e){return "{}";}}
+        @JavascriptInterface public String savePresence(String mode){return localControl("savePresence",new JSONArray().put(mode));}
+        @JavascriptInterface public String saveAbsence(String json){return localControl("saveAbsence",new JSONArray().put(json));}
+        @JavascriptInterface public String resolveAbsence(String id,String action){return localControl("resolveAbsence",new JSONArray().put(id).put(action));}
         @JavascriptInterface public String rollerReconnect(){return localControl("rollerReconnect",new JSONArray());}
         @JavascriptInterface public String saveRoller(String json){return localControl("saveRoller",new JSONArray().put(json));}
         @JavascriptInterface public String rollerSession(boolean start){if(lan.viewer())return LanSync.READ_ONLY;try{RollerStore.get(MainActivity.this).toggle(start);repository.invalidateStats();solarPlanning.request();return "";}catch(Exception e){return Repository.safeError(e);}}

@@ -1,6 +1,6 @@
 (function(root){
   'use strict';
-  const actions=new Set(['saveSolarSetup','saveSolarSite','weatherPlace','refreshWeather','saveEquipment','saveRoller','rollerReconnect','saveDevice','removeDevice','importSettings','start','stop','importArchive','importMissingArchive','cancelArchive','backgroundArchive']);
+  const actions=new Set(['savePresence','saveAbsence','resolveAbsence','saveSolarSetup','saveSolarSite','weatherPlace','refreshWeather','saveEquipment','saveRoller','rollerReconnect','saveDevice','removeDevice','importSettings','start','stop','importArchive','importMissingArchive','cancelArchive','backgroundArchive']);
   root.WattControlBridge=class{
     constructor(native,notify,changed,revision){
       this.revision=revision;this.native=native;this.notify=notify;this.changed=changed;this.next=0;this.pending=null;this.formRevision=null;

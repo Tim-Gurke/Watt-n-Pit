@@ -11,3 +11,5 @@
 .solar-learning-exclusions{margin:12px 0}.solar-learning-exclusions>div{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border)}.solar-learning-exclusions dt{overflow-wrap:anywhere}.solar-learning-exclusions dd{margin:0;white-space:nowrap}
 
 .solar-learning-table{table-layout:fixed}.solar-learning-table th,.solar-learning-table td{white-space:normal;overflow-wrap:anywhere;padding:10px 4px;font-size:11px}.solar-learning-table th:first-child{width:25%}.solar-learning-table th:nth-child(2){width:42%}.solar-learning-table th:nth-child(3){width:33%}
+
+.presence-plans article{padding:12px 0;border-bottom:1px solid var(--border);margin-bottom:12px}.presence-plans p{font-size:13px;line-height:1.6}.presence-choices{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}#presenceLive{font-size:16px;color:var(--mint)}#presenceSettings{margin-bottom:12px}

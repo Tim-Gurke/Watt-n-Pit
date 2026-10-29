@@ -64,9 +64,9 @@ test('two tiny fragments on other dates do not qualify one exceptional full day 
  const rows=[];for(const age of [26,25,24,23,22,21,20,2,1,0]){const at=now-age*D,day=new Date(at).toISOString().slice(0,10),hours=age===1||age===2?.25:5;rows.push({day,slot:1,learningVersion:2,usage:{wh:(age===0?80:10)*hours,duration:hours*H,estimatedDuration:0,estimatedWh:0,latest:at}});}
  const u=C.consumption({usageMode:'auto'},rows,'2026-10-23',now);assert.equal(u.slotStats[1].recentInfluence,0);assert.ok(Math.abs(u.parts[1]-50)<1e-8);
 });
-test('the previous matching season remains available within 400 days while older learning evidence expires',()=>{
+test('two previous matching seasons remain available within three calendar years while older evidence expires',()=>{
  const run=day=>C.consumption({usageMode:'auto'},observations(day,600),'2026-10-23',now);
- assert.equal(run('2025-10-24').wh,600);assert.equal(run('2025-06-01').wh,null);
+ assert.equal(run('2025-10-24').wh,600);assert.equal(run('2024-10-24').wh,600);assert.equal(run('2025-06-01').wh,600);assert.equal(run('2023-10-22').wh,null);
 });
 const equipment=(extra=[])=>E.normalize({version:1,groups:[{id:'roof',label:'Dach',count:2,watts:100,tilt:30,placement:'fixed',measurement:'solar',controller:'MPPT'},...extra]});
 const plan=eq=>C.normalize({groups:{roof:{azimuth:180,shade:[0,0,0]}}},eq);

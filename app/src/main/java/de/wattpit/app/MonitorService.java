@@ -74,6 +74,7 @@ public final class MonitorService extends Service {
         restartScan();
         if (first) worker.scheduleWithFixedDelay(() -> main.post(() -> {
             if (!repository.running) return;
+            PresenceStore.get(this).tick();
             if (!scanning) startScan();
             getSystemService(NotificationManager.class).notify(NOTIFICATION,notification());
         }),30,30,TimeUnit.SECONDS);

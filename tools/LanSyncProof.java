@@ -114,6 +114,14 @@ public final class LanSyncProof {
             check(rejected&&source.prefs.getFloat("capacity",0)==120,"host-side validation rejects invalid values from the remote form");
             rejected=false;try{viewer.control("deleteDatabase",new JSONArray(),viewer.controlRevision());}catch(IllegalArgumentException expected){rejected=true;}
             check(rejected,"the control API accepts only the explicit app-operation whitelist");
+            long presenceFrom=System.currentTimeMillis()+3600000,presenceTo=presenceFrom+86400000;
+            viewer.control("saveAbsence",new JSONArray().put(new JSONObject().put("from",presenceFrom).put("to",presenceTo).toString()),viewer.controlRevision());
+            JSONObject sharedPresence=new JSONObject(viewer.part("presence"));String absenceId=sharedPresence.getJSONArray("plans").getJSONObject(0).getString("id");
+            check(sharedPresence.getJSONArray("plans").getJSONObject(0).getLong("to")==presenceTo,"a viewer creates a confirmed future absence in the host's shared planning store");
+            viewer.control("saveAbsence",new JSONArray().put(new JSONObject().put("id",absenceId).put("from",presenceFrom+3600000).put("to",presenceTo).toString()),viewer.controlRevision());
+            check(new JSONObject(viewer.part("presence")).getJSONArray("plans").getJSONObject(0).getLong("to")==presenceTo,"remote departure edits preserve the original return and are acknowledged by the host");
+            viewer.control("resolveAbsence",new JSONArray().put(absenceId).put("cancel"),viewer.controlRevision());
+            check(new JSONObject(viewer.part("presence")).getJSONArray("plans").getJSONObject(0).getString("status").equals("cancelled"),"remote cancellation removes the planned absence from forecasting on every viewer");
             viewer.control("weatherPlace",new JSONArray().put("{\"off\":true}"),viewer.controlRevision());
             check(!source.prefs.contains("weatherPlace"),"the viewer can disable shared weather at the host");
             source.prefs.edit().putString("theme","dark").putString("dashboard-v1","host-layout").commit();

@@ -28,7 +28,7 @@ final class RollerLedger extends SQLiteOpenHelper {
         source=plant;mac=address;session=started;lastTo=b;wh+=value;
         ContentValues row=new ContentValues();row.put("source",plant);row.put("start",from);row.put("end",b);row.put("wh",wh);row.put("mac",address);row.put("session",started);
         SQLiteDatabase db=getWritableDatabase();db.insertWithOnConflict("input_intervals",null,row,SQLiteDatabase.CONFLICT_REPLACE);
-        if(b-lastPrune>3600000){db.delete("input_intervals","end<?",new String[]{""+(b-400L*86400000)});lastPrune=b;}
+        if(b-lastPrune>3600000){db.delete("input_intervals","end<?",new String[]{""+(LearningWindow.since(b))});lastPrune=b;}
     }
     synchronized JSONArray read(String plant,long a,long b)throws JSONException{
         JSONArray out=new JSONArray();try(Cursor c=getReadableDatabase().rawQuery("SELECT start,end,wh FROM input_intervals WHERE source=? AND end>? AND start<? ORDER BY start",new String[]{plant,""+a,""+b})){
