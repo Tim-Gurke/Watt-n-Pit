@@ -13,7 +13,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   window.WattPit={syncState:()=>JSON.stringify({busy:window.busy,cockpitNoticeAccepted:localStorage.getItem('notice')==='yes',archive:window.archive,theme:window.fixture.settings.theme,palette:'classic'}),acknowledgeCockpit:()=>{if(window.ackFailure)return 'Speichern fehlgeschlagen';localStorage.setItem('notice','yes');return '';},cancelArchive:()=>{window.cancelCalls++;},snapshot:()=>{heavy();return JSON.stringify(window.fixture);},history:()=>{heavy();return '{"points":[]}';},dashboardHistory:()=>{heavy();return '{"points":[],"summary":{}}';},energyHistoryWindow:(from,to,source,solarFrom,solarTo)=>{
    heavy();window.flowCalls.push({from,to,source,solarFrom,solarTo});
    const s=(kind,total)=>({points:[{t:kind==='solar'?rise-60000:from,v:0},{t:kind==='solar'?set+60000:to,v:total}],summary:{last:total,from:kind==='solar'?rise-60000:from,to:kind==='solar'?set+60000:to,coverage:1}});
-   return JSON.stringify({solar:s('solar',100),consumption:s('consumption',160),balance:s('balance',-60)});
+   return JSON.stringify({accountingVersion:2,solar:s('solar',100),consumption:s('consumption',160),balance:s('balance',-60)});
   },settings:json=>{Object.assign(window.fixture.settings,JSON.parse(json));return '';}};
  });
  await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));

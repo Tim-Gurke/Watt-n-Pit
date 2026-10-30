@@ -306,6 +306,9 @@ final class HistoryDb extends SQLiteOpenHelper {
     }
     /** Calendar-day summaries of the existing energy flow, read once per month off the UI thread. */
     JSONObject dailyEnergy(long from,long to,JSONObject weather)throws Exception{
+        return dailyEnergy(from,to,weather,null);
+    }
+    JSONObject dailyEnergy(long from,long to,JSONObject weather,List<EnergyIntegral.ModelInterval> model)throws Exception{
         if(from<0||to<=from||to-from>32L*86400000)throw new IllegalArgumentException("Ungültiger Tageszeitraum.");
         long end=Math.min(to,System.currentTimeMillis());JSONArray days=new JSONArray();
         if(end<=from)return new JSONObject().put("days",days);
@@ -325,9 +328,10 @@ final class HistoryDb extends SQLiteOpenHelper {
                 if(set>rise&&set<=dayEnd&&set>start)solarTo=Math.min(next,set);
                 break;
             }
-            EnergyIntegral.Result result=EnergyIntegral.flowIntervals(clipIntervals(solar,start,next),clipIntervals(battery,start,next),start,next,solarFrom,solarTo).consumption;
+            List<EnergyIntegral.ModelInterval> clipped=null;if(model!=null){clipped=new ArrayList<>();for(EnergyIntegral.ModelInterval x:model){long a=Math.max(start,x.interval.from),b=Math.min(next,x.interval.to);if(b>a)clipped.add(new EnergyIntegral.ModelInterval(a,b,x.interval.a,x.estimated));}}
+            EnergyIntegral.Result result=EnergyIntegral.flowIntervals(clipIntervals(solar,start,next),clipIntervals(battery,start,next),start,next,solarFrom,solarTo,clipped,null).consumption;
             days.put(new JSONObject().put("day",day.toString()).put("last",result.wh==null?JSONObject.NULL:result.wh)
-                    .put("coverage",result.coverage(start,next)).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",start).put("to",next));
+                    .put("coverage",result.coverage(start,next)).put("modelledMillis",result.modelledMillis).put("inconsistentMillis",result.inconsistentMillis).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",start).put("to",next));
             day=day.plusDays(1);
         }
         return new JSONObject().put("days",days);
@@ -426,11 +430,14 @@ final class HistoryDb extends SQLiteOpenHelper {
         return energyFlow(from,to,solarFrom,to,source);
     }
     JSONObject energyFlow(long from,long to,long solarFrom,long solarTo,String source) throws Exception {
+        return energyFlow(from,to,solarFrom,solarTo,source,null,null);
+    }
+    JSONObject energyFlow(long from,long to,long solarFrom,long solarTo,String source,List<EnergyIntegral.ModelInterval> extra,List<EnergyIntegral.ModelInterval> mobile) throws Exception {
         to=Math.min(to,System.currentTimeMillis());
         solarFrom=Math.max(from,solarFrom);
-        EnergyIntegral.Flow flow=to>from?EnergyIntegral.flowIntervals(SampleTimeline.energyIntervals(powerSamples(from,to,"solar",source),from,to,false),batteryIntervals(from,to,source,null),from,to,solarFrom,solarTo):null;
-        JSONObject out=new JSONObject();String[] kinds={"solar","consumption","balance"};
-        EnergyIntegral.Result[] results=flow==null?new EnergyIntegral.Result[]{new EnergyIntegral.Result(),new EnergyIntegral.Result(),new EnergyIntegral.Result()}:new EnergyIntegral.Result[]{flow.solar,flow.consumption,flow.balance};
+        EnergyIntegral.Flow flow=to>from?EnergyIntegral.flowIntervals(SampleTimeline.energyIntervals(powerSamples(from,to,"solar",source),from,to,false),batteryIntervals(from,to,source,null),from,to,solarFrom,solarTo,extra,mobile):null;
+        JSONObject out=new JSONObject();String[] kinds={"solar","consumption","balance","mobile"};
+        EnergyIntegral.Result[] results=flow==null?new EnergyIntegral.Result[]{new EnergyIntegral.Result(),new EnergyIntegral.Result(),new EnergyIntegral.Result(),new EnergyIntegral.Result()}:new EnergyIntegral.Result[]{flow.solar,flow.consumption,flow.balance,flow.mobile};
         for(int i=0;i<kinds.length;i++)out.put(kinds[i],energyJson(results[i],i==0&&flow!=null?flow.solarFrom:from,i==0&&flow!=null?flow.solarTo:to,kinds[i]));
         return out;
     }
@@ -459,7 +466,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         JSONArray points=new JSONArray();
         for(EnergyIntegral.Point p:result.points)points.put(new JSONObject().put("t",p.time).put("last",p.time).put("v",p.wh).put("min",p.wh).put("max",p.wh).put("n",1).put("gap",p.gap).put("kind",kind).put("device","calculated-"+kind).put("origin","calculated"));
         Object total=result.wh==null?JSONObject.NULL:result.wh;
-        JSONObject summary=new JSONObject().put("last",total).put("min",result.wh==null?JSONObject.NULL:result.minimumWh).put("max",result.wh==null?JSONObject.NULL:result.maximumWh).put("n",result.points.size()).put("coverage",result.coverage(from,to)).put("measuredCoverage",result.measuredCoverage(from,to)).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",from).put("to",to);
+        JSONObject summary=new JSONObject().put("last",total).put("min",result.wh==null?JSONObject.NULL:result.minimumWh).put("max",result.wh==null?JSONObject.NULL:result.maximumWh).put("n",result.points.size()).put("coverage",result.coverage(from,to)).put("measuredCoverage",result.measuredCoverage(from,to)).put("modelledMillis",result.modelledMillis).put("inconsistentMillis",result.inconsistentMillis).put("estimated",kind.equals("mobile")||result.modelledMillis>0).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",from).put("to",to);
         return new JSONObject().put("points",points).put("summary",summary);
     }
 

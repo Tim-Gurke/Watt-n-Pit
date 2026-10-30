@@ -141,15 +141,18 @@
       if(this.period.mode==='sunrise'&&(this.tile.metric==='solar'||m.flow==='solar')){const full=this.view.from===this.base.from&&this.view.to===this.base.to;this.base=C.solarPlotWindow(this.base,primary.data.points||[],m.flow==='solar'?primary.data.summary:null);if(full)this.view={from:this.base.from,to:this.base.to};}
       const shunt=this.a.reading('shunt'),chargeEstimate=this.tile.metric==='chargeTime'?this.d.updateChargeEstimate(shunt,snapshot):null;
       if(this.tile.metric==='chargeTime')$('tileDetailTitle').textContent=C.tileLabel(this.tile,chargeEstimate);
-      let value=this.valueMode==='live'?C.signedValue(this.tile,C.liveValue(this.tile.metric,shunt,this.a.reading('solar'),snapshot,Date.now(),chargeEstimate)):C.signedValue(this.tile,C.historicalValue(this.tile.metric,primary.data.summary?.[this.valueMode],snapshot.settings.capacity||100));
+      let value=m.modelPower&&this.valueMode==='live'?C.displayValue({...this.tile,period:{...this.tile.period,mode:'live'},valueMode:'live'},primary.data.summary,shunt,this.a.reading('solar'),snapshot):this.valueMode==='live'?C.signedValue(this.tile,C.liveValue(this.tile.metric,shunt,this.a.reading('solar'),snapshot,Date.now(),chargeEstimate)):C.signedValue(this.tile,C.historicalValue(this.tile.metric,primary.data.summary?.[this.valueMode],snapshot.settings.capacity||100));
       value=C.convert(value,this.tile.unit,this.tile.metric);
       const color=this.d.paint(this.tile.color,this.tile,true),reading=$('detailReading');reading.style.setProperty('--tile-color',color);reading.style.setProperty('--number-size','42px');
-      const number=`<strong class="detail-number">${esc(C.format(value,this.tile))}</strong><span>${esc(m.status?'':this.tile.unit)}</span>`;
+      const number=`<strong class="detail-number">${esc(C.format(value,this.tile))}</strong><span>${esc(m.status?'':this.tile.unit)}${m.modelPower||m.estimated||primary.data.summary?.modelledMillis>0?' · geschätzt':''}</span>`;
       this.value=value;reading.innerHTML=this.tile.type==='gauge'?this.gauge():`<div class="detail-number-row">${number}</div>`;
       reading.insertAdjacentHTML('beforeend',`<p>${esc(this.tile.metric==='chargeTime'?C.chargeHint(chargeEstimate):{live:'Aktuell',last:'Letzter Wert',avg:'Durchschnitt',min:'Minimum',max:'Maximum'}[this.valueMode])}</p>${m.liveOnly&&m.hint?`<p class="detail-live-note">${esc(m.hint)}</p>`:''}`);
       $('detailCompareCount').textContent=this.selected.size>1?'('+String(this.selected.size-1)+')':'';
       $('detailLegend').innerHTML=this.series.map((s,i)=>`<span><i style="background:${this.color(s,i)}"></i>${esc(label(s.tile))} · ${esc(s.tile.unit)}</span>`).join('');
       const notes=[this.base.note||'',m.hint||''];
+      if(m.modelPower||m.estimated||primary.data.summary?.modelledMillis>0)notes.push('Geschätzt · enthält Modellwerte der mobilen Solarerzeugung.');
+      if(primary.data.summary?.inconsistentMillis>0)notes.push('Schätzung und Messbilanz passen teilweise nicht zusammen; diese Abschnitte bleiben ohne Geräteverbrauchswert.');
+      if(primary.data.updateRequired)notes.push('Bitte auch das Hauptgerät auf 1.6.10 oder neuer aktualisieren.');
       if(primary.data.pending)notes.push(primary.data.stale?'Letzter Stand · neue Daten werden geladen …':'Daten werden im Hintergrund geladen …');
       else if(primary.data.refreshError)notes.push('Letzter Stand · Aktualisierung fehlgeschlagen. Neuer Versuch folgt.');
       if(m.energy)notes.push(Math.floor((primary.data.summary?.coverage||0)*100)+' % des Zeitraums abgedeckt.');

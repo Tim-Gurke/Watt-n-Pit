@@ -382,7 +382,7 @@ test('upgrading the three energy tiles keeps both layouts and uses sunrise yield
   assert.deepEqual(board.tiles.map(t=>t.layouts),before.tiles.map(t=>t.layouts));assert.deepEqual(old,before);
   assert.equal(board.tiles.find(t=>t.metric==='solarEnergy').period.mode,'sunrise');
   for(const metric of ['consumptionEnergy','energyBalance'])assert.equal(board.tiles.find(t=>t.metric===metric).period.mode,'today');
-  assert.equal(board.tiles.find(t=>t.metric==='energyBalance').title,'');assert.equal(board.energyFlowVersion,1);
+  assert.equal(board.tiles.find(t=>t.metric==='energyBalance').title,'Akkubilanz');assert.equal(board.energyFlowVersion,1);
   assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(board))),board);
 });
 test('non-daily comparisons share a period while daily solar may start at sunrise',()=>{
@@ -462,4 +462,18 @@ test('new tiles, stored layouts and imported layouts respect the requested font 
  const old=C.defaults();old.tiles[0].fontSize=18;old.tiles[1].fontSize=64;
  const positions=structuredClone(old.tiles.map(t=>t.layouts)),clean=C.normalize(old);
  assert.equal(clean.tiles[0].fontSize,18);assert.equal(clean.tiles[1].fontSize,20);assert.deepEqual(clean.tiles.map(t=>t.layouts),positions);
+});
+
+test('mobile tiles keep distinct power and energy units and preserve customized layouts and captions',()=>{
+  assert.deepEqual(C.CATALOG.mobileSolarPower.units,['W','kW']);assert.deepEqual(C.CATALOG.mobileSolarEnergy.units,['Wh','kWh']);
+  assert.equal(C.CATALOG.consumptionEnergy.label,'Geräteverbrauch');assert.equal(C.CATALOG.energyBalance.label,'Akkubilanz');
+  const board=C.defaults(),power=C.tile('mobileSolarPower'),energy=C.tile('mobileSolarEnergy');power.title='Mein Koffer';power.layouts.compact={x:2,y:30,w:5,h:4};energy.layouts.wide={x:1,y:20,w:7,h:5};board.tiles.push(power,energy);
+  assert.deepEqual(C.normalize(board).tiles.map(t=>[t.id,t.title,t.layouts]),board.tiles.map(t=>[t.id,t.title,t.layouts]));
+});
+test('mobile live power uses the model response, including real zero, and expires old responses',()=>{
+  const t=C.tile('mobileSolarPower'),now=Date.now(),snapshot={settings:{capacity:100}};
+  assert.equal(C.displayValue(t,{live:60,liveAt:now},null,{solar:155},snapshot),60);
+  assert.equal(C.displayValue(t,{live:0,liveAt:now},null,null,snapshot),0);
+  assert.equal(C.displayValue(t,{live:60,liveAt:now-45001},null,null,snapshot),null);
+  assert.equal(C.displayValue(t,{last:60,live:null,liveAt:now},null,null,snapshot),null);
 });

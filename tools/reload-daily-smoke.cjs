@@ -12,7 +12,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   window.begin=()=>{window.run={busy:true,background:false,runId:window.run.runId+1,startedAt:Date.now()};window.archive={active:true,device:'SmartSolar · Beispiel',text:'Fehlende Daten ergänzen',done:3,total:10};};
   window.WattPit={appVersion:()=>'1.3.10',snapshot:()=>JSON.stringify({...window.fixture,archiveBusy:window.run.busy,archive:window.archive}),syncState:()=>JSON.stringify({...window.run,cockpitNoticeAccepted:true,theme:window.fixture.settings.theme,palette:'classic',archive:window.archive}),start:()=>{window.starts++;window.fixture.running=true;},stop:()=>{window.fixture.running=false;},importMissingArchive:()=>{window.reloads++;window.begin();},cancelArchive:()=>{window.cancels++;},backgroundArchive:()=>{window.run.background=true;return '';},history:()=>'{'+'"points":[]}',dashboardHistory:()=>'{'+'"points":[],"summary":{}}',energyHistoryWindow:()=>'{'+'"solar":{},"consumption":{},"balance":{}}',dailyEnergy:()=>{throw Error('Synchronous day summaries freeze the UI');},requestHistory:json=>{
    const q=JSON.parse(json);if(q.method==='dailyEnergy')window.dayQueries++;
-   const data=q.method==='dailyEnergy'?{days:[{day:'2026-10-22',last:window.dayAmount,coverage:.99},{day:'2026-10-21',last:null,coverage:0},{day:'2026-10-20',last:0,coverage:1}]}:{points:[],summary:{}};
+   const data=q.method==='dailyEnergy'?{accountingVersion:2,days:[{day:'2026-10-22',last:window.dayAmount,coverage:.99},{day:'2026-10-21',last:null,coverage:0},{day:'2026-10-20',last:0,coverage:1}]}:{points:[],summary:{}};
    setTimeout(()=>window.onHistoryResult({id:q.id,data}),30);
   },settings:json=>{Object.assign(window.fixture.settings,JSON.parse(json));return '';}};
  });

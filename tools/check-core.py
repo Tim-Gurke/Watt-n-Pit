@@ -14,6 +14,7 @@ out = args.output.resolve()
 out.mkdir(parents=True, exist_ok=True)
 classpath = os.pathsep.join(str(args.dependencies.resolve() / name) for name in [
     'junit-4.13.2.jar', 'hamcrest-core-1.3.jar', 'sqlite-jdbc-3.46.1.0.jar', 'slf4j-api-1.7.36.jar'])
+classpath += ''.join(os.pathsep + str(p) for p in args.dependencies.resolve().glob('zxing-*.jar'))
 source_dir = root / 'app/src/main/java/de/wattpit/app/core'
 test_dir = root / 'app/src/test/java/de/wattpit/app/core'
 subprocess.run(['java', 'com.sun.tools.javac.Main', '-cp', classpath, '-d', str(out),

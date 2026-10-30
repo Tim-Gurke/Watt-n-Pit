@@ -243,7 +243,7 @@ function deviceForm(device={},found=false) {
   };
 }
 
-const metrics = {power:{title:'Solar & Batteriebilanz',unit:'W'},soc:{title:'Ladezustand',unit:'%'},voltage:{title:'Batteriespannung',unit:'V'},current:{title:'Strom am Gerät',unit:'A'},yieldWh:{title:'Tagesertrag des SmartSolar',unit:'Wh'},energy:{title:'Ertrag, Verbrauch & Bilanz',unit:'Wh'}};
+const metrics = {power:{title:'Solar & Batteriebilanz',unit:'W'},soc:{title:'Ladezustand',unit:'%'},voltage:{title:'Batteriespannung',unit:'V'},current:{title:'Strom am Gerät',unit:'A'},yieldWh:{title:'Tagesertrag des SmartSolar',unit:'Wh'},energy:{title:'Solarertrag, Geräteverbrauch & Akkubilanz',unit:'Wh'}};
 function selectRange(next) {
   range=next; const now=new Date(), end=new Date(now); end.setHours(24,0,0,0);
   const begin=new Date(now);begin.setHours(0,0,0,0);
@@ -284,6 +284,7 @@ function loadHistory() {
     if(metric==='energy'){
       const sun=window.WattDashboardCore.miniWindow('sunrise',snapshot.weather||{},dataTime()),solarFrom=range==='today'?Math.max(viewFrom,sun.solarFrom??viewFrom):viewFrom,solarTo=range==='today'?sun.solarTo??viewTo:viewTo;
       energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo,solarFrom,solarTo)):native?.energyHistoryWindow?JSON.parse(historyRead('energyHistoryWindow',[Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom),Math.ceil(solarTo)],scope)):native?.energyHistory?JSON.parse(historyRead('energyHistory',[Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom)],scope)):{};
+      if(!demo&&energyData.solar&&energyData.accountingVersion!==2){const unknown={points:[],summary:{},updateRequired:true};energyData.consumption=unknown;energyData.mobile=unknown;}
       fetched=energyData;if(energyData.error)throw new Error();historyPending=!!energyData.pending;
       points=energyPlotPoints(energyData);
     }else if(demo)points=source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric);
@@ -314,11 +315,12 @@ function loadMini(force=false) {
   drawMini();
 }
 function energyPlotPoints(data){
-  return [...(data?.solar?.points||[]),...(data?.consumption?.points||[]),...($('energyBalance').checked?data?.balance?.points||[]:[])].sort((a,b)=>a.t-b.t);
+  return [...(data?.solar?.points||[]),...(data?.consumption?.points||[]),...(data?.mobile?.summary?.modelledMillis>0?data.mobile.points||[]:[]),...($('energyBalance').checked?data?.balance?.points||[]:[])].sort((a,b)=>a.t-b.t);
 }
 function energyDescription(data){
+  if(data?.consumption?.updateRequired)return 'Bitte auch das Hauptgerät auf 1.6.10 oder neuer aktualisieren.';
   const describe=(series,label)=>{const s=series?.summary||{},coverage=Math.floor((s.coverage||0)*100);return `${label}: ${num(s.last,2)} Wh · ${coverage} % der Zeit abgedeckt${s.interpolatedMillis>0?' · davon '+num(s.interpolatedMillis/60000,1)+' min kurz interpoliert':''}`;};
-  return describe(data?.solar,'Solarertrag')+' · '+describe(data?.consumption,'Verbrauch')+' · '+describe(data?.balance,'Bilanz')+'. + Überschuss · − Defizit.';
+  return describe(data?.solar,'Solarertrag fest')+' · '+(data?.mobile?.summary?.modelledMillis>0?describe(data.mobile,'Solarertrag mobil · geschätzt')+' · ':'')+describe(data?.consumption,'Geräteverbrauch'+(data?.consumption?.summary?.modelledMillis>0?' · teilweise geschätzt':''))+' · '+describe(data?.balance,'Akkubilanz')+'. + Laden · − Entladen.';
 }
 function sampleEnergyDemo(from,to,solarFrom=from,solarTo=to){
   return dashboard.demoFlow(null,{from,to:Math.min(to,Date.now())},solarFrom,solarTo);
@@ -329,8 +331,9 @@ function seriesOf(data) {
   return [...groups.values()];
 }
 function seriesLabel(s) {
-  if(s.kind==='balance')return 'Bilanz';
-  if(s.kind==='consumption')return 'Verbrauch';
+  if(s.kind==='balance')return 'Akkubilanz';
+  if(s.kind==='consumption')return 'Geräteverbrauch';
+  if(s.kind==='mobile')return 'Solarertrag mobil · geschätzt';
   if(s.origin==='calculated')return s.kind==='solar'?'Solarertrag':'Batterieentnahme berechnet';
   const name=snapshot.devices.find(d=>d.mac===s.device)?.name || (s.kind==='solar'?'SmartSolar':'SmartShunt');
   return name + (s.origin==='csv'?' · CSV':s.origin==='archive'?' · Archiv':'');
@@ -413,19 +416,20 @@ $('historyChart').addEventListener('pointercancel',event=>{pointers.delete(event
 function renderDaily() {
  let el=$('solarDailyArchive'); if(!el){el=document.createElement('article');el.id='solarDailyArchive';el.className='card';$('historyStats').after(el);}
  const rows=snapshot.solarDaily||[];el.hidden=!rows.length;
- const months=new Map(),consumption=new Map(),waiting=new Set(),failed=new Set(),outdated=new Set();
+ const months=new Map(),consumption=new Map(),waiting=new Set(),failed=new Set(),outdated=new Set(),oldHosts=new Set();
  if(!demo&&native?.dailyEnergy)for(const row of rows){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(row.day))continue;const month=row.day.slice(0,7);if(months.has(month))continue;
   const start=new Date(month+'-01T00:00:00'),end=new Date(start);end.setMonth(end.getMonth()+1);
   if(start.getTime()>=dataTime())continue;
   try{const data=JSON.parse(historyRead('dailyEnergy',[start.getTime(),end.getTime(),snapshot.historyRevision||0,Math.floor(dataTime()/30000)],'daily:'+month));
+   if(data.days&&data.accountingVersion!==2){oldHosts.add(month);data.days=[];}
    months.set(month,data);if(data.pending)waiting.add(month);if(data.error||data.refreshError)failed.add(month);if(data.stale)outdated.add(month);for(const day of data.days||[])consumption.set(day.day,day);
   }catch(_){months.set(month,{});failed.add(month);}
  }
- el.innerHTML='<h2>Solar-Tagesarchiv</h2><p class="muted">Ertrag: Tageswerte des Solarladereglers. Verbrauch: aus Solar- und Shunt-Messungen berechnet, einschließlich der Nacht. Messlücken bleiben unberechnet; heute ist vorläufig.</p><div style="overflow-x:auto" tabindex="0" aria-label="Tagesarchiv, weitere Spalten seitlich erreichbar"><table><thead><tr><th>Tag</th><th>Ertrag Wh</th><th>Verbrauch Wh</th><th>Maximum W</th><th>Batterie min/max V</th></tr></thead><tbody>'+rows.map(r=>{
+ el.innerHTML='<h2>Solar-Tagesarchiv</h2><p class="muted">Ertrag: Tageswerte des Solarladereglers. Geräteverbrauch: festes Solar + geschätztes mobiles Solar − Akkubilanz, einschließlich der Nacht. Messlücken bleiben unberechnet; heute ist vorläufig.</p><div style="overflow-x:auto" tabindex="0" aria-label="Tagesarchiv, weitere Spalten seitlich erreichbar"><table><thead><tr><th>Tag</th><th>Ertrag Wh</th><th>Geräteverbrauch Wh</th><th>Maximum W</th><th>Batterie min/max V</th></tr></thead><tbody>'+rows.map(r=>{
   const day=consumption.get(r.day),known=day?.last!=null&&Number.isFinite(Number(day.last));
   const amount=known?num(day.last,2):waiting.has(r.day.slice(0,7))?'…':'—';
-  const coverage=known?`${Math.floor(Math.max(0,Math.min(1,day.coverage||0))*100)} % erfasst${day.interpolatedMillis>0?' · kurz interpoliert':''}`:waiting.has(r.day.slice(0,7))?'wird berechnet':failed.has(r.day.slice(0,7))?'Abfrage fehlgeschlagen':'keine Messdaten';
+  const coverage=oldHosts.has(r.day.slice(0,7))?'Hauptgerät aktualisieren':known?`${Math.floor(Math.max(0,Math.min(1,day.coverage||0))*100)} % erfasst${day.interpolatedMillis>0?' · kurz interpoliert':''}${day.modelledMillis>0?' · teilweise geschätzt':''}${day.inconsistentMillis>0?' · unplausible Schätzabschnitte fehlen':''}`:waiting.has(r.day.slice(0,7))?'wird berechnet':failed.has(r.day.slice(0,7))?'Abfrage fehlgeschlagen':'keine Messdaten';
   const note=outdated.has(r.day.slice(0,7))?' · letzter Stand'+(waiting.has(r.day.slice(0,7))?' · wird aktualisiert':failed.has(r.day.slice(0,7))?' · Aktualisierung fehlgeschlagen':''):'';
   return `<tr><td>${escapeHtml(r.day)}</td><td>${num(r['Yield(Wh)'])}</td><td>${amount}<span class="daily-coverage">${coverage}${note}</span></td><td>${num(r['Max. PV power(W)'])}</td><td>${num(r['Min. battery voltage(V)'],2)} / ${num(r['Max. battery voltage(V)'],2)}</td></tr>`;
  }).join('')+'</tbody></table></div>';

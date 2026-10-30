@@ -12,7 +12,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   window.fixture={running:false,devices:[],found:[],readings:[],historyRevision:0,stats:{count:20},settings:{theme:'dark',palette:'classic',capacity:100,sampleSeconds:10},weather:{timezone:'Europe/Berlin',days:[{day:'2026-10-19',sunrise:Date.parse('2026-10-19T05:45:00Z'),sunset:Date.parse('2026-10-19T16:15:00Z')}]}};
   const data=(method,args)=>{
    const [from,to]=args,series=(kind,total)=>({points:[{t:from,v:0,kind},{t:to,v:total,kind}],summary:{from,to,last:total,min:Math.min(0,total),max:Math.max(0,total),coverage:1}});
-   if(method.startsWith('energy'))return {solar:series('solar',window.finished?120:100),consumption:series('consumption',window.finished?180:150),balance:series('balance',window.finished?-60:-50)};
+   if(method.startsWith('energy'))return {accountingVersion:2,solar:series('solar',window.finished?120:100),consumption:series('consumption',window.finished?180:150),balance:series('balance',window.finished?-60:-50)};
    return {points:[{t:from,v:10,min:10,max:10,kind:'solar'},{t:to,v:20,min:20,max:20,kind:'solar'}],summary:{last:20,min:10,max:20}};
   };
   const sync=(method,args)=>{if(window.run.busy)throw Error('Synchronous database query during active sync');window.syncCalls++;return JSON.stringify(data(method,args));};

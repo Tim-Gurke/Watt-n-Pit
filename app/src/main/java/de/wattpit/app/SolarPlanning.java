@@ -21,23 +21,45 @@ final class SolarPlanning extends SQLiteOpenHelper {
     private JSONArray rollerInputs=new JSONArray(),presenceHistory=new JSONArray();
     static volatile String sharedKnowledge="{}";
     private final Repository repository;
+    final MobileSolarDisplay display;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final AtomicBoolean busy=new AtomicBoolean();
     private final AtomicBoolean requestedAgain=new AtomicBoolean();
     private final Consumer<JSONObject> callback;
     private volatile boolean closed;
     SolarPlanning(Context context,Repository repository,Consumer<JSONObject> callback){
-        super(context,"wattpit-planning.db",null,3);this.repository=repository;this.callback=callback;this.context=context.getApplicationContext();rollerLedger=RollerLedger.get(context);setWriteAheadLoggingEnabled(true);
+        super(context,"wattpit-planning.db",null,4);this.repository=repository;this.callback=callback;this.context=context.getApplicationContext();rollerLedger=RollerLedger.get(context);display=new MobileSolarDisplay(repository,this);setWriteAheadLoggingEnabled(true);
     }
     @Override public void onCreate(SQLiteDatabase db){
         db.execSQL("CREATE TABLE observations(start INTEGER NOT NULL,end INTEGER NOT NULL,source TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(start,end,source))");
         db.execSQL("CREATE TABLE forecasts(key TEXT NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,issued INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(key,start,end,issued))");
         db.execSQL("CREATE TABLE contexts(at INTEGER PRIMARY KEY,key TEXT NOT NULL,mobile_free INTEGER NOT NULL,source TEXT NOT NULL,solar_key TEXT NOT NULL DEFAULT '',payload TEXT NOT NULL DEFAULT '{}')");
         PlanningConfirmation.create(db);
+        MobileSolarDisplay.create(db);
     }
     @Override public void onUpgrade(SQLiteDatabase db,int oldVersion,int newVersion){
         if(oldVersion<2){db.execSQL("ALTER TABLE contexts ADD COLUMN solar_key TEXT NOT NULL DEFAULT ''");db.execSQL("ALTER TABLE contexts ADD COLUMN payload TEXT NOT NULL DEFAULT '{}'");}
         if(oldVersion<3&&newVersion>=3)PlanningConfirmation.create(db);
+        if(oldVersion<4&&newVersion>=4)MobileSolarDisplay.create(db);
+    }
+    JSONObject energyFlow(long from,long to,long solarFrom,long solarTo,String source)throws Exception{
+        long until=Math.min(to,System.currentTimeMillis());MobileSolarDisplay.Model model=display.model(from,until);
+        return repository.db.energyFlow(from,until,solarFrom,solarTo,source,model.extra,model.mobile).put("accountingVersion",2);
+    }
+    JSONObject energyFlow(long from,long to,long solarFrom,String source)throws Exception{return energyFlow(from,to,solarFrom,to,source);}
+    JSONObject dashboardData(long from,long to,String metric)throws Exception{
+        if(metric.equals("mobileSolarPower"))return display.power(from,to);
+        String kind=metric.equals("mobileSolarEnergy")?"mobile":metric.equals("consumptionEnergy")?"consumption":metric.equals("flowSolarEnergy")?"solar":metric.equals("flowBalanceEnergy")?"balance":null;
+        return kind==null?repository.db.dashboardData(from,to,metric):energyFlow(from,to,from,to,"all").getJSONObject(kind);
+    }
+    JSONArray history(long from,long to,String metric,String source)throws Exception{
+        if(metric.equals("mobileSolarPower"))return display.power(from,to).getJSONArray("points");
+        String kind=metric.equals("mobileSolarEnergy")?"mobile":metric.equals("consumptionEnergy")?"consumption":metric.equals("flowSolarEnergy")?"solar":metric.equals("flowBalanceEnergy")?"balance":null;
+        return kind==null?repository.db.query(from,to,metric,source):energyFlow(from,to,from,to,source).getJSONObject(kind).getJSONArray("points");
+    }
+    JSONObject dailyEnergy(long from,long to,JSONObject weather)throws Exception{
+        if(from<0||to<=from||to-from>32L*86400000)throw new IllegalArgumentException("Ungültiger Tageszeitraum.");
+        long until=Math.min(to,System.currentTimeMillis());MobileSolarDisplay.Model model=display.model(from,until);return repository.db.dailyEnergy(from,until,weather,model.extra).put("accountingVersion",2);
     }
     static JSONObject checked(JSONObject input,JSONObject equipment)throws JSONException{
         if(input.has("version")&&input.optInt("version")!=1)throw new IllegalArgumentException("Unbekannte Aufstellung.");

@@ -159,37 +159,31 @@ Unter **Vergleichswerte** weitere Messgrößen einschalten. Gleiche Einheiten we
 
 Diese Änderungen gelten nur in der geöffneten Großansicht. **×** oder Android-Zurück schließt sie; die gespeicherte Kachel und ihre Anordnung bleiben erhalten. Für bleibende Änderungen **Kachel-Einstellungen** verwenden. Im Anordnungsmodus öffnet Antippen direkt den Kacheleditor.
 
-## 5. Solarertrag, Verbrauch und Bilanz verstehen
+## 5. Solarertrag, Geräteverbrauch und Akkubilanz verstehen
 
 | Kachel | Bedeutung | Standardzeitraum |
 |---|---|---|
-| **Solarertrag** | Aus der gemessenen Solarleistung berechnete Energie | Seit Sonnenaufgang |
-| **Verbrauch** | Solarertrag minus Akkubilanz; direkt genutzter Solarstrom ist enthalten | Heute ab Mitternacht |
-| **Bilanz** | Solarertrag minus berechneter Verbrauch | Heute ab Mitternacht |
+| **Solarertrag** | Energie des gemessenen Solarreglers | Seit Sonnenaufgang |
+| **Solarleistung mobil** | Momentane Leistung des aktiven ungemessenen mobilen Kreises, geschätzt | Aktuell, W/kW |
+| **Solarertrag mobil** | Geschätzte zusätzliche mobile Energie | Heute, Wh/kWh |
+| **Geräteverbrauch** | Festes Solar + geschätztes zusätzliches Solar − Akkubilanz, einschließlich Rollerladung und Ladeverlusten | Heute ab Mitternacht |
+| **Akkubilanz** | Zugeführte minus entnommene Energie am Akku auf den erfassten Abschnitten | Heute ab Mitternacht |
 
-Beispiel: **100 Wh Solarertrag − 150 Wh Verbrauch = −50 Wh Bilanz**. Plus bedeutet Überschuss, Minus Defizit. Wh und kWh sind wählbar. Die Rechnung verwendet die tatsächlichen Zeitabstände der erfassten Leistungspunkte und ist eine Näherung aus Regler und Shunt einschließlich der Verluste zwischen den Messstellen.
+Beispiel für eine Stunde mit konstanten Leistungen: **155 Wh fest + 60 Wh mobil − 166 Wh Geräteverbrauch = +49 Wh Akkubilanz**. Der Geräteverbrauch steigt, während gleichzeitig der Akku geladen wird. Die mobile Erzeugung wird nicht länger unauffällig vom Geräteverbrauch abgezogen. Bei geschätztem mobilem Anteil ist auch der daraus berechnete Gerätebedarf teilweise geschätzt.
 
-Der nächtliche Verbrauch bleibt enthalten: Außerhalb des Solarfensters zählt der beobachtete Shunt-Verlauf mit Solar null. Tatsächlich erfasste frühe oder späte Erzeugung erweitert das Fenster und wird in Ertrag und Verbrauch mitgeführt. Innerhalb dieses Fensters werden nur Zeitabschnitte verwendet, in denen Solarregler **und** Shunt verwertbare Daten haben. Es werden keine unbekannten Tageslücken mit null aufgefüllt. Die Prozentangabe nennt die erfasste Zeit des jeweiligen Fensters; fehlende Messintervalle erscheinen als **—**, erfasste Null als **0,00**. Ohne gültige Sonnenaufgangszeit wird ausdrücklich **heute (Ersatz)** verwendet. Vor dem bekannten Sonnenaufgang steht der Ertrag ohne verwertbare frühere Erzeugung bei 0 Wh. Verbrauch und Bilanz zählen auch nach Sonnenuntergang weiter; die Differenz bleibt Ertrag minus Verbrauch.
+Unter **+ Kachel** beide mobilen Werte einzeln hinzufügen, verschieben und skalieren. **Kachel antippen → Großansicht öffnen** bietet Verlauf und Zeitraum. Die Leistung in W ist ein Wetter-/Aufstellungsmodell, keine Bluetooth-Liveablesung des PWM-Reglers. Der Wh-Wert summiert nur nachvollziehbare Aufstellungs- und Modellzeiten. Bei einem Standortwechsel werden frühere Zeiten nach ihrer damaligen Aufstellung behandelt; verfügbare Wetterstände bleiben dafür lokal erhalten.
 
-![Solarertrag, Verbrauch und gestrichelte Bilanz im berechneten Energieverlauf](images/energy-history.png)
+**Mobil aus** bedeutet ab dem bestätigten Umschaltzeitpunkt 0 W. Frühere mobile Tageserträge bleiben bestehen. Ohne eingerichteten mobilen beziehungsweise anderen ungemessenen Solarkreis wird der Geräteverbrauch allein aus Solarregler und Shunt berechnet; Wetter ist dafür nicht erforderlich. Bei aktivem Modul und fehlender Modellgrundlage erscheint eine Lücke statt einer behaupteten Null. Erkennbare negative Gerätebedarfe werden nicht als tatsächlicher Verbrauch dargestellt. Ungemessener Landstrom und Ladebegrenzungen können die Modellzuordnung beeinflussen.
 
-Unter **Verlauf → Energie berechnet** erscheinen diese drei Kurven für die dortige Zeit- und Quellenwahl. **Kurve „Bilanz“ anzeigen** blendet die dritte Kurve ein oder aus. Antippen des Diagramms zeigt die Werte am ausgewählten Zeitpunkt. Überlappende Aufzeichnungen, Archive und CSV-Werte werden einmal gezählt; eigene Aufzeichnungen und feinere Archive haben Vorrang. Die Bilanz beschreibt den Energiefluss und keine genaue Änderung der chemisch gespeicherten Akkuenergie; Ladeverluste werden nicht korrigiert.
+Der Nachtverbrauch bleibt enthalten. Die Prozentangaben beziehen sich auf abgedeckte Zeiten; größere Mess- oder Modelllücken werden nicht mit null gefüllt. Unter **Verlauf → Energie berechnet** erscheinen Geräteverbrauch, feste Erzeugung, Akkubilanz und bei vorhandenem Modellanteil die mobile Erzeugung getrennt. **Kurve „Akkubilanz“ anzeigen** blendet die Batteriekurve ein oder aus. Die Bilanz beschreibt Energiefluss, keine genaue Änderung des chemischen Akkuinhalts.
 
-### Zusätzlicher PWM-Regler und andere Einspeisungen
+Bei bestehenden Kacheln ändern sich die Standardbezeichnungen zu **Geräteverbrauch** und **Akkubilanz**. Eigene Titel und die Anordnung in beiden Ansichten bleiben erhalten. Zuerst das Hauptgerät und danach alle Anzeigen auf 1.6.10 aktualisieren. Die Anzeigen verwenden die Berechnung des Hauptgeräts; mit einem älteren Hauptgerät erscheint eine Aktualisierungsaufforderung.
 
-Ein Regler ohne eigenen Ertragsmesswert entlastet den Akku, fehlt aber im angezeigten Solarertrag. Dadurch fällt auch der **berechnete Verbrauch um diesen Ertrag zu niedrig aus**.
-
-Beispiel: Der SmartSolar liefert **20 Wh**, ein ungemessener PWM-Regler **30 Wh**, die Verbraucher nutzen tatsächlich **100 Wh**. Die App zeigt **20 Wh Solarertrag, 70 Wh Verbrauch und −50 Wh Bilanz**. Im reinen Solarbetrieb bleibt die Differenz richtig, obwohl Ertrag und Verbrauch unvollständig sind. Das setzt voraus, dass die Batteriezweige korrekt über den Shunt erfasst werden.
-
-Ungemessener Landstrom oder andere Ladegeräte beeinflussen den Rechenwert ebenfalls. Bei starker zusätzlicher Einspeisung kann er negativ werden. Die Verbrauchskachel meldet dann **Zusätzliche Einspeisung**; der Wert wird nicht auf null begrenzt. Der Hinweis steht auch in den Kacheleinstellungen, in der Großansicht und unter **Verlauf → Energie berechnet → Berechnung und zusätzliche Einspeisung**.
-
-### Die drei Kacheln einstellen
-
-Die vorhandene Batterieentnahme-Kachel wird beim Update zu **Verbrauch**, die bisherige Akkubilanz zu **Bilanz**. Position, Größe in beiden Ansichten, Farben, Einheiten und eigene Beschriftungen bleiben erhalten. Unveränderte alte Standardbeschriftungen werden aktualisiert. Der Tagesstandard ist Solarertrag ab Sonnenaufgang und Verbrauch/Bilanz ab Mitternacht.
+### Energiekacheln einstellen
 
 ![Bilanz in Wh mit Verlauf und automatischer Skala](images/energy-tile.png)
 
-Unter **+ Kachel → Energie** sind alle drei Werte einzeln ergänzbar. **Kachel antippen → Kachel-Einstellungen** bietet Zahlenwert, Rundinstrument oder Verlauf sowie Wh/kWh, Farben und Skala. Verbrauch und Bilanz verwenden einen gemeinsamen Zeitraum. Bei **Heute** kann Solar seit Sonnenaufgang zählen; bei **Letzte …**, **Seit Zurücksetzen** und freien Zeiträumen wechseln die drei Werte gemeinsam. Eine dauerhaft geänderte Sonnenaufgangsauswahl an der Solarkachel lässt Verbrauch und Bilanz auf Heute stehen. Vorzeichen der drei Hauptwerte bleiben ihrer Bedeutung entsprechend; in der Großansicht gelten Änderungen weiterhin nur vorübergehend.
+Unter **+ Kachel → Energie** sind die Energiewerte einzeln ergänzbar; die mobile Leistung steht unter **Solar**. **Kachel antippen → Kachel-Einstellungen** bietet Zahlenwert, Rundinstrument oder Verlauf sowie Wh/kWh, Farben und Skala. Geräteverbrauch, mobiler Ertrag und Akkubilanz verwenden einen gemeinsamen Zeitraum. Bei **Heute** kann Solar seit Sonnenaufgang zählen; bei **Letzte …**, **Seit Zurücksetzen** und freien Zeiträumen wechseln die drei Werte gemeinsam. Eine dauerhaft geänderte Sonnenaufgangsauswahl an der Solarkachel lässt Verbrauch und Bilanz auf Heute stehen. Vorzeichen der drei Hauptwerte bleiben ihrer Bedeutung entsprechend; in der Großansicht gelten Änderungen weiterhin nur vorübergehend.
 
 Die bisherigen Werte **Batterieentnahme berechnet** und **Akkubilanz** bleiben unter **+ Kachel → Energie** als unabhängige Zusatzwerte verfügbar. Batterieentnahme summiert nur Energie aus dem Akku und erscheint standardmäßig negativ; die Akkubilanz summiert Laden minus Entladen allein aus dem Shunt. Deren Vorzeichen lassen sich weiterhin umkehren. Der grobe Tageszähler des SmartSolar bleibt unter **Solarertrag heute** auswählbar.
 

@@ -19,12 +19,14 @@
     consumed:     {label:'Entnommene Kapazität', group:'Akku', kind:'shunt', field:'consumed', units:['Ah','mAh'], min:0, max:100, digits:1, color:'#81baf4', hint:'Vom Shunt seit seiner letzten Voll-Synchronisation gezählte Ah. Optionaler Zusatzwert.'},
     alarm:        {label:'Shunt-Alarm', group:'Akku', kind:'shunt', field:'alarm', units:['Code'], min:0, max:255, digits:0, color:'#e8bb57', status:true},
     solar:        {label:'Solarleistung', group:'Solar', kind:'solar', field:'solar', units:['W','kW'], min:0, max:300, digits:0, color:'#e8bb57'},
+    mobileSolarPower:{label:'Solarleistung mobil',group:'Solar',kind:'mobile',backend:'mobileSolarPower',modelPower:true,units:['W','kW'],min:0,max:200,digits:0,color:'#e8bb57',hint:'Geschätzte zusätzliche Solarleistung aus Wetter und tatsächlich gespeicherter Aufstellung, einschließlich PWM-Verlusten. Keine Liveablesung des PWM-Reglers. Mobil aus oder kein mobiles Modul: 0 W ab diesem Zeitpunkt. Fehlende Grundlagen bei aktivem Modul bleiben unbekannt.'},
+    mobileSolarEnergy:{label:'Solarertrag mobil',group:'Energie',kind:'mobile',backend:'mobileSolarEnergy',flow:'mobile',units:['Wh','kWh'],min:0,max:1000,digits:2,color:'#e8bb57',energy:true,estimated:true,hint:'Geschätzter Ertrag der nicht separat gemessenen mobilen Kreise im gewählten Zeitraum. Frühere aktive Zeiten bleiben nach Mobil aus erhalten; unbekannte Aufstellung oder Wetterlücken zählen nicht als Null. Bereits am Solarregler gemessene Kreise werden nicht doppelt gezählt.'},
     yieldWh:      {label:'Solarertrag heute', group:'Solar', kind:'solar', field:'yieldWh', units:['kWh','Wh'], min:0, max:2000, digits:2, color:'#e8bb57'},
     solarEnergy:  {label:'Solarertrag',group:'Energie',kind:'solar',backend:'flowSolarEnergy',flow:'solar',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#e8bb57',energy:true,hint:'Ertrag des gemessenen Solarreglers. Solarertrag, Verbrauch und Bilanz verwenden ab Sonnenaufgang gemeinsam erfasste Solar- und Shuntabschnitte. Ein ungemessener PWM-Regler fehlt im Ertrag.'},
-    consumptionEnergy:{label:'Verbrauch',group:'Energie',kind:'consumption',backend:'consumptionEnergy',flow:'consumption',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#65cbb0',energy:true,hint:'Berechnet: Solarertrag minus Akkubilanz. Enthält direkt genutzten Solarstrom und Energie aus dem Akku. Zusätzliche ungemessene Einspeisung, z. B. PWM oder Landstrom, senkt diesen Wert; er kann negativ werden. Ab Sonnenaufgang nur gemeinsam erfasste Solar- und Shuntabschnitte; der Nachtverbrauch ab Mitternacht bleibt enthalten.'},
-    energyBalance:{label:'Bilanz',group:'Energie',kind:'balance',backend:'flowBalanceEnergy',flow:'balance',units:['Wh','kWh'],min:-2000,max:2000,digits:2,color:'#81baf4',energy:true,hint:'Solarertrag minus berechneter Verbrauch. + Überschuss · − Defizit. Im reinen Solarbetrieb entspricht dies der Akkubilanz auf den gemeinsam erfassten Abschnitten. Ohne Korrektur der Ladeverluste.'},
+    consumptionEnergy:{label:'Geräteverbrauch',group:'Energie',kind:'consumption',backend:'consumptionEnergy',flow:'consumption',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#65cbb0',energy:true,hint:'Gesamter Gerätebedarf einschließlich Rollerladung und Ladeverlusten: gemessenes festes Solar plus geschätzte zusätzliche Solarerzeugung (z. B. PWM) minus Akkubilanz. Mit mobilem Anteil teilweise geschätzt. Ohne mobile Einspeisung entfällt die Ergänzung automatisch. Mess- und Modelllücken bleiben offen; unplausible negative Gerätebedarfe werden nicht als Verbrauch ausgegeben.'},
+    energyBalance:{label:'Akkubilanz',group:'Energie',kind:'balance',backend:'flowBalanceEnergy',flow:'balance',units:['Wh','kWh'],min:-2000,max:2000,digits:2,color:'#81baf4',energy:true,hint:'Nettoenergie am Akku auf den gemeinsam erfassten Solar- und Shuntabschnitten. + mehr zugeführt als entnommen, − mehr entnommen als zugeführt. Beide Solarkreise und alle Verbraucher sind am Shunt enthalten. Eine positive momentane Leistung kann gleichzeitig mit einer negativen Tagesbilanz auftreten.'},
     dischargeEnergy:{label:'Batterieentnahme berechnet',group:'Energie',kind:'shunt',backend:'dischargeEnergy',units:['Wh','kWh'],min:0,max:2000,digits:2,color:'#65cbb0',energy:true,hint:'Zusatzwert: nur aus dem Akku entnommene Energie. Direkt genutzter Solarstrom fehlt; dies ist kein Gesamtverbrauch.'},
-    batteryEnergy:{label:'Akkubilanz',group:'Energie',kind:'shunt',backend:'batteryEnergy',units:['Wh','kWh'],min:-2000,max:2000,digits:2,color:'#81baf4',energy:true,hint:'Zusatzwert aus dem Shunt allein: geladene minus entnommene Energie, unabhängig vom Solarregler. + Laden · − Entladen. Nur erfasste Zeitabschnitte; ohne Korrektur der Ladeverluste.'},
+    batteryEnergy:{label:'Akkubilanz · Shunt gesamt',group:'Energie',kind:'shunt',backend:'batteryEnergy',units:['Wh','kWh'],min:-2000,max:2000,digits:2,color:'#81baf4',energy:true,hint:'Zusatzwert aus dem Shunt allein: geladene minus entnommene Energie, unabhängig vom Solarregler. + Laden · − Entladen. Nur erfasste Zeitabschnitte; ohne Korrektur der Ladeverluste.'},
     pvVoltage: {label:'PV-Eingangsspannung',group:'Solar',kind:'solar',field:'pvVoltage',backend:'pvVoltage',units:['V','mV'],min:0,max:75,digits:2,color:'#efb468',hint:'Spannung am Solareingang des Reglers; aus dem Gerätearchiv.'},
     solarTemperature: {label:'Batterietemperatur am Regler',group:'Solar',kind:'solar',field:'temperature',backend:'solarTemperature',units:['°C'],min:-20,max:60,digits:1,color:'#81baf4',hint:'Nur mit vorhandenem Temperatursensor; aus dem Gerätearchiv.'},
     solarVoltage: {label:'Regler-Batteriespannung', group:'Solar', kind:'solar', field:'voltage', units:['V','mV'], min:10, max:15, digits:2, color:'#81baf4', hint:'Batterieseitige Spannung am SmartSolar; keine PV-Eingangsspannung.'},
@@ -193,7 +195,7 @@
     const fallback=tile(input.metric),m=CATALOG[input.metric],result={...fallback};
     result.id=/^[a-zA-Z0-9_-]{1,90}$/.test(input.id || '') && !seen.has(input.id)?input.id:fallback.id;seen.add(result.id);
     result.title=typeof input.title==='string'?input.title.slice(0,60):'';
-    if(input.metric==='energyBalance'&&/^(?:Ertrag\s*[−–-]\s*Entnahme|Akkubilanz)$/i.test(result.title.trim()))result.title='';
+    if(input.metric==='energyBalance'&&/^Ertrag\s*[−–-]\s*Entnahme$/i.test(result.title.trim()))result.title='';
     result.unit=m.units.includes(input.unit)?input.unit:m.units[0];
     result.type=!m.status && (m.liveOnly?['number','gauge']:['number','gauge','chart']).includes(input.type)?input.type:'number';
     result.digits=Math.round(numeric(input.digits,m.digits,0,3));result.fontSize=numeric(input.fontSize,20,18,20);
@@ -308,6 +310,7 @@
     return CATALOG[t.metric].energy&&t.reverseSign?{min:signedValue(t,max),max:signedValue(t,min)}:{min,max};
   }
   function displayValue(t,summary,shunt,solar,snapshot,chargeEstimate=null) {
+    if(CATALOG[t.metric].modelPower&&usesLiveValue(t))return finite(summary?.liveAt)&&Math.abs(Date.now()-summary.liveAt)<=45000?signedValue(t,summary.live):null;
     return signedValue(t,usesLiveValue(t)?liveValue(t.metric,shunt,solar,snapshot,Date.now(),chargeEstimate):historicalValue(t.metric,summary?.[t.period.aggregate],snapshot.settings.capacity));
   }
   function format(value,t) {
@@ -326,7 +329,7 @@
     const dataLow=Math.min(...values),dataHigh=Math.max(...values);
     const upper=v=>{const step=10**(Math.floor(Math.log10(v))-1);return Number((Math.ceil(v/step-1e-9)*step).toPrecision(12));};
     let low,high;
-    if(['solar','yieldWh','solarEnergy','consumptionEnergy','dischargeEnergy','energyBalance','batteryEnergy','solarCurrent','load','remaining','remainingAh','remainingWh','consumed','power','current'].includes(t.metric)){
+    if(['solar','mobileSolarPower','mobileSolarEnergy','yieldWh','solarEnergy','consumptionEnergy','dischargeEnergy','energyBalance','batteryEnergy','solarCurrent','load','remaining','remainingAh','remainingWh','consumed','power','current'].includes(t.metric)){
       low=dataLow<0?-upper(-dataLow*1.1):0;high=dataHigh>0?upper(dataHigh*1.1):dataLow<0?0:1;
     }else{
       const span=dataHigh-dataLow||Math.max(Math.abs(dataHigh)*.02,.1),step=10**(Math.floor(Math.log10(span))-1),pad=span*.1;

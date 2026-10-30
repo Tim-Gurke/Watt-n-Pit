@@ -365,11 +365,11 @@ public final class MainActivity extends Activity {
                         JSONObject data;
                         if(remote!=lan.viewer())return;
                         if(remote)data=lan.query(method,args);else switch(method){
-                            case "history":data=new JSONObject().put("points",repository.db.query(from,to,args.getString(2),args.getString(3)));break;
-                            case "dashboardHistory":data=repository.db.dashboardData(from,to,args.getString(2));break;
-                            case "energyHistoryWindow":data=repository.db.energyFlow(from,to,args.getLong(3),args.getLong(4),args.getString(2));break;
-                            case "energyHistory":data=repository.db.energyFlow(from,to,args.getLong(3),args.getString(2));break;
-                            case "dailyEnergy":data=repository.db.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}")));break;
+                            case "history":data=new JSONObject().put("points",solarPlanning.history(from,to,args.getString(2),args.getString(3)));break;
+                            case "dashboardHistory":data=solarPlanning.dashboardData(from,to,args.getString(2));break;
+                            case "energyHistoryWindow":data=solarPlanning.energyFlow(from,to,args.getLong(3),args.getLong(4),args.getString(2));break;
+                            case "energyHistory":data=solarPlanning.energyFlow(from,to,args.getLong(3),args.getString(2));break;
+                            case "dailyEnergy":data=solarPlanning.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}")));break;
                             default:throw new IllegalArgumentException();
                         }
                         response.put("id",id).put("data",data);
@@ -386,7 +386,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String history(long from, long to, String metric, String source) {
             if(lan.viewer())return "{\"pending\":true}";
             if(repository.archiveBusy)return "{\"syncing\":true}";
-            try { return new JSONObject().put("points",repository.db.query(from,to,metric,source)).toString(); }
+            try { return new JSONObject().put("points",solarPlanning.history(from,to,metric,source)).toString(); }
             catch (Exception e) { return "{\"points\":[],\"error\":\"Verlauf konnte nicht geladen werden.\"}"; }
         }
         @JavascriptInterface public String dashboardPreset(){try{return DashboardPreset.read(MainActivity.this);}catch(Exception e){return "null";}}
@@ -403,24 +403,24 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String dashboardHistory(long from,long to,String metric) {
             if(lan.viewer())return "{\"pending\":true}";
             if(repository.archiveBusy)return "{\"syncing\":true}";
-            try { return repository.db.dashboardData(from,to,metric).toString(); }
+            try { return solarPlanning.dashboardData(from,to,metric).toString(); }
             catch(Exception e) { return "{\"points\":[],\"summary\":{},\"error\":\"Zeitraum konnte nicht geladen werden.\"}"; }
         }
         @JavascriptInterface public String energyHistory(long from,long to,String source,long solarFrom) {
             if(lan.viewer())return "{\"pending\":true}";
             if(repository.archiveBusy)return "{\"syncing\":true}";
-            try {return repository.db.energyFlow(from,to,solarFrom,source).toString();}
+            try {return solarPlanning.energyFlow(from,to,solarFrom,source).toString();}
             catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
         }
         @JavascriptInterface public String energyHistoryWindow(long from,long to,String source,long solarFrom,long solarTo) {
             if(lan.viewer())return "{\"pending\":true}";
             if(repository.archiveBusy)return "{\"syncing\":true}";
-            try{return repository.db.energyFlow(from,to,solarFrom,solarTo,source).toString();}
+            try{return solarPlanning.energyFlow(from,to,solarFrom,solarTo,source).toString();}
             catch(Exception e){return "{\"error\":\"Energieberechnung konnte nicht geladen werden.\"}";}
         }
         @JavascriptInterface public String dailyEnergy(long from,long to,long revision,long slot){
             if(lan.viewer())return "{\"days\":[],\"pending\":true}";
-            try{return repository.db.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}"))).toString();}
+            try{return solarPlanning.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}"))).toString();}
             catch(Exception e){return "{\"days\":[],\"error\":\"Tagesverbrauch konnte nicht geladen werden.\"}";}
         }
         @JavascriptInterface public void searchWeather(String query){files.execute(()->{try{call("onWeatherSearch",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onWeatherSearch",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte Verbindung prüfen und erneut suchen."));}catch(JSONException ignored){}}});}

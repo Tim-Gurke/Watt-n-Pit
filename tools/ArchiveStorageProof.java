@@ -150,6 +150,8 @@ public final class ArchiveStorageProof {
             unavailableCurrentRepair(args[0]+".unavailable");
         }else if(args[1].equals("weather_contract")){
             WeatherContractProof.run(Path.of(args[2]).getParent().getParent().resolve("weather"),Path.of(args[3]));
+        }else if(args[1].equals("mobile_display")){
+            MobileDisplayProof.run(repo,new TestContext(Path.of(args[0]+".prefs")));
         }else if(args[1].equals("solar_planning")){
             SolarPlanningProof.run(repo,new TestContext(Path.of(args[0]+".prefs")));
         }else if(args[1].equals("manual_queue")){

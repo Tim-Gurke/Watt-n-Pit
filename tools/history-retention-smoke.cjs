@@ -11,16 +11,16 @@ const preset=require('../app/src/main/assets/dashboard-preset.json');
    window.revision=1;window.auto=true;window.pendingReads=[];window.amount=640;window.dayAmount=29.68;
    const history=q=>{
     const [from,to,metric]=q.args,points=[{t:from,v:10,kind:'shunt',device:'shunt',origin:'archive',period:10},{t:(from+to)/2,v:20,kind:'shunt',device:'shunt',origin:'archive',period:10},{t:to,v:30,kind:'shunt',device:'shunt',origin:'archive',period:10}];
-    if(q.method==='dailyEnergy'){window.lastDaily=q;return {days:[{day:'2026-10-27',last:window.dayAmount,coverage:.99},{day:'2026-10-26',last:0,coverage:1}]};}
-    if(q.method.startsWith('energy')){const series=last=>({points:points.map((p,i)=>({...p,v:i*last/2})),summary:{last,n:3,coverage:1,measuredCoverage:1,from,to}});return {solar:series(410),consumption:series(window.amount),balance:series(410-window.amount)};}
+    if(q.method==='dailyEnergy'){window.lastDaily=q;return {accountingVersion:2,days:[{day:'2026-10-27',last:window.dayAmount,coverage:.99},{day:'2026-10-26',last:0,coverage:1}]};}
+    if(q.method.startsWith('energy')){const series=last=>({points:points.map((p,i)=>({...p,v:i*last/2})),summary:{last,n:3,coverage:1,measuredCoverage:1,from,to}});return {accountingVersion:2,solar:series(410),consumption:series(window.amount),balance:series(410-window.amount)};}
     return {points:points.map(p=>({...p,v:metric==='voltage'?13.1:p.v})),summary:{last:30,min:10,max:30,n:3}};
    };
    window.drain=error=>{let limit=0;while(window.pendingReads.length){if(++limit>100)throw Error('Unbounded read loop');const q=window.pendingReads.shift();window.onHistoryResult({id:q.id,data:error?{error:'Hauptgerät nicht erreichbar'}:history(q)});}};
    window.WattPit={appVersion:()=> '1.6.4',isLanViewer:()=>true,lanState:()=>JSON.stringify({id:'plant',role:'viewer',name:'Testanlage',connected:true}),snapshot:()=>JSON.stringify({running:true,historyRevision:window.revision,lan:{id:'plant',connected:true},devices:[{mac:'shunt',kind:'shunt',name:'Test-Shunt'},{mac:'solar',kind:'solar',name:'Test-Solar'}],readings:[{device:'shunt',kind:'shunt',t:Date.now(),soc:62,voltage:13.15,current:-2,power:-26},{device:'solar',kind:'solar',t:Date.now(),solar:0,state:0}],found:[],stats:{count:100},settings:{theme,palette:'classic',capacity:100,sampleSeconds:10,miniRange:'last6h'},solarDaily:[{day:'2026-10-27','Yield(Wh)':410},{day:'2026-10-26','Yield(Wh)':0}]}),syncState:()=>JSON.stringify({busy:false,runId:0,cockpitNoticeAccepted:true,theme,palette:'classic'}),dashboardPreset:()=>JSON.stringify(preset),dashboard:()=>JSON.stringify(preset),saveDashboard:()=>'',settings:()=>'',solarSetup:()=> '{}',rollerSnapshot:()=> '{}',history:()=>{throw Error('Blocking viewer read');},dashboardHistory:()=>{throw Error('Blocking viewer read');},energyHistoryWindow:()=>{throw Error('Blocking viewer read');},dailyEnergy:()=>{throw Error('Blocking viewer read');},requestHistory:json=>{const q=JSON.parse(json);if(window.auto)setTimeout(()=>window.onHistoryResult({id:q.id,data:history(q)}),10);else window.pendingReads.push(q);}};
   },{preset,theme});
   await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
-  const consumption=page.locator('.cockpit-tile').filter({has:page.locator('.tile-label',{hasText:'Verbrauch'})});
-  await until(()=>miniPoints.length===3&&[...document.querySelectorAll('.tile-label')].some(e=>e.textContent==='Verbrauch'&&e.closest('.cockpit-tile').querySelector('.tile-number').textContent==='640,00'));
+  const consumption=page.locator('.cockpit-tile').filter({has:page.locator('.tile-label',{hasText:'Geräteverbrauch'})});
+  await until(()=>miniPoints.length===3&&[...document.querySelectorAll('.tile-label')].some(e=>e.textContent==='Geräteverbrauch'&&e.closest('.cockpit-tile').querySelector('.tile-number').textContent==='640,00'));
   await page.evaluate(()=>{const tile=dashboard.config.tiles.find(t=>t.metric==='consumptionEnergy');if(!dashboard.detail)dashboard.detail=new WattTileDetail(dashboard);dashboard.detail.open(tile.id);window.auto=false;window.revision++;poll();dashboard.detail.refresh(false);});
   assert.equal(await page.locator('#detailReading .detail-number').textContent(),'640,00');assert.match(await page.locator('#detailNote').textContent(),/Letzter Stand/);await page.locator('#detailClose').click();
   await page.evaluate(()=>{window.auto=false;window.revision++;poll();});
@@ -28,7 +28,7 @@ const preset=require('../app/src/main/assets/dashboard-preset.json');
   await page.evaluate(()=>window.drain(true));await page.waitForTimeout(120);assert.equal(await consumption.locator('.tile-number').textContent(),'640,00');assert.match(await consumption.locator('.tile-hint').textContent(),/Aktualisierung fehlgeschlagen/);
   await page.clock.setFixedTime(new Date('2026-10-27T19:10:00Z'));await page.evaluate(()=>poll());
   assert.equal(await consumption.locator('.tile-number').textContent(),'640,00');assert.equal(await page.evaluate(()=>miniPoints.length),3);
-  await page.evaluate(()=>{window.amount=660;window.drain(false);});await until(()=>[...document.querySelectorAll('.tile-label')].some(e=>e.textContent==='Verbrauch'&&e.closest('.cockpit-tile').querySelector('.tile-number').textContent==='660,00'));
+  await page.evaluate(()=>{window.amount=660;window.drain(false);});await until(()=>[...document.querySelectorAll('.tile-label')].some(e=>e.textContent==='Geräteverbrauch'&&e.closest('.cockpit-tile').querySelector('.tile-number').textContent==='660,00'));
   await page.locator('[data-page="history"]').click();await page.evaluate(()=>{poll();window.drain(false);});await page.waitForTimeout(120);
   const row=day=>page.locator('#solarDailyArchive tr').filter({has:page.locator('td').filter({hasText:day})});
   assert.match(await row('2026-10-27').locator('td').nth(2).textContent(),/29,68/);assert.match(await row('2026-10-26').locator('td').nth(2).textContent(),/0,00/);

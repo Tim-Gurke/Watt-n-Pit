@@ -15,7 +15,7 @@ const fs=require('node:fs');
   window.WattPit={snapshot:()=>JSON.stringify(window.mock),dashboard:()=>JSON.stringify(window.testConfig),saveDashboard:json=>{window.testConfig=JSON.parse(json);localStorage.setItem('mock-dashboard',json);return '';},settings:json=>{Object.assign(window.mock.settings,JSON.parse(json));localStorage.setItem('mock-mini-range',window.mock.settings.miniRange);return '';},history:(from,to,metric,source)=>{window.calls.push({from,to,metric,source});return '{"points":[]}';},dashboardHistory:(from,to,metric)=>{
    if(metric==='solarEnergy'||metric==='dischargeEnergy')return JSON.stringify(energy(metric==='solarEnergy'?'solar':'shunt'));
    return window.historyError?'{"points":[],"summary":{},"error":"unavailable"}':JSON.stringify({points:[{t:now-3600000,last:now-3600000,v:1,min:1,max:1,n:1,device:'TEST-SOLAR',origin:'archive',period:3600},{t:now-600000,last:now-600000,v:3,min:3,max:6,n:1,device:'TEST-SOLAR',origin:'archive',period:3600}],summary:{last:3,avg:2,min:1,max:6}});
-  },energyHistory:()=>JSON.stringify({solar:energy('solar'),battery:energy('shunt')})};
+  },energyHistory:()=>JSON.stringify({accountingVersion:2,solar:energy('solar'),battery:energy('shunt')})};
  });
  await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
  const solar=page.locator('[data-tile="test-solar"]'),number=()=>solar.locator('.tile-number').textContent(),curve=async()=>JSON.stringify([...(await solar.locator('.tile-sparkline path').last().getAttribute('d')).matchAll(/([ML])[\d.]+,([\d.]+)/g)].map(m=>[m[1],Number(m[2])]));

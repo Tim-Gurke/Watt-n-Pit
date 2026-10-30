@@ -6,9 +6,13 @@
 
 Auch Firmware-Updates deiner Victron-Geräte führst du weiterhin über die offiziellen Victron-Apps durch, bei SmartShunt und SmartSolar über VictronConnect. Watt’n’Pit kann keine Geräteupdates durchführen.
 
-**[Android-APK 1.6.9 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.9/Watt-n-Pit-v1.6.9.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.6.10 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.10/Watt-n-Pit-v1.6.10.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
+
+## Neu in 1.6.10
+
+**Mobile Solarerzeugung separat:** Zwei zusätzliche Kacheln zeigen **Solarleistung mobil** in W und **Solarertrag mobil** in Wh, jeweils sichtbar geschätzt. **Geräteverbrauch** ergänzt den mobilen Modellanteil zur bisherigen Messrechnung; die Batterieenergie heißt jetzt **Akkubilanz**. Mobil aus und Anlagen ohne mobiles Modul funktionieren ohne Wettergrundlage, bereits erzeugte mobile Energie bleibt erhalten. Hauptgerät zuerst und danach Anzeigen aktualisieren; eigene Layouts bleiben erhalten. [Änderungen und Grenzen](docs/releases/1.6.10.md).
 
 ## Neu in 1.6.9
 
@@ -139,7 +143,7 @@ Die Hochkant-Vorlage enthält zehn Kacheln und eine Verlaufshöhe von 465 Pixeln
 
 Beim ersten Öffnen den Cockpit-Hinweis lesen und **Verstanden** wählen. Er erscheint auch bei bestehenden Installationen einmal nach diesem Update. Die Bestätigung bleibt nur auf diesem Gerät und wird nicht mit Einstellungen exportiert.
 
-1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.9/Watt-n-Pit-v1.6.9.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
+1. Die [APK herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.10/Watt-n-Pit-v1.6.10.apk) und installieren. Für Updates die neue APK über die bestehende Installation installieren.
 2. In **VictronConnect → Einstellungen → ⋮ → Produktinfo** die **Sofortanzeige über Bluetooth** des jeweiligen Geräts einschalten.
 3. Unter **Sofortanzeige-Details → Anzeigen** die Geräteadresse und den **32-stelligen Verschlüsselungsschlüssel** übernehmen.
 4. In Watt’n’Pit unter **Geräte → Suche starten** das Gerät einrichten oder mit **+** manuell hinzufügen. Jeder Geräteschlüssel gehört zu genau einem Gerät.
@@ -155,13 +159,11 @@ Die sechsstellige Bluetooth-PIN für die Android-Kopplung ist **ein anderer Code
 
 **Solarertrag:** Aus erfasster Leistung des Solarreglers berechnet, im Standard seit Sonnenaufgang am Wetterort. Ein ungemessener zusätzlicher Regler ist darin nicht enthalten. Ohne gültigen Sonnenaufgang erscheint ausdrücklich „heute (Ersatz)“.
 
-**Verbrauch:** Rechnerisch **Solarertrag − Akkubilanz**. Dazu gehören direkt genutzter Solarstrom und Energie aus dem Akku. Im Standard zählt er ab Mitternacht; außerhalb des Solarfensters wird der beobachtete Shunt-Verlauf verwendet. Tatsächlich erfasste Erzeugung vor Sonnenaufgang oder nach Sonnenuntergang erweitert das Solarfenster. Darin müssen Regler und Shunt für denselben Abschnitt vorliegen. Der Wert ist eine Näherung aus den Messstellen einschließlich der Verluste dazwischen.
+**Solarleistung mobil / Solarertrag mobil:** Zusätzliches, nicht am SmartSolar gemessenes mobiles Solar als Modellwert in W beziehungsweise Wh. Beide sind ausdrücklich **geschätzt**. Aufstellung, PWM-Gesamtfaktor, Wetter und gemeldete aktive Zeiten bestimmen die Werte. Mobil aus bedeutet ab diesem Zeitpunkt null; vorheriger Ertrag bleibt erhalten. Fehlende Grundlagen bleiben unbekannt.
 
-**Bilanz:** **Solarertrag − Verbrauch**. Beispiel: **100 Wh Ertrag − 150 Wh Verbrauch = −50 Wh Defizit**. Die Bilanz entspricht im reinen Solarbetrieb dem erfassten Nettofluss am Akku; Ladeverluste werden nicht herausgerechnet. Sie beschreibt keine genaue Änderung des chemischen Akkuinhalts.
+**Geräteverbrauch:** Rechnerisch **festes Solar + geschätztes zusätzliches Solar − Akkubilanz**. Enthält den gesamten Bedarf einschließlich Rollerladung und Ladeverlusten. Mobile Schätzanteile sind sichtbar gekennzeichnet. Die Geräte können Energie verbrauchen, während zugleich ein Überschuss den Akku lädt. Tageswerte zählen einschließlich der Nacht ab Mitternacht.
 
-![Solarertrag, Verbrauch und Bilanz im berechneten Energieverlauf](docs/images/energy-history.png)
-
-**Zusätzlicher PWM-Regler oder andere ungemessene Einspeisung:** Der fehlende Ertrag senkt den berechneten Verbrauch um denselben Betrag. Beispiel: 20 Wh gemessener Solarertrag + 30 Wh ungemessener PWM-Ertrag und 100 Wh tatsächlicher Verbrauch erscheinen als **20 Wh Ertrag, 70 Wh Verbrauch und −50 Wh Bilanz**. Im reinen Solarbetrieb bleibt die Differenz erhalten. Bei starker zusätzlicher Einspeisung kann der berechnete Verbrauch negativ werden; die App zeigt dann „Zusätzliche Einspeisung“. Alle Batteriezweige müssen korrekt über den Shunt erfasst werden.
+**Akkubilanz:** Zugeführte minus entnommene Energie am Akku auf den erfassten Solar-/Shuntabschnitten. Plus bedeutet netto geladen, Minus netto entladen. Die momentane Akkuleistung in W und die Bilanz eines Tages in Wh sind verschiedene Größen. Andere ungemessene Ladegeräte können die Geräteberechnung weiterhin verfälschen; unplausible negative Abschnitte bleiben offen. Alle Batteriezweige müssen korrekt über den Shunt erfasst werden.
 
 Messlücken werden ausgelassen, nicht mit Tageswerten aufgefüllt. Die Prozentangabe nennt die erfasste Zeit des jeweiligen Fensters. Ohne verwertbare Messintervalle erscheint „—“, gemessene Null bleibt 0 Wh. Vor Sonnenaufgang steht der Solarertrag ohne erfasste frühere Erzeugung bei 0 Wh. Nach Sonnenuntergang endet die Solarzeitachse am Sonnenuntergang oder an der letzten verwertbaren späten Erzeugung; der Tagesertrag bleibt stehen.
 

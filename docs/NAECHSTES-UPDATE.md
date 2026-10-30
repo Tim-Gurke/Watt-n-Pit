@@ -1,6 +1,6 @@
 # Planung und umgesetzte Änderungen
 
-## Vorgemerkt fürs nächste Update: Geräteverbrauch und mobiles Solar getrennt darstellen
+## Mit 1.6.10 umgesetzt: Geräteverbrauch und mobiles Solar getrennt darstellen
 
 Wünsche vom 30. Oktober 2026: **Geräteverbrauch** soll den gesamten Bedarf der Geräte benennen. Die mobile Erzeugung soll eine eigene Kachel bekommen, statt nur unauffällig den bisherigen berechneten Verbrauch zu senken. Die bisherige Arbeitsbezeichnung **Restbedarf** ist damit abgelöst.
 
@@ -19,7 +19,7 @@ Mitteilung vom 30. Oktober 2026: Die feste Anlage liefert aktuell **155 W**; am 
 
 Foto vom 30. Oktober 2026, Anzeige 09:48: **95 % BMS-Ladezustand, 53,87 V, 1,61 A und 86,7 W BMS-Ladeleistung**. Der geschätzte Wohnwagenanteil beträgt **126,7 W**, gegenüber zuvor genannten 146–148 W. Das passt zu einer gegen Ladeende sinkenden Leistung. Einen festen Beginn exakt bei 95 % belegt diese Momentaufnahme nicht. Die bestehende Live-Schätzung des Wohnwagenanteils verwendet bereits die aktuelle BMS-Leistung; diese Beobachtung ist ein Vergleichspunkt für spätere Beurteilungen des Ladeverlaufs.
 
-Status: für das nächste Update vorgemerkt; bisher ausschließlich Planung und dokumentierte Vergleichspunkte.
+Status: in 1.6.10 umgesetzt; siehe [Versionshinweise](releases/1.6.10.md). Mobil aus und Anlagen ohne mobiles Modul werden automatisch berücksichtigt. Die bisherige Bilanz heißt nun Akkubilanz.
 
 ## Mit 1.5.0 umgesetzt
 

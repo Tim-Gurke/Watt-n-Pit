@@ -278,13 +278,13 @@ final class LanSync {
         long to=args.getLong(1);
         // Calendar-month requests include their future month end. HistoryDb validates
         // their bounded 32-day span and only calculates consumption up to the present.
-        if(method.equals("dailyEnergy"))return repository.db.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}")));
+        if(method.equals("dailyEnergy"))return planning.dailyEnergy(from,to,new JSONObject(repository.prefs.getString("weatherCache","{}")));
         if(from<0||to<=from||to-from>366L*86400000||to>System.currentTimeMillis()+86400000)throw new IllegalArgumentException();
         switch(method){
-            case "history":return new JSONObject().put("points",repository.db.query(from,to,args.getString(2),args.getString(3)));
-            case "dashboardHistory":return repository.db.dashboardData(from,to,args.getString(2));
-            case "energyHistoryWindow":return repository.db.energyFlow(from,to,args.getLong(3),args.getLong(4),args.getString(2));
-            case "energyHistory":return repository.db.energyFlow(from,to,args.getLong(3),args.getString(2));
+            case "history":return new JSONObject().put("points",planning.history(from,to,args.getString(2),args.getString(3)));
+            case "dashboardHistory":return planning.dashboardData(from,to,args.getString(2));
+            case "energyHistoryWindow":return planning.energyFlow(from,to,args.getLong(3),args.getLong(4),args.getString(2));
+            case "energyHistory":return planning.energyFlow(from,to,args.getLong(3),args.getString(2));
             default:throw new IllegalArgumentException();
         }
     }

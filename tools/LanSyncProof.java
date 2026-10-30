@@ -69,6 +69,9 @@ public final class LanSyncProof {
             Method refresh=LanSync.class.getDeclaredMethod("refresh");refresh.setAccessible(true);refresh.invoke(viewer);
             check(Files.getLastModifiedTime(savedDisplay).toMillis()==1000000,"frequent live refreshes do not rewrite the complete persistent display bundle");
             JSONArray history=viewer.query("history",new JSONArray().put(now-60000).put(now).put("batteryPower").put("all")).getJSONArray("points");
+            JSONObject mobilePower=viewer.query("dashboardHistory",new JSONArray().put(now-60000).put(now).put("mobileSolarPower"));
+            check(mobilePower.getJSONObject("summary").getDouble("last")==0,"a viewer receives known zero mobile power from a host without mobile modules, independently of its own weather");
+            check(viewer.query("energyHistoryWindow",new JSONArray().put(now-60000).put(now).put("all").put(now-60000).put(now)).getInt("accountingVersion")==2,"LAN energy responses identify complete device accounting so older host data cannot be mislabeled");
             java.time.ZoneId zone=java.time.ZoneId.systemDefault();java.time.LocalDate today=java.time.LocalDate.now(zone);
             long monthFrom=today.withDayOfMonth(1).atStartOfDay(zone).toInstant().toEpochMilli(),monthTo=today.withDayOfMonth(1).plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli();
             for(int i=3;i>=1;i--){Reading solar=new Reading();solar.device="AA:00:00:00:00:02";solar.kind="solar";solar.origin="live";solar.timestamp=now-i*10000;solar.period=10;solar.solar=30.0;source.db.insert(solar);}

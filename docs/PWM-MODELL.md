@@ -27,3 +27,7 @@ Die Erkennung wirkt sofort beim Lesen alter Einstellungen; die Anlage muss nicht
 Browserprognose und native Verbrauchsauswertung verwenden dieselben Regeln. In geeigneten älteren Messabschnitten mit dokumentierter PWM-Aufstellung wird die geschätzte mobile Einspeisung mit dem neuen Faktor neu berechnet. Dazu wird die Lernalgorithmus-Version auf 1690 angehoben. Ein gespeicherter historischer Wetterstand wird verwendet, wenn vorhanden. Wo die notwendigen Wetter-/Aufstellungsdaten fehlen, wird kein neuer Beitrag erfunden.
 
 Die gemessenen Wh, importierte Tageserträge, Shunt-Bilanz, Roller-Sondernutzungen und Geräte-Layouts werden nicht durch einen PWM-Abschlag verändert. Mobile Energie bleibt ausdrücklich geschätzt. Das Modell ändert keine Ladeparameter am Regler.
+
+## Separate Darstellung ab 1.6.10
+
+Solarleistung mobil und Solarertrag mobil zeigen die zusätzliche, nicht separat gemessene mobile Erzeugung ausdrücklich geschätzt. Der Geräteverbrauch ergänzt diesen zeitlich passenden Anteil einmal zur ursprünglichen Solar-/Shunt-Rechnung. Die ursprünglichen Sensordaten und die Grundlage des Verbrauchslernens bleiben getrennt erhalten. Mobil aus oder kein zusätzliches Modul bedeutet bekannte null; aktive Zeiten ohne Wetter-/Aufstellungsgrundlage bleiben unbekannt. Modellleistung ist insbesondere bei Laderegelung kein Nachweis tatsächlich erzeugter Leistung.
