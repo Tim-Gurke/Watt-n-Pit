@@ -1,0 +1,67 @@
+name: Verify public Watt'n'Pit 1.6.10 download
+
+on:
+  push:
+    branches: ['verify/public-1.6.10']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 573762c2a4275dd63a20ac3e4c40fe4b5bc999bc
+      - name: Download public APK and published checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 2 --retry-delay 2 --max-time 30 \
+            https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.10/Watt-n-Pit-v1.6.10.apk \
+            -o "$RUNNER_TEMP/public.apk"
+          curl --fail --location --retry 2 --retry-delay 2 --max-time 30 \
+            https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.10/SHA256SUMS.txt \
+            -o "$RUNNER_TEMP/SHA256SUMS.txt"
+      - name: Check exact bytes, embedded assets, package and update certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os, subprocess, zipfile
+          root=Path(os.environ['RUNNER_TEMP'])
+          apk=root/'public.apk'
+          data=apk.read_bytes()
+          digest=hashlib.sha256(data).hexdigest()
+          assert len(data)==625659
+          assert digest=='101373bd055df98ba8b695d26c5c5dcab900eeaf59523973dfea0682b842ddf0'
+          assert data==Path('.release/Watt-n-Pit-v1.6.10.apk').read_bytes()
+          assert (root/'SHA256SUMS.txt').read_text()==digest+'  Watt-n-Pit-v1.6.10.apk\n'
+          count=0
+          with zipfile.ZipFile(apk) as z:
+              for asset in Path('app/src/main/assets').iterdir():
+                  if asset.is_file():
+                      assert z.read('assets/'+asset.name)==asset.read_bytes(), asset.name
+                      count+=1
+              assert b'MobileSolarDisplay' in z.read('classes.dex')
+          sdk=Path(os.environ['ANDROID_HOME'])/'build-tools'
+          choices=sorted(sdk.iterdir(),key=lambda p:tuple(int(x) if x.isdigit() else 0 for x in p.name.split('.')))
+          tools=choices[-1]
+          certificate=subprocess.check_output([str(tools/'apksigner'),'verify','--print-certs',str(apk)],text=True)
+          expected='0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2'
+          assert 'certificate SHA-256 digest: '+expected in certificate
+          badging=subprocess.check_output([str(tools/'aapt'),'dump','badging',str(apk)],text=True)
+          assert "name='de.wattpit.app'" in badging
+          assert "versionName='1.6.10'" in badging and "versionCode='59'" in badging
+          assert 'application-debuggable' not in badging
+          result={'public_download_verified':True,'bytes':len(data),'sha256':digest,'certificate_sha256':expected,'assets_verified':count,'source_sha':'10a7e3b5238bbcca4993b66eb651a2e03b21a3f0'}
+          (root/'public-verification.json').write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps(result))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Watt-n-Pit-public-verification-1.6.10
+          path: ${{ runner.temp }}/public-verification.json
