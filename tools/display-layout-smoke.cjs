@@ -7,14 +7,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',isMobile:true,deviceScaleFactor:2}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-10-30T17:27:00Z'));
   await page.addInitScript(()=>{
-   window.fixtureTheme='dark';window.late=false;window.revision=0;window.hold=false;window.queue=[];
+   window.fixtureTheme='dark';window.fixtureViewer=true;window.late=false;window.revision=0;window.hold=false;window.queue=[];
    const points=(from,to,total)=>[{t:from,v:0,gap:true},{t:from+(to-from)*.3,v:total*.4,gap:false},{t:from+(to-from)*.5,v:total*.4,gap:true},{t:to,v:total,gap:false}];
    const data=q=>{const [from,to,metric]=q.args,series=total=>({points:points(from,to,total),summary:{last:total,min:0,max:total,n:4,coverage:window.late?.79:1,modelledMillis:to-from,inconsistentMillis:window.late?3600000:0,adjustedMillis:window.late?3600000:0,limitedMillis:window.late?3600000:0,missingPriorMillis:window.late?60000:0,abnormalMillis:window.late?60000:0,from,to}});
     if(q.method.startsWith('energy'))return {accountingVersion:2,solar:series(429.93),consumption:series(332.16),balance:series(252.32),mobile:series(126.89)};
     return {points:points(from,to,100),summary:{last:100,min:0,max:180,n:4}};
    };
    window.drain=()=>{while(window.queue.length){const q=window.queue.shift();window.onHistoryResult({id:q.id,data:data(q)});}};
-   window.WattPit={appVersion:()=>'1.6.11',isLanViewer:()=>true,displayScale:()=>Number(localStorage.getItem('fixture-scale')||100),saveDisplayScale:n=>{localStorage.setItem('fixture-scale',n);return '';},
+   window.WattPit={appVersion:()=>'1.6.11',isLanViewer:()=>window.fixtureViewer,displayScale:()=>Number(localStorage.getItem('fixture-scale')||100),saveDisplayScale:n=>{localStorage.setItem('fixture-scale',n);return '';},
     dashboard:()=>localStorage.getItem('fixture-board')||'{}',saveDashboard:s=>{localStorage.setItem('fixture-board',s);return '';},settings:()=>'',history:()=>'{"points":[]}',dashboardHistory:()=>{throw Error('Blocking viewer read');},energyHistoryWindow:()=>{throw Error('Blocking viewer read');},dailyEnergy:()=>{throw Error('Blocking viewer read');},
     snapshot:()=>JSON.stringify({running:true,status:'Live',historyRevision:window.revision,lan:{id:'fixture-plant',connected:true},devices:[{kind:'solar',mac:'solar'},{kind:'shunt',mac:'shunt'}],readings:[{device:'solar',kind:'solar',t:Date.now(),solar:0,state:5},{device:'shunt',kind:'shunt',t:Date.now(),soc:97.6,power:-22,current:-22/13.24,voltage:13.24}],found:[],stats:{count:100},settings:{theme:window.fixtureTheme,palette:'classic',capacity:100,sampleSeconds:10},weather:{timezone:'Europe/Berlin',days:[{day:'2026-10-30',sunrise:Date.parse('2026-10-30T06:10:25Z'),sunset:Date.parse('2026-10-30T16:08:10Z')} ]}}),
     requestHistory:s=>{const q=JSON.parse(s);if(window.hold)window.queue.push(q);else setTimeout(()=>window.onHistoryResult({id:q.id,data:data(q)}),15);}
@@ -59,7 +59,29 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
    await page.locator('#detailCanvas').click({position:{x:Math.max(20,canvas.width*.6),y:40}});assert.equal(await page.locator('#detailTooltip').isVisible(),true);
    await page.locator('#detailClose').click();
   }
+  // Android WebView can report the zoomed document width as innerWidth during
+  // an edit reflow. It must keep the same viewport layout and tile coordinates.
+  await page.setViewportSize({width:360,height:800});
+  for(const scale of [50,73,100,150]){
+   await page.evaluate(scale=>WattDisplay.apply(scale),scale);
+   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));
+   const positions=()=>page.evaluate(()=>JSON.stringify([...document.querySelectorAll('.cockpit-tile')].map(e=>[e.dataset.tile,e.style.left,e.style.top,e.style.width,e.style.height])));
+   const before=await positions();
+   await page.evaluate(()=>{window.fixtureInnerWidth=Object.getOwnPropertyDescriptor(window,'innerWidth');Object.defineProperty(window,'innerWidth',{configurable:true,get:()=>720});});
+   await page.locator('#editDashboard').click();assert.equal(await page.evaluate(()=>dashboard.profile),'compact');assert.equal(await positions(),before);
+   await page.locator('#editDashboard').click();assert.equal(await page.evaluate(()=>dashboard.profile),'compact');assert.equal(await positions(),before);
+   await page.evaluate(()=>Object.defineProperty(window,'innerWidth',window.fixtureInnerWidth));
+  }
   assert.equal(await page.evaluate(()=>JSON.stringify(dashboard.config.tiles.map(t=>[t.id,t.layouts]))),layout);
+  // A cold local host must remain editable while its real worker response is
+  // delayed, and a pending response must not claim an incompatible host version.
+  await page.evaluate(()=>{window.fixtureViewer=false;window.hold=true;window.revision++;poll();});
+  assert.doesNotMatch(await page.locator('[data-tile="layout-consumptionEnergy"] .tile-hint').textContent(),/Hauptgerät.*aktualisieren/);
+  assert.equal(await page.locator('[data-tile="layout-consumptionEnergy"] .tile-chart-empty').textContent(),'Werte werden geladen …');
+  await page.locator('#editDashboard').click();assert.equal(await page.evaluate(()=>dashboard.editing),true);
+  await page.locator('#editDashboard').click();assert.equal(await page.evaluate(()=>dashboard.editing),false);
+  await page.evaluate(()=>{window.hold=false;window.drain();});
+  await waitForPage(page,()=>document.querySelector('[data-tile="layout-consumptionEnergy"] .tile-number')?.textContent==='332,16');
   await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#displayScale').getAttribute('step'),'1');await page.locator('#displayScale').evaluate(e=>{e.value='73';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));});
   assert.equal(await page.locator('#displayScaleValue').textContent(),'73 %');await page.reload();assert.equal(await page.evaluate(()=>WattDisplay.value),73);
   await page.locator('[data-page="settings"]').click();await page.locator('#resetDisplayScale').click();assert.equal(await page.evaluate(()=>WattDisplay.value),100);

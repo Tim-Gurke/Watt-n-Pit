@@ -11,7 +11,7 @@
   const stamp=t=>new Date(t).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   const aggregateNames={avg:'Durchschnitt',min:'Minimum',max:'Maximum',last:'Letzter Wert'};
   // 620 px board plus its normal 22 px frame; display scaling does not select another saved layout.
-  const screenProfile=()=>window.innerWidth>=642?'wide':'compact';
+  const screenProfile=()=>window.matchMedia('(min-width:642px)').matches?'wide':'compact';
   class WattDashboard {
     constructor(adapter) {
       this.a=adapter;this.board=$('dashboardBoard');this.weatherContent=$('weatherStrip');this.widgets={weather:{content:this.weatherContent,dock:$('weatherDock')},lan:{content:$('lanBanner'),dock:$('lanDock')}};this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
@@ -166,7 +166,7 @@
           else if(this.a.native?.energyHistory)data=JSON.parse(read('energyHistory',[Math.floor(window.from),Math.ceil(window.to),'all',solarFrom]));
           else throw new Error('Energieberechnung nicht verfügbar.');
           if(data.error||!data.solar||!data.consumption||!data.balance)throw new Error('Energiedaten nicht verfügbar.');
-          if(!this.a.isDemo()&&data.accountingVersion!==2){const missing={points:[],summary:{},error:true,updateRequired:true};data.consumption=missing;data.mobile=missing;}
+          if(!this.a.isDemo()&&!data.pending&&data.accountingVersion!==2){const missing={points:[],summary:{},error:true,updateRequired:true};data.consumption=missing;data.mobile=missing;}
         }
         else if(this.a.isDemo())data=this.demoData(t,window);
         else if(this.a.native?.dashboardHistory)data=JSON.parse(read('dashboardHistory',[Math.floor(window.from),Math.ceil(window.to),backend]));
@@ -254,7 +254,7 @@
         const reading=`<strong class="tile-number">${esc(C.format(value,t))}</strong><span class="tile-unit">${!m.status?esc(t.unit):''}${estimated?'<small class="tile-estimate-tag"> · geschätzt</small>':''}</span>`;
         const visual=el.querySelector('.tile-visual');
         if(t.type==='gauge')visual.innerHTML=this.gauge(t,value,reading);
-        else if(t.type==='chart')visual.innerHTML=`<div class="tile-reading chart-reading">${reading}</div>${this.sparkline(t,data?.points || [],window,snapshot.settings.capacity,data?.summary)}`;
+        else if(t.type==='chart')visual.innerHTML=`<div class="tile-reading chart-reading">${reading}</div>${this.sparkline(t,data?.points || [],window,snapshot.settings.capacity,data?.summary,data)}`;
         else visual.innerHTML=`<div class="tile-reading">${reading}</div>`;
         let hint=window?`${aggregateNames[t.period.aggregate]} · ${this.periodLabel(t,window)}`:m.kind==='shunt'?'SmartShunt':'SmartSolar';
         if(!window && t.metric==='remaining' && !C.finite(value))hint=shunt?.current>.03?'Akku wird geladen':'Wert vom SmartShunt';
@@ -327,10 +327,10 @@
       const result=C.readableColor(color,background,page,t.opacity,target);
       this.paintCache.set(key,result);return result;
     }
-    sparkline(t,points,window,capacity,summary) {
+    sparkline(t,points,window,capacity,summary,state) {
       if(!window)return '';
       const series=points.map(p=>({...p,v:C.convert(C.signedValue(t,C.historicalValue(t.metric,p.v,capacity)),t.unit,t.metric)})).filter(p=>C.finite(p.v));
-      if(!series.length)return '<div class="tile-chart-empty">Keine gespeicherten Werte</div>';
+      if(!series.length)return `<div class="tile-chart-empty">${state?.pending?'Werte werden geladen …':state?.error?'Werte konnten nicht geladen werden':'Keine gespeicherten Werte'}</div>`;
       const bounds=C.chartRange(t,points,capacity,summary),low=bounds.min,high=bounds.max,x=p=>4+(p.t-window.from)/(window.to-window.from)*292,y=p=>58-C.clamp((p.v-low)/(high-low),0,1)*52;
       const zero=low<0&&high>=0?`<path class="tile-zero-line" d="M4 ${y({v:0}).toFixed(2)}H296" stroke="var(--border)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`:'';
       let path='',last=null;

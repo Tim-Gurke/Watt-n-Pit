@@ -49,7 +49,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  assert.equal(await page.locator('#syncCompact').isVisible(),false);assert.equal(await page.locator('#activityOverlay').isVisible(),false);assert.equal(await page.locator('#capacitySetting').inputValue(),'125');
  await page.evaluate(()=>{Object.assign(window.run,{busy:true,background:false,runId:2,startedAt:Date.now()});window.saveRun();poll();});assert.equal(await page.locator('#syncWaiting').isVisible(),true,'next run reused background choice');
  await page.locator('#syncBackground').click();await page.evaluate(()=>{Object.assign(window.run,{busy:false,background:false});window.archive={active:false,text:'Synchronisation abgeschlossen.'};window.fixture.historyRevision++;poll();});
- await page.locator('[data-page="overview"]').click();assert.equal(await page.locator('[data-tile="default-solarEnergy"] .tile-number').textContent(),'120,00');
+ await page.locator('[data-page="overview"]').click();await until(()=>document.querySelector('[data-tile="default-solarEnergy"] .tile-number')?.textContent==='120,00');
  assert.equal(await page.evaluate(()=>JSON.stringify(dashboard.config.tiles.map(t=>t.layouts))),layouts);
  assert.equal(errors.length,0,errors.join('\n'));await browser.close();console.log('Per-run background choice, reload/device continuity, asynchronous periods, responsive status/cancel, completion, unsaved inputs and both orientations/themes passed.');
 })().catch(e=>{console.error(e);process.exit(1);});

@@ -4,7 +4,7 @@
   'use strict';
   const methods=new Set(['history','dashboardHistory','energyHistory','energyHistoryWindow','dailyEnergy']);
   const missing=()=>({points:[],summary:{},pending:true});
-  const pending=method=>method==='dailyEnergy'?{days:[],pending:true}:method.startsWith('energy')?{solar:missing(),consumption:missing(),balance:missing(),pending:true}:missing();
+  const pending=method=>method==='dailyEnergy'?{days:[],pending:true}:method.startsWith('energy')?{solar:missing(),consumption:missing(),balance:missing(),mobile:missing(),pending:true}:missing();
   return class {
     constructor(raw,ready){
       this.raw=raw;this.ready=ready;this.cache=new Map();this.queue=new Map();this.nextId=0;this.generation=0;this.busy=false;
@@ -45,7 +45,7 @@
         part.pending=refreshing;part.stale=true;part.dataAt=entry.at;
         if(entry.error)part.refreshError=entry.error;else delete part.refreshError;
       };
-      mark(data);if(method.startsWith('energy'))for(const key of ['solar','consumption','balance'])if(data[key])mark(data[key]);
+      mark(data);if(method.startsWith('energy'))for(const key of ['solar','consumption','balance','mobile'])if(data[key])mark(data[key]);
       return JSON.stringify(data);
     }
     accept(query,data){
@@ -55,7 +55,9 @@
     }
     read(method,args,scope){
       this.source();const key=this.key(method,args,scope),query={key,method,args,scope,generation:this.generation};
-      if((!this.busy&&method!=='dailyEnergy'&&!this.raw.isLanViewer?.())||!this.raw.requestHistory){
+      // Local model/history reads can be just as expensive as LAN queries. Keep
+      // them off the WebView's JavaScript thread whenever the worker is available.
+      if(!this.raw.requestHistory){
         let data;try{data=JSON.parse(this.raw[method](...args));}catch(_){data={error:'Zeitraum konnte nicht geladen werden.'};}
         if(data.syncing){try{this.state(JSON.parse(this.raw.syncState()));}catch(_){}return this.busy?this.read(method,args,scope):this.value(this.previous(method,args,scope),method,true);}
         this.accept(query,data);return this.value(this.cache.get(key),method);

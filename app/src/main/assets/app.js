@@ -166,7 +166,7 @@ function poll() {
       if(sourceChanged){reads?.invalidate(true);points=[];miniPoints=[];energyData=null;}
       const lanChanged=sourceChanged||snapshot.lan&&lastLanConnection!==snapshot.lan.connected;
       if(lanChanged)lastLanConnection=snapshot.lan?.connected;
-      if(lanChanged||snapshot.historyRevision!=null&&snapshot.historyRevision!==lastHistoryRevision){lastHistoryRevision=snapshot.historyRevision;if(deviceNative?.isLanViewer?.())reads?.invalidate();dashboard?.clearCache();lastMiniLoad=0;if(page==='history'&&!demo)loadHistory();}
+      if(lanChanged||snapshot.historyRevision!=null&&snapshot.historyRevision!==lastHistoryRevision){lastHistoryRevision=snapshot.historyRevision;reads?.invalidate();dashboard?.clearCache();lastMiniLoad=0;if(page==='history'&&!demo)loadHistory();}
       if (snapshot.eventId && snapshot.eventId !== lastEvent) { toast(snapshot.event); lastEvent = snapshot.eventId; }
       if (document.documentElement.dataset.theme !== snapshot.settings.theme) theme(snapshot.settings.theme,false);
     } catch (error) { console.error('Snapshot unavailable',error); }
@@ -284,7 +284,7 @@ function loadHistory() {
     if(metric==='energy'){
       const sun=window.WattDashboardCore.miniWindow('sunrise',snapshot.weather||{},dataTime()),solarFrom=range==='today'?Math.max(viewFrom,sun.solarFrom??viewFrom):viewFrom,solarTo=range==='today'?sun.solarTo??viewTo:viewTo;
       energyData=demo?(source==='csv'?{}:sampleEnergyDemo(viewFrom,viewTo,solarFrom,solarTo)):native?.energyHistoryWindow?JSON.parse(historyRead('energyHistoryWindow',[Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom),Math.ceil(solarTo)],scope)):native?.energyHistory?JSON.parse(historyRead('energyHistory',[Math.floor(viewFrom),Math.ceil(viewTo),source,Math.floor(solarFrom)],scope)):{};
-      if(!demo&&energyData.solar&&energyData.accountingVersion!==2){const unknown={points:[],summary:{},updateRequired:true};energyData.consumption=unknown;energyData.mobile=unknown;}
+      if(!demo&&!energyData.pending&&energyData.solar&&energyData.accountingVersion!==2){const unknown={points:[],summary:{},updateRequired:true};energyData.consumption=unknown;energyData.mobile=unknown;}
       fetched=energyData;if(energyData.error)throw new Error();historyPending=!!energyData.pending;
       points=energyPlotPoints(energyData);
     }else if(demo)points=source==='csv'?[]:sampleDemo(viewFrom,viewTo,metric);
@@ -422,7 +422,7 @@ function renderDaily() {
   const start=new Date(month+'-01T00:00:00'),end=new Date(start);end.setMonth(end.getMonth()+1);
   if(start.getTime()>=dataTime())continue;
   try{const data=JSON.parse(historyRead('dailyEnergy',[start.getTime(),end.getTime(),snapshot.historyRevision||0,Math.floor(dataTime()/30000)],'daily:'+month));
-   if(data.days&&data.accountingVersion!==2){oldHosts.add(month);data.days=[];}
+   if(data.days&&!data.pending&&data.accountingVersion!==2){oldHosts.add(month);data.days=[];}
    months.set(month,data);if(data.pending)waiting.add(month);if(data.error||data.refreshError)failed.add(month);if(data.stale)outdated.add(month);for(const day of data.days||[])consumption.set(day.day,day);
   }catch(_){months.set(month,{});failed.add(month);}
  }
