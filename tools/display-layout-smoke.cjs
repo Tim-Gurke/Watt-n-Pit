@@ -59,8 +59,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
    await page.locator('#detailClose').click();
   }
   assert.equal(await page.evaluate(()=>JSON.stringify(dashboard.config.tiles.map(t=>[t.id,t.layouts]))),layout);
-  await page.locator('[data-page="settings"]').click();await page.locator('#displayScale').evaluate(e=>{e.value='50';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));});
-  assert.equal(await page.locator('#displayScaleValue').textContent(),'50 %');await page.reload();assert.equal(await page.evaluate(()=>WattDisplay.value),50);
+  await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#displayScale').getAttribute('step'),'1');await page.locator('#displayScale').evaluate(e=>{e.value='73';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));});
+  assert.equal(await page.locator('#displayScaleValue').textContent(),'73 %');await page.reload();assert.equal(await page.evaluate(()=>WattDisplay.value),73);
   await page.locator('[data-page="settings"]').click();await page.locator('#resetDisplayScale').click();assert.equal(await page.evaluate(()=>WattDisplay.value),100);
   assert.deepEqual(errors,[]);await page.close();
   // Device-local settings must not be supplied by another handset or the LAN host.

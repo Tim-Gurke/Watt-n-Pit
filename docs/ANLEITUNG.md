@@ -87,7 +87,7 @@ Falls nichts ankommt: Bluetooth und Reichweite prüfen, VictronConnect vom Gerä
 
 ### Darstellungsgröße und lange Kachelhinweise ab 1.6.11
 
-**Einstellungen → Darstellungsgröße** skaliert die App von **50 bis 150 %**. **100 %** ist die Normalgröße. Die Auswahl wird nur auf diesem Handy gespeichert, auch wenn es die Daten einer Zentrale anzeigt. Android-Anzeigegröße und Schriftgröße müssen dafür nicht verändert werden. Schmale und breite Kachelanordnungen bleiben erhalten; das Verkleinern der App wechselt auf einem schmalen Bildschirm nicht automatisch in die breite Anordnung.
+**Einstellungen → Darstellungsgröße** skaliert die App von **50 bis 150 %** in **1%-Schritten**. **100 %** ist die Normalgröße. Die Auswahl wird nur auf diesem Handy gespeichert, auch wenn es die Daten einer Zentrale anzeigt. Android-Anzeigegröße und Schriftgröße müssen dafür nicht verändert werden. Schmale und breite Kachelanordnungen bleiben erhalten; das Verkleinern der App wechselt auf einem schmalen Bildschirm nicht automatisch in die breite Anordnung.
 
 Ein Hinweis unter einer Kachelskala belegt höchstens zwei Zeilen. Längerer Text wird innerhalb der zweiten Zeile mit **…** gekürzt. Der Hinweis darf auch nach späteren Datenaktualisierungen nicht über Titel, Zahl, Kurve oder Skala liegen. **Kachel antippen → Großansicht öffnen** zeigt die vollständigen Erklärungen.
 
