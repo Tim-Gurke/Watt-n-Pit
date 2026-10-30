@@ -7,10 +7,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',isMobile:true,deviceScaleFactor:2}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-10-30T17:27:00Z'));
   await page.addInitScript(()=>{
-   window.fixtureTheme='dark';window.fixtureViewer=true;window.late=false;window.revision=0;window.hold=false;window.queue=[];
+   window.fixtureTheme='dark';window.fixtureViewer=true;window.late=false;window.revision=0;window.hold=false;window.queue=[];window.failEnergy=false;
    const points=(from,to,total)=>[{t:from,v:0,gap:true},{t:from+(to-from)*.3,v:total*.4,gap:false},{t:from+(to-from)*.5,v:total*.4,gap:true},{t:to,v:total,gap:false}];
    const data=q=>{const [from,to,metric]=q.args,series=total=>({points:points(from,to,total),summary:{last:total,min:0,max:total,n:4,coverage:window.late?.79:1,modelledMillis:to-from,inconsistentMillis:window.late?3600000:0,adjustedMillis:window.late?3600000:0,limitedMillis:window.late?3600000:0,missingPriorMillis:window.late?60000:0,abnormalMillis:window.late?60000:0,from,to}});
-    if(q.method.startsWith('energy'))return {accountingVersion:2,solar:series(429.93),consumption:series(332.16),balance:series(252.32),mobile:series(126.89)};
+    if(q.method.startsWith('energy'))return window.failEnergy?{error:'Test connection unavailable'}:{accountingVersion:2,solar:series(429.93),consumption:series(332.16),balance:series(252.32),mobile:series(126.89)};
     return {points:points(from,to,100),summary:{last:100,min:0,max:180,n:4}};
    };
    window.drain=()=>{while(window.queue.length){const q=window.queue.shift();window.onHistoryResult({id:q.id,data:data(q)});}};
@@ -64,7 +64,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   await page.setViewportSize({width:360,height:800});
   for(const scale of [50,73,100,150]){
    await page.evaluate(scale=>WattDisplay.apply(scale),scale);
-   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));
+   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
    const positions=()=>page.evaluate(()=>JSON.stringify([...document.querySelectorAll('.cockpit-tile')].map(e=>[e.dataset.tile,e.style.left,e.style.top,e.style.width,e.style.height])));
    const before=await positions();
    await page.evaluate(()=>{window.fixtureInnerWidth=Object.getOwnPropertyDescriptor(window,'innerWidth');Object.defineProperty(window,'innerWidth',{configurable:true,get:()=>720});});
@@ -81,6 +81,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   await page.locator('#editDashboard').click();assert.equal(await page.evaluate(()=>dashboard.editing),true);
   await page.locator('#editDashboard').click();assert.equal(await page.evaluate(()=>dashboard.editing),false);
   await page.evaluate(()=>{window.hold=false;window.drain();});
+  await waitForPage(page,()=>document.querySelector('[data-tile="layout-consumptionEnergy"] .tile-number')?.textContent==='332,16');
+  // The day/sunset bounds stay fixed. A failed cold read must still retry after
+  // its cooldown instead of preserving an empty dashboard entry indefinitely.
+  await page.evaluate(()=>{window.failEnergy=true;reads.invalidate(true);dashboard.cache.clear();window.revision++;poll();});
+  await waitForPage(page,()=>document.querySelector('[data-tile="layout-consumptionEnergy"] .tile-chart-empty')?.textContent==='Werte konnten nicht geladen werden');
+  await page.evaluate(()=>{window.failEnergy=false;});
+  await page.clock.setFixedTime(new Date('2026-10-30T17:27:06Z'));
+  await page.evaluate(()=>poll());
   await waitForPage(page,()=>document.querySelector('[data-tile="layout-consumptionEnergy"] .tile-number')?.textContent==='332,16');
   await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#displayScale').getAttribute('step'),'1');await page.locator('#displayScale').evaluate(e=>{e.value='73';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));});
   assert.equal(await page.locator('#displayScaleValue').textContent(),'73 %');await page.reload();assert.equal(await page.evaluate(()=>WattDisplay.value),73);

@@ -171,8 +171,11 @@
         else if(this.a.isDemo())data=this.demoData(t,window);
         else if(this.a.native?.dashboardHistory)data=JSON.parse(read('dashboardHistory',[Math.floor(window.from),Math.ceil(window.to),backend]));
         else if(this.a.native?.history){data=JSON.parse(read('history',[Math.floor(window.from),Math.ceil(window.to),backend,'all']));data.summary=this.summary(data.points || []);}
-      } catch(_){const missing={points:[],summary:{},error:true};data=m.flow?{solar:missing,consumption:missing,balance:missing}:missing;}
-      if(this.cache.size>128)this.cache.clear();this.cache.set(key,data);return m.flow?data[m.flow]:data;
+      } catch(_){const missing={points:[],summary:{},error:true};data=m.flow?{solar:missing,consumption:missing,balance:missing,mobile:missing,error:true}:missing;}
+      // A fixed period (for example sunset) must retry a failed first read. Its
+      // bounds will not move, so caching an error here would hide the retry path.
+      if(!data.pending&&!data.error&&!data.stale&&!data.refreshError){if(this.cache.size>128)this.cache.clear();this.cache.set(key,data);}
+      return m.flow?data[m.flow]:data;
     }
     summary(points) {
       const valid=points.filter(p=>C.finite(p.v));if(!valid.length)return {};
