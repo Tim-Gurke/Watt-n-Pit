@@ -450,6 +450,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         MobilePast(String key,long at,List<SampleTimeline.Interval> solar,List<SampleTimeline.Interval> battery,List<SampleTimeline.Interval> voltage){this.key=key;this.at=at;this.solar=solar;this.battery=battery;this.voltage=voltage;}
     }
     private MobilePast mobilePast;
+    private final Object mobilePastLock=new Object();
     /** Five-minute means are used only for an explicitly estimated historical load prior. */
     private static List<SampleTimeline.Interval> priorMeans(List<SampleTimeline.Interval> input){
         List<SampleTimeline.Interval> out=new ArrayList<>();long from=-1,end=-1,bucket=-1,duration=0;double area=0;
@@ -458,13 +459,13 @@ final class HistoryDb extends SQLiteOpenHelper {
             if(duration==0){from=a;bucket=slot;}area+=(x.value(a)+x.value(b))/2*(b-a);duration+=b-a;end=b;a=b;
         }}if(duration>0){double avg=area/duration;out.add(new SampleTimeline.Interval(from,end,avg,avg));}return out;
     }
-    private synchronized MobilePast mobilePast(long from,long to,String source){
+    private MobilePast mobilePast(long from,long to,String source){synchronized(mobilePastLock){
         long now=android.os.SystemClock.elapsedRealtime();String key=from+":"+to+":"+source;
         if(mobilePast!=null&&mobilePast.key.equals(key)&&now>=mobilePast.at&&now-mobilePast.at<60000)return mobilePast;
         List<SampleTimeline.Interval> sun=new ArrayList<>(),net=new ArrayList<>(),volts=new ArrayList<>();
         if(to>from){sun=priorMeans(SampleTimeline.energyIntervals(powerSamples(from,to,"solar",source),from,to,false));net=priorMeans(batteryIntervals(from,to,source,null));volts=priorMeans(SampleTimeline.energyIntervals(fieldSamples(from,to,"batteryVoltage",source,null),from,to,false));}
         return mobilePast=new MobilePast(key,now,sun,net,volts);
-    }
+    }}
     de.wattpit.app.core.MobileSolarAccounting.Result adjustMobileModel(long lookback,long from,long to,String source,List<EnergyIntegral.ModelInterval> extra,List<EnergyIntegral.ModelInterval> mobile,List<SampleTimeline.Interval> roller){
         long cut=from/86400000L*86400000L;MobilePast past=mobilePast(lookback,cut,source);
         List<SampleTimeline.Interval> sun=new ArrayList<>(past.solar),net=new ArrayList<>(past.battery),volts=new ArrayList<>(past.voltage);
