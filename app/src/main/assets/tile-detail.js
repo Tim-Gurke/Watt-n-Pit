@@ -169,7 +169,9 @@
       const points=this.series[0].data.points?.filter(p=>p.t>=this.view.from&&p.t<=this.view.to)||[];
       const range=this.scaleMode==='auto'?C.chartRange({...this.tile,scaleMode:'auto'},points,this.a.getSnapshot().settings.capacity||100):this.manual;
       const tile={...this.tile,reverseSign:false,min:C.unconvert(range.min,this.tile.unit,this.tile.metric),max:C.unconvert(range.max,this.tile.unit,this.tile.metric)};
-      return this.d.gauge(tile,this.value,'');
+      const m=C.CATALOG[tile.metric],estimated=m.modelPower||m.estimated||this.series[0].data.summary?.modelledMillis>0;
+      const reading=`<strong class="tile-number">${esc(C.format(this.value,tile))}</strong><span class="tile-unit">${esc(tile.unit)}${estimated?'<small class="tile-estimate-tag"> · geschätzt</small>':''}</span>`;
+      return this.d.gauge(tile,this.value,reading);
     }
     weather(){
       const holder=$('detailWeather');if(!holder)return;holder.hidden=false;holder.innerHTML='';
