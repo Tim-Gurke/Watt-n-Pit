@@ -1,4 +1,5 @@
 /* Reported regression: late multi-line status text must not displace chart content. */
+const waitForPage=require('./browser-wait.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.WATTPIT_CHROMIUM,args:['--no-sandbox']});
@@ -25,9 +26,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
    dashboard.config.tiles=metrics.map((metric,i)=>{const t=WattDashboardCore.tile(metric,'layout-'+metric);t.type=metric==='soc'?'gauge':'chart';t.period.mode='sunrise';t.scaleMode='auto';for(const profile of ['compact','wide'])t.layouts[profile]={x:i%3*4,y:Math.floor(i/3)*6,w:4,h:6};return t;});
    dashboard.config.energyPeriod={...dashboard.config.tiles[1].period};dashboard.commit();
   });
-  await page.waitForFunction(()=>document.querySelector('[data-tile="layout-consumptionEnergy"] .tile-number')?.textContent==='332,16').catch(async error=>{console.error(await page.evaluate(()=>({tiles:[...document.querySelectorAll('.cockpit-tile')].map(e=>({id:e.dataset.tile,text:e.textContent})),config:dashboard?.config,pending:window.queue})),errors);throw error;});
+  await waitForPage(page,()=>document.querySelector('[data-tile="layout-consumptionEnergy"] .tile-number')?.textContent==='332,16').catch(async error=>{console.error(await page.evaluate(()=>({tiles:[...document.querySelectorAll('.cockpit-tile')].map(e=>({id:e.dataset.tile,text:e.textContent})),config:dashboard?.config,pending:window.queue})),errors);throw error;});
   const layout=await page.evaluate(()=>JSON.stringify(dashboard.config.tiles.map(t=>[t.id,t.layouts])));
-  await page.waitForFunction(()=>[...document.querySelectorAll('.type-chart.cockpit-tile')].every(e=>e.querySelector('.tile-sparkline')));
+  await waitForPage(page,()=>[...document.querySelectorAll('.type-chart.cockpit-tile')].every(e=>e.querySelector('.tile-sparkline')));
   const geometry=()=>page.evaluate(()=>[...document.querySelectorAll('.type-chart.cockpit-tile')].map(el=>{
    const rect=selector=>el.querySelector(selector).getBoundingClientRect().toJSON(),hint=el.querySelector('.tile-hint'),zoom=el.getBoundingClientRect().width/el.offsetWidth;
    return {id:el.dataset.tile,card:el.getBoundingClientRect().toJSON(),head:rect('.tile-head'),reading:rect('.tile-reading'),curve:rect('.tile-sparkline'),axis:rect('.tile-chart-range'),hint:rect('.tile-hint'),maxHint:parseFloat(getComputedStyle(hint).lineHeight)*2*zoom};
@@ -41,7 +42,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   // A later viewer refresh adds exactly the long warning/status combination from the report.
   await page.evaluate(()=>{window.late=true;window.hold=true;window.revision++;poll();});
   await check();await page.evaluate(()=>{window.drain();window.hold=false;});
-  await page.waitForFunction(()=>document.querySelector('[data-tile="layout-consumptionEnergy"] .tile-hint')?.textContent.includes('auffällige Messwerte'));await check();
+  await waitForPage(page,()=>document.querySelector('[data-tile="layout-consumptionEnergy"] .tile-hint')?.textContent.includes('auffällige Messwerte'));await check();
   assert.match(await page.locator('[data-tile="layout-consumptionEnergy"] .tile-hint').textContent(),/Teilsumme/);
   const output=process.env.WATTPIT_SCREENSHOT_DIR;if(output)fs.mkdirSync(output,{recursive:true});
   for(const width of [360,412,844])for(const theme of ['dark','light'])for(const scale of [50,100,150]){
@@ -53,7 +54,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
    if(output&&width===360&&scale===100)await page.screenshot({path:path.join(output,`display-late-${theme}.png`),fullPage:true});
    // A real sheet remains reachable and does not move the saved tiles.
    await page.locator('[data-tile="layout-consumptionEnergy"]').click();await page.locator('#tileActionDetail').click();
-   await page.waitForFunction(()=>document.getElementById('detailNote').textContent.includes('Teilsumme'));
+   await waitForPage(page,()=>document.getElementById('detailNote').textContent.includes('Teilsumme'));
    const canvas=await page.locator('#detailCanvas').boundingBox();await page.locator('#detailCanvas').scrollIntoViewIfNeeded();
    await page.locator('#detailCanvas').click({position:{x:Math.max(20,canvas.width*.6),y:40}});assert.equal(await page.locator('#detailTooltip').isVisible(),true);
    await page.locator('#detailClose').click();
