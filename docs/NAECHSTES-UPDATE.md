@@ -1,17 +1,25 @@
 # Planung und umgesetzte Änderungen
 
-## Vorgemerkt fürs nächste Update: Verbrauch mit mobilem Solar verständlich anzeigen
+## Vorgemerkt fürs nächste Update: Geräteverbrauch und mobiles Solar getrennt darstellen
 
-Wunsch vom 30. Oktober 2026: Die bisherige Kachel **Verbrauch** ist bei zusätzlicher, nicht separat gemessener mobiler Einspeisung missverständlich. Sie zeigt den Gerätebedarf abzüglich dieser Einspeisung und damit keinen vollständig gemessenen Geräteverbrauch.
+Wünsche vom 30. Oktober 2026: **Geräteverbrauch** soll den gesamten Bedarf der Geräte benennen. Die mobile Erzeugung soll eine eigene Kachel bekommen, statt nur unauffällig den bisherigen berechneten Verbrauch zu senken. Die bisherige Arbeitsbezeichnung **Restbedarf** ist damit abgelöst.
 
-- Die Standardbeschriftung und kurze Erklärung der Kachel verständlicher gestalten; **Restbedarf** ist die vorläufige Arbeitsbezeichnung. Den bereits verrechneten mobilen Beitrag ausdrücklich erklären.
-- In der Großansicht die Berechnungsgrundlage nennen: gemessener Solarertrag minus Akkubilanz. Den mobilen Beitrag nicht ein zweites Mal abziehen und geschätzte mobile Erzeugung nicht als separaten Messwert ausgeben.
-- Momentane Akkubilanz in W, Tagesbilanz in Wh und aufsummierten Restbedarf in Wh klar unterscheiden. Eine positive Akkubilanz kann gleichzeitig mit einem weiter steigenden Restbedarf auftreten.
-- Den möglichen Rückgang des Rechenwerts erklären: Er sinkt erst, wenn die ungemessene mobile Einspeisung den gesamten laufenden Gerätebedarf einschließlich Rollerladung und Ladeverlusten übersteigt. Beispiel aus dem Gespräch: Bei 149 W gemessener fester Solarleistung und +49 W am Akku ergeben sich ungefähr 100 W berechneter Restbedarf; dessen Tageswert steigt weiter.
-- Negative Rechenwerte verständlich als zusätzliche Einspeisung kennzeichnen. Tatsächliche Geräteenergie und ungemessene Erzeugung lassen sich ohne weitere Messung nicht eindeutig trennen.
-- Bestehende individuelle Kacheltitel und Layouts bei der späteren Umsetzung erhalten.
+- Eine separate, frei hinzufügbare, verschiebbare und skalierbare Kachel **Solarleistung mobil** in W vorsehen; **geschätzt** dauerhaft als gut sichtbaren Zusatz zeigen. Sie nutzt das Modell der tatsächlich aktiven mobilen Aufstellung einschließlich PWM-Verlustansatz und ist keine Bluetooth-Liveablesung des PWM-Reglers.
+- Leistung und Ertrag sprachlich und rechnerisch trennen: Für eine aufsummierte Ansicht in Wh lautet die Bezeichnung **Solarertrag mobil**, ebenfalls **geschätzt**. Nur nachvollziehbar abgedeckte Aufstellungs- und Modellzeiträume verwenden; fehlende Grundlagen nicht als gemessene Null ausgeben.
+- Die Verbrauchskachel als **Geräteverbrauch** mit dem gesamten Bedarf einschließlich Rollerladung und Ladeverlusten auslegen. Dazu die zeitlich passende mobile Schätzung einmal zur bisherigen Rechnung ergänzen: gemessener fester Solarertrag + geschätzter mobiler Solarertrag − gemessene Akkubilanz. Den Gesamtwert wegen des geschätzten mobilen Anteils entsprechend kennzeichnen.
+- Feste gemessene Solarerzeugung, mobile geschätzte Erzeugung und Geräteverbrauch verständlich unterscheiden. Die tatsächliche Akkubilanz bleibt am Shunt gemessen. Ein gegebenenfalls angebotener Gesamtertrag muss seinen geschätzten Anteil erkennen lassen. Keine doppelte mobile Korrektur in Anzeige, Prognose oder Verbrauchslernen; die bereits im Gesamtverbrauch enthaltene Rollerladung nicht zusätzlich aufschlagen.
+- Momentane Leistung in W und aufsummierte Tagesenergie in Wh klar unterscheiden. Auch bei positiver Akkubilanz steigt der gesamte Geräteverbrauch weiter, solange die Geräte Energie nutzen. Eine sinkende alte Verbrauchskurve bezeichnete den Rest nach ungemessener Einspeisung und darf unter der neuen Bezeichnung nicht als rückgängig gemachter Geräteverbrauch erklärt werden.
+- Ursprüngliche Messwerte erhalten, Schätzanteile und fehlende Grundlagen nachvollziehbar kennzeichnen. Vorhandene individuelle Kacheltitel und beide Gerätelayouts erhalten; neue Kacheln über die vorhandene Auswahl anbieten. Schriftgrößen weiterhin höchstens 20.
 
-Status: für das nächste Update vorgemerkt; bisher ausschließlich Planung.
+### Praxisvergleich: festes Solar und PWM-Modul
+
+Mitteilung vom 30. Oktober 2026: Die feste Anlage liefert aktuell **155 W**; am PWM-Regler des mobilen Moduls stehen **4,5 A**. Falls dies der Batterie-Ladestrom ist, ergeben sich mit der zuvor fotografierten Batteriespannung von **13,35 V** ungefähr **60,1 W mobil** und damit ungefähr **215 W insgesamt**. Spannung und Strom wurden nicht gleichzeitig dokumentiert; die Zuordnung der Stromanzeige ist nicht bestätigt. Als bedingten Plausibilitätsvergleich speichern, nicht als exakte Kalibrierung oder festen Reglerwirkungsgrad übernehmen.
+
+### Praxisbeobachtung: Roller-Ladeleistung bei angezeigten 95 %
+
+Foto vom 30. Oktober 2026, Anzeige 09:48: **95 % BMS-Ladezustand, 53,87 V, 1,61 A und 86,7 W BMS-Ladeleistung**. Der geschätzte Wohnwagenanteil beträgt **126,7 W**, gegenüber zuvor genannten 146–148 W. Das passt zu einer gegen Ladeende sinkenden Leistung. Einen festen Beginn exakt bei 95 % belegt diese Momentaufnahme nicht. Die bestehende Live-Schätzung des Wohnwagenanteils verwendet bereits die aktuelle BMS-Leistung; diese Beobachtung ist ein Vergleichspunkt für spätere Beurteilungen des Ladeverlaufs.
+
+Status: für das nächste Update vorgemerkt; bisher ausschließlich Planung und dokumentierte Vergleichspunkte.
 
 ## Mit 1.5.0 umgesetzt
 
