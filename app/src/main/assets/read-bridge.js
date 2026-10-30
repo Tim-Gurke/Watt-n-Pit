@@ -21,7 +21,12 @@
       if(changed){this.invalidate();this.runId=state.runId;}
       this.busy=!!state.busy;
     }
-    key(method,args,scope){return JSON.stringify([scope??null,method,args.map((v,i)=>i<2?Math.floor(v/10000):v)]);}
+    key(method,args,scope){
+      // Solar bounds that follow the live window must share its time bucket.
+      // Otherwise every repaint creates a fresh energy query a few ms later.
+      const energy=method.startsWith('energy');
+      return JSON.stringify([scope??null,method,args.map((v,i)=>i<2||energy&&i>=3&&(v===args[0]||v===args[1])?Math.floor(v/10000):v)]);
+    }
     remember(key,value){
       if(value.scope!=null)for(const [oldKey,old] of this.cache)if(old.method===value.method&&old.scope===value.scope)this.cache.delete(oldKey);
       this.cache.delete(key);if(this.cache.size>=128)this.cache.delete(this.cache.keys().next().value);this.cache.set(key,value);

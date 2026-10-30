@@ -59,3 +59,13 @@ test('slow queries coalesce moving requests for the same logical view',()=>{
  const {b,requests,reply}=viewer();b.read('history',[0,100000,'power','all'],'day');
  for(let i=1;i<=50;i++)b.read('history',[i*10000,i*10000+100000,'power','all'],'day');assert.equal(requests.length,1);assert.equal(b.queue.size,1);reply({points:[{v:12}]});assert.equal(requests.length,2);assert.equal(requests[1].args[0],500000);
 });
+test('energy bounds following a live window share its bucket without a repaint query loop',()=>{
+ const {b,requests,reply}=viewer();b.read('energyHistoryWindow',[0,100000,'all',0,100000],'today');reply({accountingVersion:2,solar:{summary:{last:20}},consumption:{summary:{last:30}},balance:{summary:{last:-10}},mobile:{summary:{last:0}}});
+ for(let delta=1;delta<1000;delta++)assert.equal(JSON.parse(b.read('energyHistoryWindow',[0,100000+delta,'all',0,100000+delta],'today')).solar.summary.last,20);
+ assert.equal(requests.length,1,'repainting must not start another native calculation within the existing time bucket');
+ b.read('energyHistoryWindow',[0,110000,'all',0,110000],'today');assert.equal(requests.length,2,'the next bucket must still refresh');
+});
+test('independent solar boundaries remain distinct even within a live time bucket',()=>{
+ const {b,requests,reply}=viewer();b.read('energyHistoryWindow',[0,100000,'all',2000,90000],'today');reply({solar:{summary:{last:20}}});
+ assert.equal(JSON.parse(b.read('energyHistoryWindow',[0,100000,'all',2500,90000],'today')).pending,true);assert.equal(requests.length,2);
+});
