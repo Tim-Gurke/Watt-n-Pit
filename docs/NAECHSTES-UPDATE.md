@@ -1,5 +1,18 @@
 # Planung und umgesetzte Änderungen
 
+## Vorgemerkt fürs nächste Update: Verbrauch mit mobilem Solar verständlich anzeigen
+
+Wunsch vom 30. Oktober 2026: Die bisherige Kachel **Verbrauch** ist bei zusätzlicher, nicht separat gemessener mobiler Einspeisung missverständlich. Sie zeigt den Gerätebedarf abzüglich dieser Einspeisung und damit keinen vollständig gemessenen Geräteverbrauch.
+
+- Die Standardbeschriftung und kurze Erklärung der Kachel verständlicher gestalten; **Restbedarf** ist die vorläufige Arbeitsbezeichnung. Den bereits verrechneten mobilen Beitrag ausdrücklich erklären.
+- In der Großansicht die Berechnungsgrundlage nennen: gemessener Solarertrag minus Akkubilanz. Den mobilen Beitrag nicht ein zweites Mal abziehen und geschätzte mobile Erzeugung nicht als separaten Messwert ausgeben.
+- Momentane Akkubilanz in W, Tagesbilanz in Wh und aufsummierten Restbedarf in Wh klar unterscheiden. Eine positive Akkubilanz kann gleichzeitig mit einem weiter steigenden Restbedarf auftreten.
+- Den möglichen Rückgang des Rechenwerts erklären: Er sinkt erst, wenn die ungemessene mobile Einspeisung den gesamten laufenden Gerätebedarf einschließlich Rollerladung und Ladeverlusten übersteigt. Beispiel aus dem Gespräch: Bei 149 W gemessener fester Solarleistung und +49 W am Akku ergeben sich ungefähr 100 W berechneter Restbedarf; dessen Tageswert steigt weiter.
+- Negative Rechenwerte verständlich als zusätzliche Einspeisung kennzeichnen. Tatsächliche Geräteenergie und ungemessene Erzeugung lassen sich ohne weitere Messung nicht eindeutig trennen.
+- Bestehende individuelle Kacheltitel und Layouts bei der späteren Umsetzung erhalten.
+
+Status: für das nächste Update vorgemerkt; bisher ausschließlich Planung.
+
 ## Mit 1.5.0 umgesetzt
 
 Roller-BMS und Ladeplanung, lokale ScootPit-Kopplung, verschiebbarer und skalierbarer Rollerblock, erhaltene Scrollposition, standardmäßiger Hintergrundabruf, Herunterziehen zum Nachladen und vollständiger Dashboard-Reset. Siehe [1.5.0](releases/1.5.0.md). Die frühere Wahlpflicht für jeden Abruf aus 1.2.6 ist damit abgelöst.
