@@ -122,6 +122,25 @@ final class SolarPlanningProof {
         check(Math.abs(mid.getDouble("consumption")-30)<1e-8&&Math.abs(mid.getJSONObject("usage").getDouble("wh")-70)<1e-8,"mobile potential corrects only the labelled learning sample; measured residual remains 30 Wh");
         check(mid.getJSONObject("usage").getLong("estimatedDuration")==5*hour&&mid.getBoolean("solarEligible"),"an active unmetered mobile module no longer blocks independent fixed-source solar training");
         check(morning.getJSONObject("usage").getLong("duration")>6*hour&&morning.getJSONObject("usage").getLong("estimatedDuration")<morning.getJSONObject("usage").getLong("duration"),"night evidence is measured even while the mobile flag stays on");
+        // Re-evaluate an already stored setup with its old, descriptive PWM name.
+        // The measured 30 Wh residual is immutable; only mobile learning changes.
+        JSONObject pwmPayload=new JSONObject(payload.toString()),pwm=pwmPayload.getJSONObject("equipment").getJSONArray("groups").getJSONObject(1);
+        pwm.put("controller","Dokio PWM").put("yieldFactor",.8).remove("yieldMode");
+        db.execSQL("UPDATE contexts SET payload=? WHERE source=?",new Object[]{pwmPayload.toString(),source});
+        repo.prefs.edit().putInt("planningEnergyVersion."+source,1670).commit();
+        JSONObject pwmMid=row(ask(planning,replies).getJSONArray("observations"),start+11*hour);
+        check(Math.abs(pwmMid.getJSONObject("usage").getDouble("wh")-60)<1e-8&&Math.abs(pwmMid.getDouble("consumption")-30)<1e-8,"legacy PWM setups rebuild earlier mobile learning with a 30 Wh estimate instead of 40 Wh while preserving actual measured consumption");
+        pwm.put("yieldFactor",.65);
+        db.execSQL("UPDATE contexts SET payload=? WHERE source=?",new Object[]{pwmPayload.toString(),source});
+        repo.prefs.edit().putInt("planningEnergyVersion."+source,0).commit();
+        JSONObject customMid=row(ask(planning,replies).getJSONArray("observations"),start+11*hour);
+        check(Math.abs(customMid.getJSONObject("usage").getDouble("wh")-62.5)<1e-8,"a stored custom PWM total is used once in native learning, without an additional regulator loss");
+        JSONObject canonical=Repository.checkedEquipment(pwmPayload.getJSONObject("equipment"));
+        check(canonical.getJSONArray("groups").getJSONObject(1).getString("yieldMode").equals("manual")&&Math.abs(canonical.getJSONArray("groups").getJSONObject(1).getDouble("yieldFactor")-.65)<1e-9,"native save and backup validation retain the inferred custom PWM model");
+        pwm.put("yieldMode","manual").put("yieldFactor",.8);canonical=Repository.checkedEquipment(pwmPayload.getJSONObject("equipment"));
+        check(canonical.getJSONArray("groups").getJSONObject(1).getString("yieldMode").equals("manual")&&canonical.getJSONArray("groups").getJSONObject(1).getDouble("yieldFactor")==.8,"an explicitly selected manual .8 remains possible after the default migration");
+        db.execSQL("UPDATE contexts SET payload=? WHERE source=?",new Object[]{payload.toString(),source});
+        repo.prefs.edit().putInt("planningEnergyVersion."+source,0).commit();ask(planning,replies);
         JSONObject temporaryOff=new JSONObject(setup.toString());temporaryOff.getJSONObject("groups").getJSONObject("case").put("active",false);
         db.execSQL("INSERT INTO contexts(at,key,mobile_free,source,solar_key,payload) VALUES(?,?,1,?,?,?)",new Object[]{start+13*hour+hour/4,"k-cccccccccccccccc",source,solarKey,new JSONObject(payload.toString()).put("setup",temporaryOff).toString()});
         db.execSQL("INSERT INTO contexts(at,key,mobile_free,source,solar_key,payload) VALUES(?,?,0,?,?,?)",new Object[]{start+14*hour,key,source,solarKey,payload.toString()});

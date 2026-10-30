@@ -3,6 +3,14 @@ const assert=require('node:assert/strict');
 const C=require('../app/src/main/assets/settings-backup.js');
 const D=require('../app/src/main/assets/dashboard-core.js');
 const sample=()=>C.create({settings:{theme:'light',palette:'green',capacity:150,sampleSeconds:30,miniRange:'sunrise',weatherPlace:{name:'Testort',latitude:48,longitude:8}}},D.defaults(),{version:1,groups:[{id:'test-group',label:'Testmodule',count:2,watts:90,placement:'fixed',controller:'Regler',measurement:'solar'}]});
+test('PWM loss model selection and custom totals round trip without changing either handset layout',()=>{
+ for(const model of [{controller:'PWM',yieldFactor:.8},{controller:'PWM',yieldFactor:.65},{controller:'PWM',controllerType:'mppt',yieldMode:'manual',yieldFactor:.8}]){
+  const backup=sample(),layout=structuredClone(backup.dashboard);Object.assign(backup.equipment.groups[0],model);if(!model.yieldMode)delete backup.equipment.groups[0].yieldMode;
+  const restored=C.normalize(JSON.parse(JSON.stringify(backup))),again=C.normalize(JSON.parse(JSON.stringify(restored)));
+  assert.deepEqual(restored,again);assert.deepEqual(restored.dashboard,layout);
+  assert.equal(restored.equipment.groups[0].yieldFactor,model.yieldFactor===.8&&model.yieldMode===undefined ? .6 : model.yieldFactor);
+ }
+});
 test('a JSON round trip preserves every portable setting, tile layout and source assignment',()=>{
   const backup=sample();backup.dashboard.tiles.push(D.tile('dischargeEnergy','optional-discharge'));backup.dashboard.tiles[1].period.mode='sunrise';backup.dashboard.tiles[1].color='#123456';backup.dashboard.tiles.find(t=>t.metric==='dischargeEnergy').reverseSign=true;backup.dashboard.blockOrder=['record','tiles','history','roller'];
   assert.deepEqual(C.normalize(JSON.parse(JSON.stringify(backup))),backup);

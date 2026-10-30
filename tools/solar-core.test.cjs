@@ -241,5 +241,21 @@ test('mobile reference changes only forecasted unmetered contribution and is wit
  p.groups.roof.shade[1]=2;const shaded=C.forecast(w,eq,p,knowledge,now)[0];assert.equal(shaded.parts[1].mobile,base.parts[1].mobile);assert.equal(shaded.calibration[1].mobileApplied,false);
 });
 test('explicit per-circuit loss factors alter modeled yield and training baselines without fabricating readings',()=>{
- const eq=equipment(),p=plan(eq),w=weather(),before=C.forecast(w,eq,p,{},now)[0];eq.groups[0].yieldFactor=.6;const after=C.forecast(w,eq,p,{},now)[0];assert.equal(after.total,before.total*.75);assert.notEqual(C.calibrationKey(eq,p,w.place),C.calibrationKey(equipment(),p,w.place));
+ const eq=equipment(),p=plan(eq),w=weather(),before=C.forecast(w,eq,p,{},now)[0];eq.groups[0].yieldMode='manual';eq.groups[0].yieldFactor=.6;const after=C.forecast(w,eq,p,{},now)[0];assert.equal(after.total,before.total*.75);assert.notEqual(C.calibrationKey(eq,p,w.place),C.calibrationKey(equipment(),p,w.place));
+});
+test('legacy PWM changes only its modeled contribution and includes all losses once',()=>{
+ const eq=equipment(),mobile={...eq.groups[0],id:'case',count:1,watts:50,controller:'PWM-Regler',placement:'mobile',measurement:'shunt'};
+ delete mobile.yieldMode;mobile.yieldFactor=.8;eq.groups.push(mobile);const p=plan(eq),w=weather();p.groups.case={active:true,azimuth:180,shade:[0,0,0]};
+ const observationsBefore=observations('2026-10-22',3000),before=JSON.stringify(observationsBefore),d=C.forecast(w,eq,p,{observations:observationsBefore},now)[0];
+ assert.equal(d.fixed,1920);assert.equal(d.mobile,360);assert.equal(d.usage.wh,3000);assert.equal(d.balance,-720);assert.equal(JSON.stringify(observationsBefore),before);
+ mobile.yieldFactor=.65;assert.equal(C.forecast(w,eq,p,{},now)[0].mobile,390);
+ mobile.yieldFactor=.8;mobile.yieldMode='manual';assert.equal(C.forecast(w,eq,p,{},now)[0].mobile,480);
+ p.groups.case.active=false;assert.equal(C.forecast(w,eq,p,{},now)[0].mobile,0);
+});
+test('PWM model identities separate old default predictions while retaining independent MPPT experience',()=>{
+ const eq=equipment(),p=plan(eq),place=weather().place,mpptKey=C.calibrationKey(eq,p,place,'source'),hw=C.systemKey(eq,'source');
+ eq.groups[0].controller='PWM';eq.groups[0].yieldFactor=.8;eq.groups[0].yieldMode='manual';const oldPWM=C.calibrationKey(eq,p,place,'source');
+ eq.groups[0].yieldMode='auto';assert.notEqual(C.calibrationKey(eq,p,place,'source'),oldPWM);assert.notEqual(C.systemKey(eq,'source'),hw);
+ const other=equipment([{...equipment().groups[0],id:'case',count:1,controller:'PWM',placement:'mobile',measurement:'shunt'}]),q=plan(other);
+ assert.equal(C.calibrationKey(other,q,place,'source'),mpptKey);assert.equal(C.systemKey(other,'source'),hw);
 });

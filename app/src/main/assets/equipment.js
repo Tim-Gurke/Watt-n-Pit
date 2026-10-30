@@ -1,6 +1,21 @@
 (function(root){
   'use strict';
   const clean=(s,max)=>String(s??'').trim().slice(0,max);
+  // A provisional TOTAL factor: PWM's .6 replaces .8, rather than multiplying
+  // another loss into an existing user-supplied total. No PWM yield is measured.
+  function yieldModel(g={}){
+    const declared=g.controllerType||'auto',name=String(g.controller||'');
+    if(!['auto','pwm','mppt','other'].includes(declared))throw new Error('Bitte einen gültigen Reglertyp wählen.');
+    const pwm=/(^|[^a-z])pwm([^a-z]|$)/i.test(name),mppt=/(^|[^a-z])mppt([^a-z]|$)/i.test(name);
+    const type=declared==='auto'?(pwm&&!mppt?'pwm':mppt&&!pwm?'mppt':'other'):declared;
+    const saved=g.yieldFactor==null||g.yieldFactor===''?null:Number(g.yieldFactor);
+    if(saved!==null&&(!Number.isFinite(saved)||saved<.1||saved>1))throw new Error('Der Ertragsfaktor muss zwischen 0,1 und 1 liegen.');
+    // Old editors wrote .8 even when the default was never changed. Other old
+    // values are explicit total factors. A new manual .8 remains possible.
+    const mode=g.yieldMode||(saved===null||saved===.8?'auto':'manual');
+    if(!['auto','manual'].includes(mode)||mode==='manual'&&saved===null)throw new Error('Bitte den eigenen Gesamtfaktor angeben.');
+    return {type,mode,factor:mode==='manual'?saved:type==='pwm'?.6:.8};
+  }
   function normalize(input){
     if(input?.version!==1||!Array.isArray(input.groups)||input.groups.length>32)throw new Error('Bitte höchstens 32 Solargruppen anlegen.');
     const ids=new Set();
@@ -12,15 +27,16 @@
       if(!['fixed','mobile','other'].includes(g.placement)||!['solar','shunt','none'].includes(g.measurement))throw new Error('Bitte Montage und Messwertquelle wählen.');
       const tilt=g.tilt==null||g.tilt===''?null:Number(g.tilt);
       if(tilt!==null&&(!Number.isFinite(tilt)||tilt<0||tilt>90))throw new Error('Der Montagewinkel muss zwischen 0° und 90° liegen.');
-      const factor=g.yieldFactor==null||g.yieldFactor===''?null:Number(g.yieldFactor);if(factor!==null&&(!Number.isFinite(factor)||factor<.1||factor>1))throw new Error('Der Ertragsfaktor muss zwischen 0,1 und 1 liegen.');
-      return {id,label,controller,count,watts,placement:g.placement,measurement:g.measurement,tilt,defaultActive:g.placement==='mobile'?false:g.defaultActive!==false&&g.defaultActive!=='false',...(factor===null?{}:{yieldFactor:factor})};
+      const model=yieldModel(g);
+      return {id,label,controller,count,watts,placement:g.placement,measurement:g.measurement,tilt,defaultActive:g.placement==='mobile'?false:g.defaultActive!==false&&g.defaultActive!=='false',controllerType:g.controllerType||'auto',yieldMode:model.mode,yieldFactor:model.factor};
     })};
   }
   function totals(input){return (input?.groups||[]).reduce((t,g)=>({watts:t.watts+g.count*g.watts,modules:t.modules+g.count}),{watts:0,modules:0});}
-  const core={normalize,totals};root.WattEquipmentCore=core;if(typeof module==='object'&&module.exports)module.exports=core;
+  const core={normalize,totals,yieldModel};root.WattEquipmentCore=core;if(typeof module==='object'&&module.exports)module.exports=core;
   if(typeof window==='undefined')return;
   const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const num=n=>Number(n).toLocaleString('de-DE',{maximumFractionDigits:1});
+  const factorText=n=>Number(n).toLocaleString('de-DE',{maximumFractionDigits:2});
   root.WattEquipment=class {
     constructor(a){this.a=a;this.key='';$('editEquipment').onclick=()=>this.open();}
     config(){const saved=this.a.getSnapshot().equipment;
@@ -32,7 +48,7 @@
     render(){
       const config=this.config(),key=JSON.stringify(config);if(key===this.key)return;this.key=key;
       const t=totals(config);$('equipmentTotal').textContent=config.groups.length?`${num(t.watts)} Wp · ${num(t.modules)} ${t.modules===1?'Modul':'Module'}`:'Noch keine Solaranlage hinterlegt.';
-      $('equipmentGroups').innerHTML=config.groups.map(g=>`<div class="equipment-summary"><div><strong>${esc(g.label)}</strong><p>${num(g.count)} × ${num(g.watts)} Wp · ${{fixed:'Fest installiert',mobile:'Mobil',other:'Sonstige Montage'}[g.placement]}</p><p>${esc(g.controller||'Regler nicht benannt')} · ${this.source(g.measurement)}</p></div><span>${num(g.count*g.watts)} Wp</span></div>`).join('');
+      $('equipmentGroups').innerHTML=config.groups.map(g=>{const m=yieldModel(g);return `<div class="equipment-summary"><div><strong>${esc(g.label)}</strong><p>${num(g.count)} × ${num(g.watts)} Wp · ${{fixed:'Fest installiert',mobile:'Mobil',other:'Sonstige Montage'}[g.placement]}</p><p>${esc(g.controller||'Regler nicht benannt')} · ${this.source(g.measurement)}</p><p>${m.type==='other'?'Ertragsmodell':m.type.toUpperCase()} · ${m.mode==='manual'?'eigener Gesamtfaktor':'Modellstartwert'} ${factorText(m.factor)}</p></div><span>${num(g.count*g.watts)} Wp</span></div>`;}).join('');
       const indirect=config.groups.filter(g=>g.measurement==='shunt'),unmeasured=config.groups.filter(g=>g.measurement==='none');
       $('equipmentNote').textContent=indirect.length?`${indirect.map(g=>g.label).join(', ')}: In der Batteriebilanz enthalten, wenn der Ladekreis über den Shunt läuft. Die einzelne Solarleistung ist ohne eigenen Messwert nicht sichtbar.`:unmeasured.length?`${unmeasured.map(g=>g.label).join(', ')}: kein eigener Messwert zugeordnet. Die Nennleistung deiner Anlage ersetzt keine Messung.`:'Die Solarleistung kommt vom verbundenen Solarladeregler. Module und weitere Regler kannst du unter Einstellungen → Deine Solaranlage anpassen.';
     }
@@ -43,10 +59,20 @@
       this.rows();$('addSolarGroup').onclick=()=>{this.gather();if(this.draft.groups.length>=32){this.a.toast('Bis zu 32 Solarkreise sind möglich.');return;}this.draft.groups.push(this.blank());this.rows();};
       $('cancelSolarEquipment').onclick=()=>this.a.closeModal();$('saveSolarEquipment').onclick=()=>this.save();
       $('solarGroupRows').addEventListener('click',event=>{const b=event.target.closest('.remove-solar-group');if(!b)return;this.gather();this.draft.groups.splice(+b.dataset.index,1);this.rows();});
+      for(const name of ['input','change'])$('solarGroupRows').addEventListener(name,event=>{if(['controller','controllerType','yieldMode'].includes(event.target.dataset.field))this.refreshYield(event.target.closest('[data-group]'));});
     }
     rows(){
       const select=(name,options,value)=>`<select data-field="${name}">${options.map(([v,l])=>`<option value="${v}" ${v===value?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
-      $('solarGroupRows').innerHTML=this.draft.groups.map((g,i)=>`<fieldset class="solar-group" data-group="${esc(g.id)}"><legend>Solarkreis ${i+1}</legend><label class="form-field">Bezeichnung<input data-field="label" maxlength="60" value="${esc(g.label)}"></label><div class="solar-module-row"><label class="form-field">Modulanzahl<input data-field="count" type="number" min="1" max="99" step="1" value="${esc(g.count)}"></label><label class="form-field">Wp pro Modul<input data-field="watts" type="number" min="1" max="5000" step="0.1" value="${esc(g.watts)}"></label></div><label class="form-field">Montage${select('placement',[['fixed','Fest installiert'],['mobile','Mobil / aufstellbar'],['other','Sonstige Montage']],g.placement)}</label><div class="solar-module-row"><label class="form-field">Montagewinkel<input data-field="tilt" type="number" min="0" max="90" step="1" placeholder="Noch unbekannt" value="${esc(g.tilt??'')}"><small>0° waagerecht · 90° senkrecht</small></label><label class="form-field">Standardmäßig berücksichtigen${select('defaultActive',[['true','Ja'],['false','Nein']],String(g.defaultActive!==false))}<small>Mobile Kreise werden vor Ort zugeschaltet.</small></label></div><label class="form-field">Regler / Ladekreis<input data-field="controller" maxlength="80" placeholder="z. B. MPPT oder PWM" value="${esc(g.controller)}"></label><label class="form-field">Ertragsfaktor inklusive Regler- und Leitungsverlusten<input data-field="yieldFactor" type="number" min="0.1" max="1" step="0.01" value="${esc(g.yieldFactor??.8)}"><small>0,8 ist der bisherige Modellstartwert. Je Kreis anpassbar; kein gemessener Wirkungsgrad.</small></label><label class="form-field">Messwertquelle${select('measurement',[['solar','Bluetooth-Solarladeregler'],['shunt','Batteriebilanz des Shunts'],['none','Ohne Messwert']],g.measurement)}</label><button class="textbutton remove-solar-group" data-index="${i}">Solarkreis entfernen</button></fieldset>`).join('');
+      $('solarGroupRows').innerHTML=this.draft.groups.map((g,i)=>`<fieldset class="solar-group" data-group="${esc(g.id)}"><legend>Solarkreis ${i+1}</legend><label class="form-field">Bezeichnung<input data-field="label" maxlength="60" value="${esc(g.label)}"></label><div class="solar-module-row"><label class="form-field">Modulanzahl<input data-field="count" type="number" min="1" max="99" step="1" value="${esc(g.count)}"></label><label class="form-field">Wp pro Modul<input data-field="watts" type="number" min="1" max="5000" step="0.1" value="${esc(g.watts)}"></label></div><label class="form-field">Montage${select('placement',[['fixed','Fest installiert'],['mobile','Mobil / aufstellbar'],['other','Sonstige Montage']],g.placement)}</label><div class="solar-module-row"><label class="form-field">Montagewinkel<input data-field="tilt" type="number" min="0" max="90" step="1" placeholder="Noch unbekannt" value="${esc(g.tilt??'')}"><small>0° waagerecht · 90° senkrecht</small></label><label class="form-field">Standardmäßig berücksichtigen${select('defaultActive',[['true','Ja'],['false','Nein']],String(g.defaultActive!==false))}<small>Mobile Kreise werden vor Ort zugeschaltet.</small></label></div><label class="form-field">Regler / Ladekreis<input data-field="controller" maxlength="80" placeholder="z. B. MPPT oder PWM" value="${esc(g.controller)}"></label><label class="form-field">Reglertyp${select('controllerType',[['auto','Aus Reglerangabe erkennen'],['pwm','PWM'],['mppt','MPPT'],['other','Sonstiger / unbekannt']],g.controllerType||'auto')}</label><label class="form-field">Ertragsmodell${select('yieldMode',[['auto','Automatischer Startwert'],['manual','Eigener Gesamtfaktor']],yieldModel(g).mode)}</label><label class="form-field">Gesamtfaktor inklusive Regler- und Leitungsverlusten<input data-field="yieldFactor" type="number" min="0.1" max="1" step="0.01" value="${esc(yieldModel(g).factor)}"><small data-yield-hint></small></label><label class="form-field">Messwertquelle${select('measurement',[['solar','Bluetooth-Solarladeregler'],['shunt','Batteriebilanz des Shunts'],['none','Ohne Messwert']],g.measurement)}</label><button class="textbutton remove-solar-group" data-index="${i}">Solarkreis entfernen</button></fieldset>`).join('');
+      $('solarGroupRows').querySelectorAll('[data-group]').forEach(row=>this.refreshYield(row));
+    }
+    refreshYield(row){
+      if(!row)return;const field=name=>row.querySelector(`[data-field="${name}"]`),g={};
+      for(const name of ['controller','controllerType','yieldMode','yieldFactor'])g[name]=field(name).value;
+      const input=field('yieldFactor');input.readOnly=g.yieldMode==='auto';if(input.readOnly)delete g.yieldFactor;
+      let m;try{m=yieldModel(g);}catch(_){row.querySelector('[data-yield-hint]').textContent='Bitte einen eigenen Gesamtfaktor zwischen 0,1 und 1 eingeben.';return;}
+      if(m.mode==='auto')input.value=m.factor;
+      row.querySelector('[data-yield-hint]').textContent=m.mode==='manual'?'Eigener Gesamtfaktor: enthält bereits alle Verluste; kein zusätzlicher PWM-Abschlag.':`${m.type==='other'?'Reglertyp nicht bestimmt':m.type.toUpperCase()+' berücksichtigt'} · ${factorText(m.factor)} als vorläufiger Gesamtfaktor. Kein gemessener Wirkungsgrad; PWM hängt auch von Modul- und Akkuspannung sowie Temperatur ab.`;
     }
     gather(){this.draft.groups=[...$('solarGroupRows').querySelectorAll('[data-group]')].map(el=>{const g={id:el.dataset.group};el.querySelectorAll('[data-field]').forEach(input=>g[input.dataset.field]=input.type==='checkbox'?input.checked:input.value);return g;});}
     async save(){

@@ -11,10 +11,11 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import de.wattpit.app.core.VictronSettings;
+import de.wattpit.app.core.SolarEquipment;
 
 /** Forecast history is separate from measurements. All history work runs off the UI/bridge thread. */
 final class SolarPlanning extends SQLiteOpenHelper {
-    private static final int ALGORITHM=1670;
+    private static final int ALGORITHM=1690;
     private final RollerLedger rollerLedger;
     private final Context context;
     private JSONArray rollerInputs=new JSONArray(),presenceHistory=new JSONArray();
@@ -149,7 +150,8 @@ final class SolarPlanning extends SQLiteOpenHelper {
                 double v=h.optDouble("v",Double.NaN);if(!Double.isFinite(v)||v<0)return null;covered+=b-a;irradiance+=v*(b-a)/3600000.0;
             }
             if(covered!=to-from)return null;JSONArray shade=p.getJSONArray("shade");int value=shade.isNull(slot)?0:shade.getInt(slot);
-            result+=g.getInt("count")*g.getDouble("watts")*irradiance/1000*g.optDouble("yieldFactor",.8)*new double[]{1,.8,.55,.25}[value];
+            double factor=SolarEquipment.yieldFactor(g.optString("controller"),g.optString("controllerType","auto"),g.optString("yieldMode"),number(g,"yieldFactor"));
+            result+=g.getInt("count")*g.getDouble("watts")*irradiance/1000*factor*new double[]{1,.8,.55,.25}[value];
         }return result;
     }
     private static boolean unmetered(JSONObject snapshot)throws Exception{

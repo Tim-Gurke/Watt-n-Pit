@@ -4,6 +4,7 @@
 })(typeof globalThis==='object'?globalThis:this,function(){
   'use strict';
   const Presence=typeof module==='object'&&module.exports?require('./presence-core.js'):globalThis.WattPresenceCore;
+  const Equipment=typeof module==='object'&&module.exports?require('./equipment.js'):globalThis.WattEquipmentCore;
   const HOUR=3600000,DAY=24*HOUR;
   const finite=x=>typeof x==='number'&&Number.isFinite(x);
   const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
@@ -40,7 +41,7 @@
   function part(hour){return hour<11?0:hour<16?1:2;}
   function setupKey(equipment,plan,place={},source=''){
     if(!finite(place.latitude)||!finite(place.longitude))return '';
-    const text=JSON.stringify([source,place.latitude.toFixed(3),place.longitude.toFixed(3),(equipment.groups||[]).map(g=>[g.id,g.count,g.watts,g.tilt,g.measurement,g.placement,plan.groups[g.id]?.active,plan.groups[g.id]?.azimuth,plan.groups[g.id]?.shade,...(g.yieldFactor==null?[]:[g.yieldFactor,g.controller||''])]).sort((a,b)=>a[0].localeCompare(b[0]))]);
+    const text=JSON.stringify([source,place.latitude.toFixed(3),place.longitude.toFixed(3),(equipment.groups||[]).map(g=>{const m=Equipment.yieldModel(g);return [g.id,g.count,g.watts,g.tilt,g.measurement,g.placement,plan.groups[g.id]?.active,plan.groups[g.id]?.azimuth,plan.groups[g.id]?.shade,...(g.yieldFactor==null?[]:[g.yieldFactor,g.controller||'']),...(m.type==='pwm'&&m.mode==='auto'?['pwm-start-v1']:[])];}).sort((a,b)=>a[0].localeCompare(b[0]))]);
     let a=2166136261,b=3339675911;for(let i=0;i<text.length;i++){a=Math.imul(a^text.charCodeAt(i),16777619);b=Math.imul(b^text.charCodeAt(i),2246822519);}return 'k-'+(a>>>0).toString(16).padStart(8,'0')+(b>>>0).toString(16).padStart(8,'0');
   }
   function calibrationKey(equipment,plan,place={},source=''){return setupKey({...equipment,groups:(equipment.groups||[]).filter(g=>g.measurement==='solar')},plan,place,source);}
@@ -48,7 +49,7 @@
   function systemKey(equipment,source=''){
     const groups=(equipment.groups||[]).filter(g=>g.measurement==='solar').map(g=>({...g,tilt:0,controller:String(g.controller||'')}));
     // The controller and explicit loss factor belong to the hardware identity too.
-    const hardware={...equipment,groups:groups.map(g=>({...g,id:g.id+'|'+g.controller+'|'+(g.yieldFactor??.8)}))};
+    const hardware={...equipment,groups:groups.map(g=>({...g,id:g.id+'|'+g.controller+'|'+Equipment.yieldModel(g).factor}))};
     const settings={groups:Object.fromEntries(hardware.groups.map(g=>[g.id,{active:true,azimuth:180,shade:[0,0,0]}]))};
     return setupKey(hardware,settings,{latitude:0,longitude:0},source);
   }
@@ -160,7 +161,8 @@
         if(!geom){complete=false;if(measured)measuredComplete=false;add('direction',g);continue;}
         if(!series){complete=false;if(measured)measuredComplete=false;add('weather');continue;}let groupHours=0;
         if(!validWindows||counts.get(d.day)!==1){complete=false;add('time');}
-        for(const {t,slot} of byDay.get(d.day)||[]){const value=series.get(t);if(!finite(value)||value<0){complete=false;if(measured)measuredComplete=false;continue;}groupHours++;const shade=setting.shade[slot];unknownShade=unknownShade||shade===null;const wh=g.count*g.watts*value/1000*(g.yieldFactor??.8)*[1,.8,.55,.25][shade??0],isMobile=g.placement==='mobile',referenceAllowed=active.filter(x=>x.measurement==='solar').every(x=>plan.groups[x.id]?.shade?.[slot]===0),factor=measured?corrections[slot].factor:referenceAllowed?corrections[slot].mobileFactor:1;
+        const yieldFactor=Equipment.yieldModel(g).factor;
+        for(const {t,slot} of byDay.get(d.day)||[]){const value=series.get(t);if(!finite(value)||value<0){complete=false;if(measured)measuredComplete=false;continue;}groupHours++;const shade=setting.shade[slot];unknownShade=unknownShade||shade===null;const wh=g.count*g.watts*value/1000*yieldFactor*[1,.8,.55,.25][shade??0],isMobile=g.placement==='mobile',referenceAllowed=active.filter(x=>x.measurement==='solar').every(x=>plan.groups[x.id]?.shade?.[slot]===0),factor=measured?corrections[slot].factor:referenceAllowed?corrections[slot].mobileFactor:1;
           bins[slot][isMobile?'mobile':'fixed']+=wh*factor;if(measured)bins[slot].raw+=wh;
           bins[slot].remaining+=wh*factor*clamp((t-now)/HOUR,0,1);
           timeline.get(t).wh+=wh*factor;

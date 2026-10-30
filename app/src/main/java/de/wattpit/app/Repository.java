@@ -293,7 +293,12 @@ final class Repository {
         }
         SolarEquipment setup=new SolarEquipment(groups);JSONArray clean=new JSONArray();
         for(SolarEquipment.Group g:setup.groups)clean.put(new JSONObject().put("id",g.id).put("label",g.label).put("count",g.count).put("watts",g.watts).put("placement",g.placement).put("controller",g.controller).put("measurement",g.measurement).put("tilt",g.tilt==null?JSONObject.NULL:g.tilt).put("defaultActive",g.defaultActive));
-        for(int i=0;i<rows.length();i++)if(rows.getJSONObject(i).has("yieldFactor")){double factor=rows.getJSONObject(i).getDouble("yieldFactor");if(!Double.isFinite(factor)||factor<.1||factor>1)throw new IllegalArgumentException("Ertragsfaktor muss zwischen 0,1 und 1 liegen.");clean.getJSONObject(i).put("yieldFactor",factor);}
+        for(int i=0;i<rows.length();i++){
+            JSONObject row=rows.getJSONObject(i),group=clean.getJSONObject(i);Double factor=row.isNull("yieldFactor")?null:row.getDouble("yieldFactor");
+            String type=row.optString("controllerType","auto"),mode=SolarEquipment.yieldMode(row.optString("yieldMode"),factor);
+            double effective=SolarEquipment.yieldFactor(group.getString("controller"),type,mode,factor);
+            group.put("controllerType",type).put("yieldMode",mode).put("yieldFactor",effective);
+        }
         return new JSONObject().put("version",1).put("groups",clean).put("ratedWatts",setup.ratedWatts());
     }
     synchronized void removeDevice(String mac) throws Exception {

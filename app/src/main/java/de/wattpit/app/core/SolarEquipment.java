@@ -4,6 +4,27 @@ import java.util.*;
 
 /** User-declared hardware, separate from measured power and charger configuration. */
 public final class SolarEquipment {
+    /** Declared controller text is enough for old installations; an explicit type wins. */
+    public static String controllerType(String controller,String declared){
+        String type=declared==null||declared.isEmpty()?"auto":declared;
+        if(!Arrays.asList("auto","pwm","mppt","other").contains(type))throw new IllegalArgumentException("Bitte einen gültigen Reglertyp wählen.");
+        if(!type.equals("auto"))return type;
+        String name=controller==null?"":controller.toLowerCase(Locale.ROOT);
+        boolean pwm=java.util.regex.Pattern.compile("(^|[^a-z])pwm([^a-z]|$)").matcher(name).find(),mppt=java.util.regex.Pattern.compile("(^|[^a-z])mppt([^a-z]|$)").matcher(name).find();
+        return pwm&&!mppt?"pwm":mppt&&!pwm?"mppt":"other";
+    }
+    public static String yieldMode(String declared,Double factor){
+        if(factor!=null&&(!Double.isFinite(factor)||factor<.1||factor>1))throw new IllegalArgumentException("Ertragsfaktor muss zwischen 0,1 und 1 liegen.");
+        // Legacy .8 was also written by the editor for an untouched default.
+        String mode=declared==null||declared.isEmpty()?(factor==null||factor==.8?"auto":"manual"):declared;
+        if(!Arrays.asList("auto","manual").contains(mode)||mode.equals("manual")&&factor==null)throw new IllegalArgumentException("Bitte den eigenen Gesamtfaktor angeben.");
+        return mode;
+    }
+    /** A provisional total loss model, never a second derating of a custom total. */
+    public static double yieldFactor(String controller,String type,String mode,Double factor){
+        String resolvedType=controllerType(controller,type),resolvedMode=yieldMode(mode,factor);
+        return resolvedMode.equals("manual")?factor:resolvedType.equals("pwm")?.6:.8;
+    }
     public static final class Group {
         public final String id,label,controller,placement,measurement;
         public final int count;public final double watts;public final Double tilt;public final boolean defaultActive;
