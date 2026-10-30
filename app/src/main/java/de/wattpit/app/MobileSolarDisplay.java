@@ -20,7 +20,7 @@ final class MobileSolarDisplay {
     MobileSolarDisplay(Repository repo,SolarPlanning planning){this.repo=repo;this.planning=planning;}
     static void create(SQLiteDatabase db){
         db.execSQL("CREATE TABLE IF NOT EXISTS display_contexts(source TEXT NOT NULL,at INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(source,at))");
-        db.execSQL("CREATE TABLE IF NOT EXISTS model_weather(place TEXT NOT NULL,geometry TEXT NOT NULL,end INTEGER NOT NULL,value REAL NOT NULL,slot INTEGER NOT NULL,night INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(place,geometry,end))");
+        db.execSQL("CREATE TABLE IF NOT EXISTS model_weather(place TEXT NOT NULL,geometry TEXT NOT NULL,end INTEGER NOT NULL,value REAL NOT NULL,slot INTEGER NOT NULL,night INTEGER NOT NULL DEFAULT 0,sunrise INTEGER NOT NULL DEFAULT 0,sunset INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(place,geometry,end))");
     }
     private JSONObject current()throws Exception{return new JSONObject().put("equipment",repo.equipment()).put("setup",planning.setup()).put("place",new JSONObject(repo.prefs.getString("weatherPlace","{}")));}
     void record()throws Exception{synchronized(LOCK){
@@ -44,7 +44,7 @@ final class MobileSolarDisplay {
                 for(int j=0;j<values.length();j++){JSONObject h=values.getJSONObject(j);long end=h.optLong("t");double value=h.optDouble("v",Double.NaN);
                     if(end<=LearningWindow.since(now)||end>now+16L*24*HOUR||!Double.isFinite(value)||value<0)continue;
                     ZonedDateTime middle=Instant.ofEpochMilli(end-HOUR/2).atZone(zone);int hour=middle.getHour();JSONObject day=days.get(middle.toLocalDate().toString());boolean night=day!=null&&day.optLong("sunrise")>0&&day.optLong("sunset")>0&&(end<=day.optLong("sunrise")||end-HOUR>=day.optLong("sunset"));
-                    ContentValues v=new ContentValues();v.put("place",location);v.put("geometry",row.optString("geometry"));v.put("end",end);v.put("value",value);v.put("slot",hour<11?0:hour<16?1:2);v.put("night",night?1:0);
+                    ContentValues v=new ContentValues();v.put("place",location);v.put("geometry",row.optString("geometry"));v.put("end",end);v.put("value",value);v.put("slot",hour<11?0:hour<16?1:2);v.put("night",night?1:0);v.put("sunrise",day==null?0:day.optLong("sunrise"));v.put("sunset",day==null?0:day.optLong("sunset"));
                     db.insertWithOnConflict("model_weather",null,v,SQLiteDatabase.CONFLICT_REPLACE);
                 }
             }
@@ -55,7 +55,7 @@ final class MobileSolarDisplay {
     private static boolean hasExtra(JSONObject snapshot)throws Exception{
         JSONArray groups=snapshot.getJSONObject("equipment").getJSONArray("groups");for(int i=0;i<groups.length();i++)if(!groups.getJSONObject(i).optString("measurement").equals("solar"))return true;return false;
     }
-    private static final class Hour {final double value;final int slot;final boolean night;Hour(double value,int slot,boolean night){this.value=value;this.slot=slot;this.night=night;}}
+    private static final class Hour {final double value;final int slot;final boolean night;final long rise,set;Hour(double value,int slot,boolean night,long rise,long set){this.value=value;this.slot=slot;this.night=night;this.rise=rise;this.set=set;}}
     Model model(long from,long to)throws Exception{
         if(to<=from)return new Model();record();archiveWeather();SQLiteDatabase db=planning.getReadableDatabase();String source=RollerLedger.source(repo.prefs);
         TreeMap<Long,JSONObject> contexts=new TreeMap<>();boolean anyExtra=hasExtra(current());
@@ -71,8 +71,8 @@ final class MobileSolarDisplay {
         for(long at:contexts.keySet())if(at>from&&at<to)cuts.add(at);
         Set<String> places=new HashSet<>();for(JSONObject p:contexts.values())places.add(place(p.optJSONObject("place")));
         for(String location:places){Map<String,NavigableMap<Long,Hour>> series=new HashMap<>();weather.put(location,series);
-            try(Cursor c=db.rawQuery("SELECT geometry,end,value,slot,night FROM model_weather WHERE place=? AND end>? AND end<=? ORDER BY end",new String[]{location,""+from,""+(to+HOUR)})){
-                while(c.moveToNext()){long end=c.getLong(1);series.computeIfAbsent(c.getString(0),k->new TreeMap<>()).put(end,new Hour(c.getDouble(2),c.getInt(3),c.getInt(4)==1));if(end>from&&end<to)cuts.add(end);if(end-HOUR>from&&end-HOUR<to)cuts.add(end-HOUR);}
+            try(Cursor c=db.rawQuery("SELECT geometry,end,value,slot,night,sunrise,sunset FROM model_weather WHERE place=? AND end>? AND end<=? ORDER BY end",new String[]{location,""+from,""+(to+HOUR)})){
+                while(c.moveToNext()){long end=c.getLong(1),rise=c.getLong(5),set=c.getLong(6);series.computeIfAbsent(c.getString(0),k->new TreeMap<>()).put(end,new Hour(c.getDouble(2),c.getInt(3),c.getInt(4)==1,rise,set));if(end>from&&end<to)cuts.add(end);if(end-HOUR>from&&end-HOUR<to)cuts.add(end-HOUR);if(rise>from&&rise<to)cuts.add(rise);if(set>from&&set<to)cuts.add(set);}
             }
         }
         Long previous=null;for(long end:cuts){if(previous==null){previous=end;continue;}long start=previous;previous=end;Map.Entry<Long,JSONObject> at=contexts.floorEntry(start);if(at==null)continue;
@@ -84,8 +84,9 @@ final class MobileSolarDisplay {
                 if(h==null||start<h.getKey()-HOUR||end>h.getKey()){known=false;break;}
                 JSONArray shade=s.optJSONArray("shade");int level=shade==null||shade.isNull(h.getValue().slot)?0:shade.optInt(h.getValue().slot,0);
                 double factor=SolarEquipment.yieldFactor(g.optString("controller"),g.optString("controllerType","auto"),g.optString("yieldMode"),g.isNull("yieldFactor")?null:g.optDouble("yieldFactor"));
-                double watts=g.getDouble("count")*g.getDouble("watts")*h.getValue().value/1000*factor*new double[]{1,.8,.55,.25}[Math.max(0,Math.min(3,level))];
-                if(!Double.isFinite(watts)||watts<0){known=false;break;}double capacity=g.getDouble("count")*g.getDouble("watts");total+=watts;rated+=capacity;estimated=true;night&=h.getValue().night&&watts==0;if(g.optString("placement").equals("mobile")){mobile+=watts;mobileRated+=capacity;mobileEstimated=true;}
+                boolean dark=h.getValue().night||h.getValue().rise>0&&h.getValue().set>0&&(end<=h.getValue().rise||start>=h.getValue().set);
+                double watts=dark?0:g.getDouble("count")*g.getDouble("watts")*h.getValue().value/1000*factor*new double[]{1,.8,.55,.25}[Math.max(0,Math.min(3,level))];
+                if(!Double.isFinite(watts)||watts<0){known=false;break;}double capacity=g.getDouble("count")*g.getDouble("watts");total+=watts;rated+=capacity;estimated=true;night&=dark;if(g.optString("placement").equals("mobile")){mobile+=watts;mobileRated+=capacity;mobileEstimated=true;}
             }
             if(known){result.extra.add(new ModelInterval(new Interval(start,end,total,total),estimated&&!night,rated,night,site,0));result.mobile.add(new ModelInterval(new Interval(start,end,mobile,mobile),mobileEstimated&&!night,mobileRated,night,site,0));}
         }return result;
@@ -96,7 +97,7 @@ final class MobileSolarDisplay {
     JSONObject diagnostic(String source)throws Exception{synchronized(LOCK){
         record();archiveWeather();SQLiteDatabase db=planning.getReadableDatabase();JSONArray contexts=new JSONArray(),weather=new JSONArray();
         try(Cursor c=db.rawQuery("SELECT at,payload FROM display_contexts WHERE source=? ORDER BY at",new String[]{source})){while(c.moveToNext())contexts.put(new JSONObject().put("at",c.getLong(0)).put("payload",new JSONObject(c.getString(1))));}
-        try(Cursor c=db.rawQuery("SELECT place,geometry,end,value,slot,night FROM model_weather ORDER BY place,geometry,end",null)){while(c.moveToNext())weather.put(new JSONObject().put("place",c.getString(0)).put("geometry",c.getString(1)).put("end",c.getLong(2)).put("value",c.getDouble(3)).put("slot",c.getInt(4)).put("night",c.getInt(5)==1));}
+        try(Cursor c=db.rawQuery("SELECT place,geometry,end,value,slot,night,sunrise,sunset FROM model_weather ORDER BY place,geometry,end",null)){while(c.moveToNext())weather.put(new JSONObject().put("place",c.getString(0)).put("geometry",c.getString(1)).put("end",c.getLong(2)).put("value",c.getDouble(3)).put("slot",c.getInt(4)).put("night",c.getInt(5)==1).put("sunrise",c.getLong(6)).put("sunset",c.getLong(7)));}
         return new JSONObject().put("version",2).put("contexts",contexts).put("weather",weather);
     }}
     JSONObject power(long from,long to,Model model)throws Exception{

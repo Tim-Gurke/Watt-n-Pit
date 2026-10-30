@@ -41,7 +41,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
         if(oldVersion<2){db.execSQL("ALTER TABLE contexts ADD COLUMN solar_key TEXT NOT NULL DEFAULT ''");db.execSQL("ALTER TABLE contexts ADD COLUMN payload TEXT NOT NULL DEFAULT '{}'");}
         if(oldVersion<3&&newVersion>=3)PlanningConfirmation.create(db);
         if(oldVersion<4&&newVersion>=4)MobileSolarDisplay.create(db);
-        if(oldVersion==4&&newVersion>=5)db.execSQL("ALTER TABLE model_weather ADD COLUMN night INTEGER NOT NULL DEFAULT 0");
+        if(oldVersion==4&&newVersion>=5){db.execSQL("ALTER TABLE model_weather ADD COLUMN night INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE model_weather ADD COLUMN sunrise INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE model_weather ADD COLUMN sunset INTEGER NOT NULL DEFAULT 0");}
     }
     private MobileSolarDisplay.Model displayModel(long from,long to,String source)throws Exception{
         long lookback=Math.max(0,from/86400000L*86400000L-4L*86400000L);MobileSolarDisplay.Model potential=display.model(lookback,to);
