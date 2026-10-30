@@ -1,6 +1,6 @@
 # PWM in Solarprognose und Verbrauchslernen
 
-Diese Änderung ist für das nächste Update vorbereitet; sie gehört noch nicht zur veröffentlichten Version 1.6.8.
+Seit Version 1.6.9 werden PWM-Angaben ausdrücklich in Solarprognose und Verbrauchslernen berücksichtigt.
 
 Vorhandene Solarkreise mit einer eindeutigen PWM-Angabe im Feld **Regler / Ladekreis** werden automatisch berücksichtigt. Groß-/Kleinschreibung und Bezeichnungen wie „Dokio PWM-Regler“ oder „PWM20A“ sind erlaubt. Sind gleichzeitig PWM und MPPT angegeben, bleibt der Typ unbekannt. Unter **Reglertyp** kann die Erkennung ausdrücklich überschrieben werden.
 
