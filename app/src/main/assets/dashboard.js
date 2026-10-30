@@ -10,6 +10,8 @@
   const dateInput=t=>{const d=new Date(t);return new Date(t-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
   const stamp=t=>new Date(t).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   const aggregateNames={avg:'Durchschnitt',min:'Minimum',max:'Maximum',last:'Letzter Wert'};
+  // 620 px board plus its normal 22 px frame; display scaling does not select another saved layout.
+  const screenProfile=()=>window.innerWidth>=642?'wide':'compact';
   class WattDashboard {
     constructor(adapter) {
       this.a=adapter;this.board=$('dashboardBoard');this.weatherContent=$('weatherStrip');this.widgets={weather:{content:this.weatherContent,dock:$('weatherDock')},lan:{content:$('lanBanner'),dock:$('lanDock')}};this.editing=false;this.cache=new Map();this.elements=new Map();this.profile='';
@@ -45,7 +47,7 @@
     }
     clearCache() {this.cache.clear();this.update();}
     render() {
-      this.profile=this.board.clientWidth>=620?'wide':'compact';
+      this.profile=screenProfile();
       this.board.classList.toggle('is-editing',this.editing);
       this.history.classList.toggle('is-editing',this.editing);$('miniHistoryResize').hidden=!this.editing;$('miniHistorySize').hidden=!this.editing;
       $('editDashboard').textContent=this.editing?'Fertig':'Anordnen';
@@ -90,13 +92,14 @@
       controls.querySelectorAll('button').forEach(button=>button.onclick=()=>{const i=order.indexOf(button.dataset.block),next=i+Number(button.dataset.move);if(next<0||next>=order.length)return;const a=this.config.blockOrder.indexOf(order[i]),b=this.config.blockOrder.indexOf(order[next]);[this.config.blockOrder[a],this.config.blockOrder[b]]=[this.config.blockOrder[b],this.config.blockOrder[a]];this.commit();controls.querySelector(`[data-block="${button.dataset.block}"][data-move="${button.dataset.move}"]`)?.focus({preventScroll:true});});
     }
     layout() {
-      const profile=this.board.clientWidth>=620?'wide':'compact';
+      const profile=screenProfile();
       if(this.profile!==profile){if(this.historyDrag)this.historyPointerEnd({pointerId:this.historyDrag.pointer},true);this.profile=profile;this.render();return;}
       this.layoutHistory();
       this.row=this.profile==='wide'?30:26;
       const width=this.board.clientWidth;
       for(const t of this.config.tiles){const p=t.layouts[this.profile],el=this.elements.get(t.id);if(!el)continue;
         el.classList.toggle('short-tile',p.h<=3);
+        el.classList.toggle('narrow-tile',p.w/12*width-10<95);
         el.classList.toggle('narrow-weather',t.metric==='weather'&&p.w<8);
         Object.assign(el.style,{left:(p.x/12*width+5)+'px',top:(p.y*this.row+5)+'px',width:(p.w/12*width-10)+'px',height:(p.h*this.row-10)+'px'});
       }
@@ -115,7 +118,7 @@
     }
     historyPointerMove(event) {
       const d=this.historyDrag;if(!d||event.pointerId!==d.pointer)return;
-      event.preventDefault();const dy=event.clientY-d.startY;if(Math.abs(dy)>3)d.moved=true;
+      event.preventDefault();const zoom=this.history.getBoundingClientRect().width/this.history.offsetWidth||1,dy=(event.clientY-d.startY)/zoom;if(Math.abs(dy)>3)d.moved=true;
       if(d.moved){this.config.historyHeight[d.profile]=Math.round(C.clamp(d.origin+dy,300,1000));this.layoutHistory();}
     }
     historyPointerEnd(event,cancelled) {
@@ -133,7 +136,7 @@
     }
     pointerMove(event) {
       const d=this.drag;if(!d || d.pointer!==event.pointerId)return;
-      const dx=event.clientX-d.startX,dy=event.clientY-d.startY;
+      const zoom=this.board.getBoundingClientRect().width/this.board.clientWidth||1,dx=(event.clientX-d.startX)/zoom,dy=(event.clientY-d.startY)/zoom;
       if(Math.abs(dx)+Math.abs(dy)>5)d.moved=true;
       if(!d.moved)return;
       event.preventDefault();const t=this.config.tiles.find(t=>t.id===d.id),p=t.layouts[this.profile],cols=Math.round(dx/(this.board.clientWidth/24))/2,rows=Math.round(dy/(this.row/2))/2;
@@ -267,9 +270,14 @@
         if(data?.summary?.modelledMillis>0)hint=this.periodLabel(t,window)+' · '+Math.floor((data.summary.coverage||0)*100)+' % abgedeckt · mit mobilem Modellanteil';
         if(m.modelPower||m.estimated||data?.summary?.modelledMillis>0)hint='Geschätzt · '+hint;
         if(data?.summary?.inconsistentMillis>0)hint+=' · Schätzung und Messbilanz passen teilweise nicht zusammen';
+        if(data?.summary?.adjustedMillis>0)hint+=' · bilanzgestützt';
+        if(data?.summary?.limitedMillis>0)hint+=' · Ladebegrenzung berücksichtigt';
+        if(data?.summary?.missingPriorMillis>0)hint+=' · Ladebegrenzung, Grundbedarf noch unbekannt';
+        if(data?.summary?.abnormalMillis>0)hint+=' · auffällige Messwerte';
+        if(m.energy&&C.finite(value)&&data?.summary?.coverage<.995)hint='Teilsumme · '+hint;
         if(data?.updateRequired)hint='Bitte auch das Hauptgerät auf 1.6.10 oder neuer aktualisieren';
         const coverage=m.energy?Math.floor((data?.summary?.coverage||0)*100)+' % des Zeitraums abgedeckt'+(data?.summary?.interpolatedMillis>0?' · davon '+(data.summary.interpolatedMillis/60000).toLocaleString('de-DE',{maximumFractionDigits:1})+' min kurz interpoliert':''):'';
-        const hintElement=el.querySelector('.tile-hint');hintElement.textContent=t.metric==='consumptionEnergy'&&C.finite(value)&&value<0?'Zusätzliche Einspeisung · '+hint:hint;hintElement.title=[window?.note||'',coverage,m.hint||''].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
+        const hintElement=el.querySelector('.tile-hint');hintElement.textContent=t.metric==='consumptionEnergy'&&C.finite(value)&&value<0?'Zusätzliche Einspeisung · '+hint:hint;hintElement.title=[hint,window?.note||'',coverage,m.hint||''].filter(Boolean).join(' ');hintElement.classList.toggle('period-sunrise',t.period.mode==='sunrise');
         el.classList.toggle('no-value',!C.finite(value));
       }
       if(visibilityChanged)this.layout();else this.fitNumbers();
@@ -282,7 +290,7 @@
         let available=parent.clientWidth-(parent.querySelector('.tile-unit')?.offsetWidth || 0)-8;
         const font=parseFloat(getComputedStyle(number).fontSize),natural=number.scrollWidth;
         // Keep a readable value on narrow tiles; put the unit below before shrinking further.
-        if(available>10&&font*available/natural<14&&parent.classList.contains('tile-reading')){parent.classList.add('stack-unit');available=parent.clientWidth;}
+        if((available<=10||font*available/Math.max(1,natural)<14)&&parent.classList.contains('tile-reading')){parent.classList.add('stack-unit');available=parent.clientWidth;}
         if(natural>available&&available>10)number.style.fontSize=Math.max(14,Math.floor(font*available/natural))+'px';
       }
     }
@@ -305,7 +313,7 @@
         paths+=`<path d="M${a} A61 61 0 0 1 ${b}" stroke="${this.paint(tone,t)}" opacity="${C.finite(value) && i/60<percent?1:.13}"/>`;
       }
       const p=point(135+percent*270),arrow=C.finite(value)?`<circle cx="${p[0]}" cy="${p[1]}" r="3.7" fill="var(--text)" stroke="var(--panel)" stroke-width="1.5"/>`:'';
-      return `<div class="tile-gauge"><svg viewBox="0 0 160 150" aria-hidden="true"><g fill="none" stroke-width="6" stroke-linecap="round">${paths}</g>${arrow}</svg><div class="gauge-reading"><strong class="tile-number">${esc(C.format(value,t))}</strong><span class="tile-unit">${esc(t.unit)}</span></div><span class="gauge-min">${esc(this.short(min))}</span><span class="gauge-max">${esc(this.short(max))}</span></div>`;
+      return `<div class="tile-gauge"><svg viewBox="0 0 160 150" aria-hidden="true"><g fill="none" stroke-width="6" stroke-linecap="round">${paths}</g>${arrow}</svg><div class="gauge-reading">${reading}</div><span class="gauge-min">${esc(this.short(min))}</span><span class="gauge-max">${esc(this.short(max))}</span></div>`;
     }
     short(n){return Number(n.toFixed(Math.abs(n)<10?1:0)).toLocaleString('de-DE');}
     blend(a,b,p){const ca=parseInt(a.slice(1),16),cb=parseInt(b.slice(1),16);return '#'+[16,8,0].map(s=>Math.round(((ca>>s)&255)*(1-p)+((cb>>s)&255)*p).toString(16).padStart(2,'0')).join('');}

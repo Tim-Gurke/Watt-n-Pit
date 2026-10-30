@@ -85,6 +85,14 @@ Falls nichts ankommt: Bluetooth und Reichweite prüfen, VictronConnect vom Gerä
 
 ## 3. Den Startbildschirm gestalten
 
+### Darstellungsgröße und lange Kachelhinweise ab 1.6.11
+
+**Einstellungen → Darstellungsgröße** skaliert die App von **50 bis 150 %**. **100 %** ist die Normalgröße. Die Auswahl wird nur auf diesem Handy gespeichert, auch wenn es die Daten einer Zentrale anzeigt. Android-Anzeigegröße und Schriftgröße müssen dafür nicht verändert werden. Schmale und breite Kachelanordnungen bleiben erhalten; das Verkleinern der App wechselt auf einem schmalen Bildschirm nicht automatisch in die breite Anordnung.
+
+Ein Hinweis unter einer Kachelskala belegt höchstens zwei Zeilen. Längerer Text wird innerhalb der zweiten Zeile mit **…** gekürzt. Der Hinweis darf auch nach späteren Datenaktualisierungen nicht über Titel, Zahl, Kurve oder Skala liegen. **Kachel antippen → Großansicht öffnen** zeigt die vollständigen Erklärungen.
+
+Die mobile Erzeugung wird bei erkennbarer Ladebegrenzung nicht allein aus verfügbarem Wetterpotenzial integriert. Ein unabhängig beobachteter früherer Grundbedarf kann zusammen mit Solar- und Shuntmessungen sowie bekannten Roller-Ladeanteilen eine **bilanzgestützte Schätzung** liefern. Die Grundlage sind mindestens 30 Minuten geeignete Messabschnitte der vorherigen drei Tage am gleichen Ort. Zeitweise begrenztes Laden kann weiterhin mobile Versorgung der Geräte bedeuten. Eine Schätzung bleibt als solche gekennzeichnet; fehlende Grundlagen oder auffällige Messwerte bleiben offen. **Teilsumme** bedeutet: Der Energiewert zählt nur die abgedeckten Abschnitte. Die Großansicht nennt Abdeckung und Gründe für Lücken.
+
 | Dunkles Design | Helles Design |
 |---|---|
 | ![Neue Hochkant-Vorlage mit zehn Kacheln im dunklen Design](images/portrait-1.3.12-dark.png) | ![Dieselbe Hochkant-Vorlage im hellen Design](images/portrait-1.3.12-light.png) |

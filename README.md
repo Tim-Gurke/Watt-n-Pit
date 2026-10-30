@@ -6,9 +6,13 @@
 
 Auch Firmware-Updates deiner Victron-Geräte führst du weiterhin über die offiziellen Victron-Apps durch, bei SmartShunt und SmartSolar über VictronConnect. Watt’n’Pit kann keine Geräteupdates durchführen.
 
-**[Android-APK 1.6.10 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.10/Watt-n-Pit-v1.6.10.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.6.11 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.11/Watt-n-Pit-v1.6.11.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
+
+## Neu in 1.6.11
+
+**Zwei Hinweiszeilen und 50–150 % Darstellungsgröße:** Lange nachgeladene Texte verdrängen keine Kachelwerte mehr. Die Größe wird direkt in der App je Handy gespeichert. Die mobile Ertragsschätzung berücksichtigt Ladebegrenzung und kann mit unabhängig beobachtetem Grundbedarf gestützt werden; unklare Abschnitte bleiben gekennzeichnet. Hauptgerät zuerst aktualisieren. [Änderungen und Grenzen](docs/releases/1.6.11.md).
 
 ## Neu in 1.6.10
 

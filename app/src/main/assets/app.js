@@ -339,8 +339,8 @@ function seriesLabel(s) {
   return name + (s.origin==='csv'?' · CSV':s.origin==='archive'?' · Archiv':'');
 }
 function canvasChart(canvas,data,from,to,chosen,mini=false) {
-  const bounds=canvas.getBoundingClientRect(), width=Math.max(1,bounds.width),height=bounds.height;
-  const ratio=window.devicePixelRatio||1;
+  const bounds=canvas.getBoundingClientRect(),zoom=(window.WattDisplay?.value||100)/100,width=Math.max(1,bounds.width/zoom),height=bounds.height/zoom;
+  const ratio=(window.devicePixelRatio||1)*zoom;
   canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
   const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);
   const style=getComputedStyle(document.documentElement),muted=style.getPropertyValue('--muted').trim(),border=style.getPropertyValue('--border').trim();
@@ -397,17 +397,17 @@ const numRaw = value => Math.round(value*100)/100;
 const pointers=new Map();let gesture=null, dragDistance=0;
 $('historyChart').addEventListener('pointerdown',event=>{
   const c=$('historyChart');c.setPointerCapture(event.pointerId);pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});dragDistance=0;
-  const list=[...pointers.values()];gesture={from:viewFrom,to:viewTo,x:event.clientX,y:event.clientY,distance:list.length>1?Math.hypot(list[1].x-list[0].x,list[1].y-list[0].y):0,anchor:list.length>1?Math.min(1,Math.max(0,((list[0].x+list[1].x)/2-c.getBoundingClientRect().left-(scale?.left||43))/(scale?.plotW||250))):.5};
+  const list=[...pointers.values()],zoom=(window.WattDisplay?.value||100)/100;gesture={from:viewFrom,to:viewTo,x:event.clientX,y:event.clientY,distance:list.length>1?Math.hypot(list[1].x-list[0].x,list[1].y-list[0].y):0,anchor:list.length>1?Math.min(1,Math.max(0,(((list[0].x+list[1].x)/2-c.getBoundingClientRect().left)/zoom-(scale?.left||43))/(scale?.plotW||250))):.5};
 });
 $('historyChart').addEventListener('pointermove',event=>{
   if(!pointers.has(event.pointerId)||!gesture)return;pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
   const list=[...pointers.values()];if(event.pointerType==='touch'&&list.length===1&&Math.abs(event.clientY-gesture.y)>Math.abs(event.clientX-gesture.x)){dragDistance=100;return;}dragDistance=Math.max(dragDistance,Math.abs(event.clientX-gesture.x));
   if(list.length>1 && gesture.distance>0){const distance=Math.hypot(list[1].x-list[0].x,list[1].y-list[0].y);const span=(gesture.to-gesture.from)*gesture.distance/Math.max(distance,5),center=gesture.from+(gesture.to-gesture.from)*gesture.anchor;dragDistance=100;clampView(center-span*gesture.anchor,center+span*(1-gesture.anchor));}
-  else if(list.length===1){const delta=(event.clientX-gesture.x)/(scale?.plotW||250)*(gesture.to-gesture.from);clampView(gesture.from-delta,gesture.to-delta);}
+  else if(list.length===1){const zoom=(window.WattDisplay?.value||100)/100,delta=(event.clientX-gesture.x)/zoom/(scale?.plotW||250)*(gesture.to-gesture.from);clampView(gesture.from-delta,gesture.to-delta);}
 });
 function releasePointer(event){
   if(!pointers.has(event.pointerId))return;
-  if(pointers.size===1&&dragDistance<6&&scale){const px=event.clientX-$('historyChart').getBoundingClientRect().left;const time=viewFrom+(px-scale.left)/scale.plotW*(viewTo-viewFrom);const nearest=[...points].sort((a,b)=>Math.abs(a.t-time)-Math.abs(b.t-time))[0];if(nearest){selectedPoint=nearest;const nearby=seriesOf(points.filter(p=>Math.abs(p.t-nearest.t)<Math.max(1000,(viewTo-viewFrom)/500))).map(s=>s.points.reduce((a,b)=>Math.abs(a.t-nearest.t)<=Math.abs(b.t-nearest.t)?a:b));$('chartTooltip').innerHTML=`<strong>${date(nearest.t)} ${clock(nearest.t)}</strong><br>${nearby.slice(0,4).map(p=>`${escapeHtml(seriesLabel(p))}: ${num(p.v,['energy','voltage','current'].includes(metric)?2:1)} ${metrics[metric].unit}${p.period?`<br><span class="muted">Archivauflösung ${num(p.period)} s</span>`:''}${p.n>1?`<br><span class="muted">Ø aus ${p.n} Werten · ${num(p.min,1)}–${num(p.max,1)} ${metrics[metric].unit}</span>`:''}`).join('<br>')}`;$('chartTooltip').hidden=false;drawHistory();}}
+  if(pointers.size===1&&dragDistance<6&&scale){const px=(event.clientX-$('historyChart').getBoundingClientRect().left)/((window.WattDisplay?.value||100)/100);const time=viewFrom+(px-scale.left)/scale.plotW*(viewTo-viewFrom);const nearest=[...points].sort((a,b)=>Math.abs(a.t-time)-Math.abs(b.t-time))[0];if(nearest){selectedPoint=nearest;const nearby=seriesOf(points.filter(p=>Math.abs(p.t-nearest.t)<Math.max(1000,(viewTo-viewFrom)/500))).map(s=>s.points.reduce((a,b)=>Math.abs(a.t-nearest.t)<=Math.abs(b.t-nearest.t)?a:b));$('chartTooltip').innerHTML=`<strong>${date(nearest.t)} ${clock(nearest.t)}</strong><br>${nearby.slice(0,4).map(p=>`${escapeHtml(seriesLabel(p))}: ${num(p.v,['energy','voltage','current'].includes(metric)?2:1)} ${metrics[metric].unit}${p.period?`<br><span class="muted">Archivauflösung ${num(p.period)} s</span>`:''}${p.n>1?`<br><span class="muted">Ø aus ${p.n} Werten · ${num(p.min,1)}–${num(p.max,1)} ${metrics[metric].unit}</span>`:''}`).join('<br>')}`;$('chartTooltip').hidden=false;drawHistory();}}
   pointers.delete(event.pointerId);gesture=null;
 }
 $('historyChart').addEventListener('pointerup',releasePointer);

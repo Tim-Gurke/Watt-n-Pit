@@ -1,5 +1,15 @@
 # Planung und umgesetzte Änderungen
 
+## Mit 1.6.11 umgesetzt: zwei Hinweiszeilen, lokale Darstellungsgröße und mobile Verbrauchsschätzung
+
+- Kachelhinweise auf höchstens zwei Zeilen begrenzen; Auslassungspunkte gehören in die zweite Zeile. Nachgeladene Meldungen dürfen die Kachelgeometrie nicht verdrängen. Vollständige Erklärung in der Großansicht.
+- Darstellungsgröße **50–150 %**, Standard **100 %**, separat je Handy. Kachelanordnungen erhalten, verschobene/skalierte Berührungspunkte korrekt verarbeiten und Schriften/Diagramme gemeinsam skalieren.
+- Bei zu kleinem Wettermodell und bei Ladebegrenzung die mobile Erzeugung mit Messbilanz und unabhängig zuvor beobachtetem Grundbedarf plausibilisieren. Bekannte Roller-Ladeanteile zeitlich passend berücksichtigen. Keine zusätzliche mobile Korrektur im Verbrauchslernen.
+- Brauchbare positive Teile eines teilweise negativen Rechenabschnitts erhalten. Fehlender Grundbedarf, unplausible Eingänge und auffällige Spannungen bleiben explizite Lücken; Teilabdeckung verständlich kennzeichnen. Mobiles Sonnenpotenzial nicht unbesehen bis Sonnenuntergang als tatsächlichen Ertrag ausweisen.
+- Modellwetter und native Aufstellungswechsel für spätere Prüfungen mit exportieren. Version-4-Datenbank samt bestehender Wetterwerte erhalten.
+
+Offene Hardware-/Betriebspunkte: Spannungsauffälligkeit des mobilen Ladezweigs unabhängig gegenprüfen; Download-/Browserhänger des G5 erst nach Gegenprobe zuordnen. Unterstützung mehrerer separater Solarregler ist ein eigener möglicher Ausbau und nicht Bestandteil dieses Updates.
+
 ## Mit 1.6.10 umgesetzt: Geräteverbrauch und mobiles Solar getrennt darstellen
 
 Wünsche vom 30. Oktober 2026: **Geräteverbrauch** soll den gesamten Bedarf der Geräte benennen. Die mobile Erzeugung soll eine eigene Kachel bekommen, statt nur unauffällig den bisherigen berechneten Verbrauch zu senken. Die bisherige Arbeitsbezeichnung **Restbedarf** ist damit abgelöst.

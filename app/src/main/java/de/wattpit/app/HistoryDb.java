@@ -328,10 +328,10 @@ final class HistoryDb extends SQLiteOpenHelper {
                 if(set>rise&&set<=dayEnd&&set>start)solarTo=Math.min(next,set);
                 break;
             }
-            List<EnergyIntegral.ModelInterval> clipped=null;if(model!=null){clipped=new ArrayList<>();for(EnergyIntegral.ModelInterval x:model){long a=Math.max(start,x.interval.from),b=Math.min(next,x.interval.to);if(b>a)clipped.add(new EnergyIntegral.ModelInterval(a,b,x.interval.a,x.estimated));}}
+            List<EnergyIntegral.ModelInterval> clipped=null;if(model!=null){clipped=new ArrayList<>();for(EnergyIntegral.ModelInterval x:model){long a=Math.max(start,x.interval.from),b=Math.min(next,x.interval.to);if(b>a)clipped.add(x.slice(a,b));}}
             EnergyIntegral.Result result=EnergyIntegral.flowIntervals(clipIntervals(solar,start,next),clipIntervals(battery,start,next),start,next,solarFrom,solarTo,clipped,null).consumption;
             days.put(new JSONObject().put("day",day.toString()).put("last",result.wh==null?JSONObject.NULL:result.wh)
-                    .put("coverage",result.coverage(start,next)).put("modelledMillis",result.modelledMillis).put("inconsistentMillis",result.inconsistentMillis).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",start).put("to",next));
+                    .put("coverage",result.coverage(start,next)).put("modelledMillis",result.modelledMillis).put("inconsistentMillis",result.inconsistentMillis).put("adjustedMillis",result.adjustedMillis).put("limitedMillis",result.limitedMillis).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",start).put("to",next));
             day=day.plusDays(1);
         }
         return new JSONObject().put("days",days);
@@ -445,6 +445,34 @@ final class HistoryDb extends SQLiteOpenHelper {
     private List<SampleTimeline.Interval> batteryIntervals(long from,long to,String source,String device){
         return EnergyIntegral.powerIntervals(fieldSamples(from,to,"batteryPower",source,device),fieldSamples(from,to,"batteryVoltage",source,device),fieldSamples(from,to,"batteryCurrent",source,device),from,to);
     }
+    private static final class MobilePast {
+        final String key;final long at;final List<SampleTimeline.Interval> solar,battery,voltage;
+        MobilePast(String key,long at,List<SampleTimeline.Interval> solar,List<SampleTimeline.Interval> battery,List<SampleTimeline.Interval> voltage){this.key=key;this.at=at;this.solar=solar;this.battery=battery;this.voltage=voltage;}
+    }
+    private MobilePast mobilePast;
+    /** Five-minute means are used only for an explicitly estimated historical load prior. */
+    private static List<SampleTimeline.Interval> priorMeans(List<SampleTimeline.Interval> input){
+        List<SampleTimeline.Interval> out=new ArrayList<>();long from=-1,end=-1,bucket=-1,duration=0;double area=0;
+        for(SampleTimeline.Interval x:input){long a=x.from;while(a<x.to){long slot=a/300000,b=Math.min(x.to,(slot+1)*300000);
+            if(duration>0&&(slot!=bucket||a!=end)){double avg=area/duration;out.add(new SampleTimeline.Interval(from,end,avg,avg));duration=0;area=0;}
+            if(duration==0){from=a;bucket=slot;}area+=(x.value(a)+x.value(b))/2*(b-a);duration+=b-a;end=b;a=b;
+        }}if(duration>0){double avg=area/duration;out.add(new SampleTimeline.Interval(from,end,avg,avg));}return out;
+    }
+    private synchronized MobilePast mobilePast(long from,long to,String source){
+        long now=android.os.SystemClock.elapsedRealtime();String key=from+":"+to+":"+source;
+        if(mobilePast!=null&&mobilePast.key.equals(key)&&now>=mobilePast.at&&now-mobilePast.at<60000)return mobilePast;
+        List<SampleTimeline.Interval> sun=new ArrayList<>(),net=new ArrayList<>(),volts=new ArrayList<>();
+        if(to>from){sun=priorMeans(SampleTimeline.energyIntervals(powerSamples(from,to,"solar",source),from,to,false));net=priorMeans(batteryIntervals(from,to,source,null));volts=priorMeans(SampleTimeline.energyIntervals(fieldSamples(from,to,"batteryVoltage",source,null),from,to,false));}
+        return mobilePast=new MobilePast(key,now,sun,net,volts);
+    }
+    de.wattpit.app.core.MobileSolarAccounting.Result adjustMobileModel(long lookback,long from,long to,String source,List<EnergyIntegral.ModelInterval> extra,List<EnergyIntegral.ModelInterval> mobile,List<SampleTimeline.Interval> roller){
+        long cut=from/86400000L*86400000L;MobilePast past=mobilePast(lookback,cut,source);
+        List<SampleTimeline.Interval> sun=new ArrayList<>(past.solar),net=new ArrayList<>(past.battery),volts=new ArrayList<>(past.voltage);
+        sun.addAll(SampleTimeline.energyIntervals(powerSamples(from,to,"solar",source),from,to,false));net.addAll(batteryIntervals(from,to,source,null));volts.addAll(SampleTimeline.energyIntervals(fieldSamples(from,to,"batteryVoltage",source,null),from,to,false));
+        return de.wattpit.app.core.MobileSolarAccounting.adjust(from,to,sun,net,
+            SampleTimeline.energyIntervals(fieldSamples(from,to,"state",source,null),from,to,false),volts,
+            SampleTimeline.energyIntervals(fieldSamples(from,to,"soc",source,null),from,to,false),extra,mobile,roller);
+    }
     private List<EnergyIntegral.Sample> fieldSamples(long from,long to,String metric,String source,String device){
         HistoryQuery query=HistoryQuery.raw(Math.max(0,from-EnergyIntegral.LOOKAROUND),Math.min(System.currentTimeMillis(),to+EnergyIntegral.LOOKAROUND),metric,source);
         List<EnergyIntegral.Sample> samples=new ArrayList<>();
@@ -466,7 +494,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         JSONArray points=new JSONArray();
         for(EnergyIntegral.Point p:result.points)points.put(new JSONObject().put("t",p.time).put("last",p.time).put("v",p.wh).put("min",p.wh).put("max",p.wh).put("n",1).put("gap",p.gap).put("kind",kind).put("device","calculated-"+kind).put("origin","calculated"));
         Object total=result.wh==null?JSONObject.NULL:result.wh;
-        JSONObject summary=new JSONObject().put("last",total).put("min",result.wh==null?JSONObject.NULL:result.minimumWh).put("max",result.wh==null?JSONObject.NULL:result.maximumWh).put("n",result.points.size()).put("coverage",result.coverage(from,to)).put("measuredCoverage",result.measuredCoverage(from,to)).put("modelledMillis",result.modelledMillis).put("inconsistentMillis",result.inconsistentMillis).put("estimated",kind.equals("mobile")||result.modelledMillis>0).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",from).put("to",to);
+        JSONObject summary=new JSONObject().put("last",total).put("min",result.wh==null?JSONObject.NULL:result.minimumWh).put("max",result.wh==null?JSONObject.NULL:result.maximumWh).put("n",result.points.size()).put("coverage",result.coverage(from,to)).put("measuredCoverage",result.measuredCoverage(from,to)).put("modelledMillis",result.modelledMillis).put("inconsistentMillis",result.inconsistentMillis).put("adjustedMillis",result.adjustedMillis).put("limitedMillis",result.limitedMillis).put("estimated",kind.equals("mobile")||result.modelledMillis>0).put("interpolatedMillis",result.interpolatedMillis).put("coveredMillis",result.coveredMillis).put("from",from).put("to",to);
         return new JSONObject().put("points",points).put("summary",summary);
     }
 

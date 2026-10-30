@@ -152,6 +152,11 @@
       const notes=[this.base.note||'',m.hint||''];
       if(m.modelPower||m.estimated||primary.data.summary?.modelledMillis>0)notes.push('Geschätzt · enthält Modellwerte der mobilen Solarerzeugung.');
       if(primary.data.summary?.inconsistentMillis>0)notes.push('Schätzung und Messbilanz passen teilweise nicht zusammen; diese Abschnitte bleiben ohne Geräteverbrauchswert.');
+      if(primary.data.summary?.adjustedMillis>0)notes.push('Bilanzgestützt geschätzt: Aus gemessener Akku- und Solarleistung sowie einem zuvor unabhängig beobachteten Grundbedarf, einschließlich bekannter Rollerladung. Dies bleibt eine Schätzung des mobilen Ertrags und des Geräteverbrauchs.');
+      if(primary.data.summary?.limitedMillis>0)notes.push('Erkannte Ladebegrenzung berücksichtigt. Verfügbares Wetterpotenzial wird in diesen Abschnitten nicht als tatsächlich genutzter mobiler Ertrag gezählt.');
+      if(primary.data.summary?.missingPriorMillis>0)notes.push('Bei Ladebegrenzung fehlt teilweise ein belastbarer früherer Grundbedarf. Diese Abschnitte bleiben offen.');
+      if(primary.data.summary?.abnormalMillis>0)notes.push('Auffällige oder zur Anlage unpassende Messwerte: Diese Abschnitte bleiben ohne mobile Ertragsschätzung.');
+      if(m.energy&&primary.data.summary?.coverage<.995)notes.push('Teilsumme: Die angezeigte Energie umfasst nur die abgedeckten Abschnitte.');
       if(primary.data.updateRequired)notes.push('Bitte auch das Hauptgerät auf 1.6.10 oder neuer aktualisieren.');
       if(primary.data.pending)notes.push(primary.data.stale?'Letzter Stand · neue Daten werden geladen …':'Daten werden im Hintergrund geladen …');
       else if(primary.data.refreshError)notes.push('Letzter Stand · Aktualisierung fehlgeschlagen. Neuer Versuch folgt.');
@@ -183,7 +188,7 @@
       const canvas=$('detailCanvas'),groups=new Map();
       this.series.forEach((s,i)=>{const unit=s.tile.unit;if(!groups.has(unit))groups.set(unit,[]);groups.get(unit).push({...s,color:this.color(s,i)});});
       canvas.style.height=groups.size>1?(groups.size*145+35)+'px':'clamp(210px,52vh,440px)';
-      const rect=canvas.getBoundingClientRect(),w=Math.max(1,rect.width),h=Math.max(1,rect.height),ratio=window.devicePixelRatio||1;
+      const rect=canvas.getBoundingClientRect(),zoom=(window.WattDisplay?.value||100)/100,w=Math.max(1,rect.width/zoom),h=Math.max(1,rect.height/zoom),ratio=(window.devicePixelRatio||1)*zoom;
       canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);
       const css=getComputedStyle(document.documentElement),muted=css.getPropertyValue('--muted').trim(),border=css.getPropertyValue('--border').trim();
       const left=48,right=13,bottom=28,pane=(h-bottom)/Math.max(1,groups.size),span=Math.max(1,this.view.to-this.view.from),plot=Math.max(1,w-left-right),x=t=>left+(t-this.view.from)/span*plot;
@@ -245,7 +250,7 @@
     }
     pick(clientX){
       if(!this.plot)return;
-      const rect=$('detailCanvas').getBoundingClientRect(),fraction=C.clamp((clientX-rect.left-this.plot.left)/this.plot.plot,0,1),time=this.view.from+fraction*(this.view.to-this.view.from);
+      const rect=$('detailCanvas').getBoundingClientRect(),zoom=(window.WattDisplay?.value||100)/100,fraction=C.clamp(((clientX-rect.left)/zoom-this.plot.left)/this.plot.plot,0,1),time=this.view.from+fraction*(this.view.to-this.view.from);
       this.selectedTime=time;
       const nearest=this.selection().find(s=>s.point)?.point;if(nearest)this.selectedTime=nearest.t;
       this.draw();
@@ -265,16 +270,17 @@
         if(e.pointerType==='touch'&&points.length===1&&Math.abs(points[0].y-g.points[0].y)>Math.abs(points[0].x-g.points[0].x)){clearTimeout(this.pickTimer);g.moved=true;return;}
         e.preventDefault();
         if(points.length===1&&g.selecting){this.pick(points[0].x);return;}
-        if(points.length===1){const dx=points[0].x-g.points[0].x;if(Math.abs(dx)>3){g.moved=true;clearTimeout(this.pickTimer);}this.view=panView(g.view,this.base,-dx/this.plot.plot*(g.view.to-g.view.from));}
+        const zoom=(window.WattDisplay?.value||100)/100;
+        if(points.length===1){const dx=points[0].x-g.points[0].x;if(Math.abs(dx)>3){g.moved=true;clearTimeout(this.pickTimer);}this.view=panView(g.view,this.base,-dx/zoom/this.plot.plot*(g.view.to-g.view.from));}
         else if(g.points.length>1){
           const distance=Math.max(1,Math.hypot(points[1].x-points[0].x,points[1].y-points[0].y)),center=(g.points[0].x+g.points[1].x)/2,current=(points[0].x+points[1].x)/2;
-          const anchor=C.clamp((center-canvas.getBoundingClientRect().left-this.plot.left)/this.plot.plot,0,1),zoomed=zoomView(g.view,this.base,g.distance/distance,anchor);
-          this.view=panView(zoomed,this.base,-(current-center)/this.plot.plot*(zoomed.to-zoomed.from));g.moved=true;
+          const anchor=C.clamp(((center-canvas.getBoundingClientRect().left)/zoom-this.plot.left)/this.plot.plot,0,1),zoomed=zoomView(g.view,this.base,g.distance/distance,anchor);
+          this.view=panView(zoomed,this.base,-(current-center)/zoom/this.plot.plot*(zoomed.to-zoomed.from));g.moved=true;
         }this.draw();
       };
       const end=e=>{clearTimeout(this.pickTimer);if(!this.pointers.has(e.pointerId))return;const tap=this.pointers.size===1&&!this.gesture?.moved;this.pointers.delete(e.pointerId);if((tap||this.gesture?.selecting)&&e.type!=='pointercancel')this.pick(e.clientX);if(this.pointers.size)start();else this.gesture=null;};
       canvas.onpointerup=end;canvas.onpointercancel=end;
-      canvas.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();const rect=canvas.getBoundingClientRect();this.zoom(Math.exp(C.clamp(e.deltaY,-400,400)*.003),C.clamp((e.clientX-rect.left-this.plot.left)/this.plot.plot,0,1));},{passive:false});
+      canvas.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();const rect=canvas.getBoundingClientRect(),zoom=(window.WattDisplay?.value||100)/100;this.zoom(Math.exp(C.clamp(e.deltaY,-400,400)*.003),C.clamp(((e.clientX-rect.left)/zoom-this.plot.left)/this.plot.plot,0,1));},{passive:false});
     }
   }
   return {periodWindow,clampView,zoomView,panView,seriesPoints,WattTileDetail};

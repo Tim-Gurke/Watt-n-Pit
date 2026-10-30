@@ -28,7 +28,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
     private final Consumer<JSONObject> callback;
     private volatile boolean closed;
     SolarPlanning(Context context,Repository repository,Consumer<JSONObject> callback){
-        super(context,"wattpit-planning.db",null,4);this.repository=repository;this.callback=callback;this.context=context.getApplicationContext();rollerLedger=RollerLedger.get(context);display=new MobileSolarDisplay(repository,this);setWriteAheadLoggingEnabled(true);
+        super(context,"wattpit-planning.db",null,5);this.repository=repository;this.callback=callback;this.context=context.getApplicationContext();rollerLedger=RollerLedger.get(context);display=new MobileSolarDisplay(repository,this);setWriteAheadLoggingEnabled(true);
     }
     @Override public void onCreate(SQLiteDatabase db){
         db.execSQL("CREATE TABLE observations(start INTEGER NOT NULL,end INTEGER NOT NULL,source TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(start,end,source))");
@@ -41,25 +41,38 @@ final class SolarPlanning extends SQLiteOpenHelper {
         if(oldVersion<2){db.execSQL("ALTER TABLE contexts ADD COLUMN solar_key TEXT NOT NULL DEFAULT ''");db.execSQL("ALTER TABLE contexts ADD COLUMN payload TEXT NOT NULL DEFAULT '{}'");}
         if(oldVersion<3&&newVersion>=3)PlanningConfirmation.create(db);
         if(oldVersion<4&&newVersion>=4)MobileSolarDisplay.create(db);
+        if(oldVersion==4&&newVersion>=5)db.execSQL("ALTER TABLE model_weather ADD COLUMN night INTEGER NOT NULL DEFAULT 0");
+    }
+    private MobileSolarDisplay.Model displayModel(long from,long to,String source)throws Exception{
+        long lookback=Math.max(0,from/86400000L*86400000L-4L*86400000L);MobileSolarDisplay.Model potential=display.model(lookback,to);
+        boolean needsAccounting=false;for(de.wattpit.app.core.EnergyIntegral.ModelInterval m:potential.extra)if(m.estimated&&m.interval.to>from&&m.interval.from<to){needsAccounting=true;break;}
+        if(!needsAccounting){MobileSolarDisplay.Model result=new MobileSolarDisplay.Model();for(de.wattpit.app.core.EnergyIntegral.ModelInterval m:potential.extra){long a=Math.max(from,m.interval.from),b=Math.min(to,m.interval.to);if(b>a)result.extra.add(m.slice(a,b));}for(de.wattpit.app.core.EnergyIntegral.ModelInterval m:potential.mobile){long a=Math.max(from,m.interval.from),b=Math.min(to,m.interval.to);if(b>a)result.mobile.add(m.slice(a,b));}return result;}
+        List<de.wattpit.app.core.SampleTimeline.Interval> special=new ArrayList<>();JSONArray rows=rollerLedger.read(RollerLedger.source(repository.prefs),lookback,to);
+        for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);long a=r.optLong("from"),b=r.optLong("to");double wh=r.optDouble("wh",Double.NaN);if(b>a&&Double.isFinite(wh)&&wh>=0)special.add(new de.wattpit.app.core.SampleTimeline.Interval(a,b,wh*3600000/(b-a),wh*3600000/(b-a)));}
+        de.wattpit.app.core.MobileSolarAccounting.Result adjusted=repository.db.adjustMobileModel(lookback,from,to,source,potential.extra,potential.mobile,special);
+        MobileSolarDisplay.Model result=new MobileSolarDisplay.Model();result.extra.addAll(adjusted.extra);result.mobile.addAll(adjusted.mobile);result.missingPriorMillis=adjusted.missingPriorMillis;result.abnormalMillis=adjusted.abnormalMillis;result.limitedMillis=adjusted.limitedMillis;return result;
+    }
+    private JSONObject modelNotes(JSONObject data,MobileSolarDisplay.Model model)throws Exception{
+        data.getJSONObject("summary").put("missingPriorMillis",model.missingPriorMillis).put("abnormalMillis",model.abnormalMillis).put("limitedUnknownMillis",model.limitedMillis).put("mobileAccountingVersion",2);return data;
     }
     JSONObject energyFlow(long from,long to,long solarFrom,long solarTo,String source)throws Exception{
-        long until=Math.min(to,System.currentTimeMillis());MobileSolarDisplay.Model model=display.model(from,until);
-        return repository.db.energyFlow(from,until,solarFrom,solarTo,source,model.extra,model.mobile).put("accountingVersion",2);
+        long until=Math.min(to,System.currentTimeMillis());MobileSolarDisplay.Model model=displayModel(from,until,source);
+        JSONObject result=repository.db.energyFlow(from,until,solarFrom,solarTo,source,model.extra,model.mobile).put("accountingVersion",2);modelNotes(result.getJSONObject("consumption"),model);modelNotes(result.getJSONObject("mobile"),model);return result;
     }
     JSONObject energyFlow(long from,long to,long solarFrom,String source)throws Exception{return energyFlow(from,to,solarFrom,to,source);}
     JSONObject dashboardData(long from,long to,String metric)throws Exception{
-        if(metric.equals("mobileSolarPower"))return display.power(from,to);
+        if(metric.equals("mobileSolarPower")){long until=Math.min(to,System.currentTimeMillis());MobileSolarDisplay.Model model=displayModel(from,until,"all");return modelNotes(display.power(from,until,model),model);}
         String kind=metric.equals("mobileSolarEnergy")?"mobile":metric.equals("consumptionEnergy")?"consumption":metric.equals("flowSolarEnergy")?"solar":metric.equals("flowBalanceEnergy")?"balance":null;
         return kind==null?repository.db.dashboardData(from,to,metric):energyFlow(from,to,from,to,"all").getJSONObject(kind);
     }
     JSONArray history(long from,long to,String metric,String source)throws Exception{
-        if(metric.equals("mobileSolarPower"))return display.power(from,to).getJSONArray("points");
+        if(metric.equals("mobileSolarPower"))return dashboardData(from,to,metric).getJSONArray("points");
         String kind=metric.equals("mobileSolarEnergy")?"mobile":metric.equals("consumptionEnergy")?"consumption":metric.equals("flowSolarEnergy")?"solar":metric.equals("flowBalanceEnergy")?"balance":null;
         return kind==null?repository.db.query(from,to,metric,source):energyFlow(from,to,from,to,source).getJSONObject(kind).getJSONArray("points");
     }
     JSONObject dailyEnergy(long from,long to,JSONObject weather)throws Exception{
         if(from<0||to<=from||to-from>32L*86400000)throw new IllegalArgumentException("Ungültiger Tageszeitraum.");
-        long until=Math.min(to,System.currentTimeMillis());MobileSolarDisplay.Model model=display.model(from,until);return repository.db.dailyEnergy(from,until,weather,model.extra).put("accountingVersion",2);
+        long until=Math.min(to,System.currentTimeMillis());MobileSolarDisplay.Model model=displayModel(from,until,"all");return repository.db.dailyEnergy(from,until,weather,model.extra).put("accountingVersion",2);
     }
     static JSONObject checked(JSONObject input,JSONObject equipment)throws JSONException{
         if(input.has("version")&&input.optInt("version")!=1)throw new IllegalArgumentException("Unbekannte Aufstellung.");
@@ -345,7 +358,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
         try(Cursor c=db.rawQuery("SELECT at,key,mobile_free,solar_key,payload FROM contexts WHERE source=? ORDER BY at",new String[]{currentSource})){while(c.moveToNext())contexts.put(new JSONObject().put("at",c.getLong(0)).put("key",c.getString(1)).put("mobileFree",c.getInt(2)==1).put("solarKey",c.getString(3)).put("payload",new JSONObject(c.getString(4))));}
         for(int i=0;i<selected.length;i++)if(!selected[i].isEmpty())devices.put(new JSONObject().put("kind",i==0?"solar":"shunt").put("device",selected[i]).put("profiles",repository.db.deviceSettingsHistory(selected[i],LearningWindow.since(now)-10L*86400000,now)).put("archiveTime",repository.archiveTimeDiagnostic(selected[i])));
         JSONArray confirmations=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,start,end,key,solar_key,payload,weather FROM confirmed_setups WHERE source=? ORDER BY start",new String[]{currentSource})){while(c.moveToNext()){PlanningConfirmation.Entry e=new PlanningConfirmation.Entry(c);confirmations.put(e.notice().put("id",e.id).put("key",e.key).put("solarKey",e.solarKey).put("payload",e.payload).put("weather",e.weather));}}
-        return result.put("rollerInputIntervals",rollerLedger.read(currentSource,LearningWindow.since(now),now)).put("rollerHandover",RollerHandover.get(context).snapshot()).put("observations",observations).put("forecasts",forecasts).put("contexts",contexts).put("confirmedSetups",confirmations).put("devices",devices);
+        return result.put("mobileDisplay",display.diagnostic(currentSource)).put("rollerInputIntervals",rollerLedger.read(currentSource,LearningWindow.since(now),now)).put("rollerHandover",RollerHandover.get(context).snapshot()).put("observations",observations).put("forecasts",forecasts).put("contexts",contexts).put("confirmedSetups",confirmations).put("devices",devices);
     });}
     void shutdown(){closed=true;worker.shutdown();/* Existing jobs finish before the process releases SQLite. */}
 }

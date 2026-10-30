@@ -38,4 +38,8 @@ public final class EnergyAccountingTest {
         EnergyIntegral.Flow f=EnergyIntegral.flowIntervals(List.of(new Interval(0,H,155,155)),List.of(new Interval(0,H,49,49)),0,H,0,H);
         assertEquals(106,f.consumption.wh,0);assertEquals(0,f.consumption.modelledMillis);
     }
+    @Test public void oneNegativeEndpointDoesNotDiscardTheSupportedPositiveHalf(){
+        EnergyIntegral.Flow f=EnergyIntegral.flowIntervals(List.of(new Interval(0,H,100,200)),List.of(new Interval(0,H,170,170)),0,H,0,H,List.of(new ModelInterval(0,H,20,true)),List.of(new ModelInterval(0,H,20,true)));
+        assertEquals(12.5,f.consumption.wh,1e-8);assertEquals(H/2,f.consumption.coveredMillis);assertEquals(H/2,f.consumption.inconsistentMillis);assertEquals(H/2,f.consumption.points.get(0).time);
+    }
 }

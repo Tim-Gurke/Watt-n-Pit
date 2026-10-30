@@ -391,6 +391,11 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public String dashboardPreset(){try{return DashboardPreset.read(MainActivity.this);}catch(Exception e){return "null";}}
         @JavascriptInterface public String dashboard() { return repository.prefs.getString("dashboard-v1","{}"); }
+        @JavascriptInterface public int displayScale(){return repository.prefs.getInt("display-scale-v1",100);}
+        @JavascriptInterface public String saveDisplayScale(int value){
+            if(value<50||value>150)return "Bitte eine Darstellungsgröße zwischen 50 und 150 % wählen.";
+            return repository.prefs.edit().putInt("display-scale-v1",value).commit()?"":"Darstellungsgröße konnte nicht gespeichert werden.";
+        }
         @JavascriptInterface public String saveDashboard(String json) {
             try {
                 if(json.length()>128000) throw new IllegalArgumentException("Die Übersicht ist zu groß.");

@@ -20,7 +20,7 @@ public final class EnergyIntegral {
         public double minimumWh,maximumWh;
         public long coveredMillis;
         public long interpolatedMillis;
-        public long modelledMillis,inconsistentMillis;
+        public long modelledMillis,inconsistentMillis,adjustedMillis,limitedMillis;
         public final List<Point> points=new ArrayList<>();
         public double coverage(long from,long to){return to>from?Math.min(1,coveredMillis/(double)(to-from)):0;}
         public double measuredCoverage(long from,long to){return to>from?Math.min(1,(coveredMillis-interpolatedMillis)/(double)(to-from)):0;}
@@ -32,8 +32,12 @@ public final class EnergyIntegral {
     }
     /** A known off state is measured absence of an assigned source, not a weather estimate. */
     public static final class ModelInterval {
-        public final Interval interval;public final boolean estimated;
-        public ModelInterval(long from,long to,double watts,boolean estimated){interval=new Interval(from,to,watts,watts);this.estimated=estimated;}
+        public static final int BALANCED=1,LIMITED=2;
+        public final Interval interval;public final boolean estimated,night;
+        public final double ratedWatts;public final String site;public final int basis;
+        public ModelInterval(long from,long to,double watts,boolean estimated){this(new Interval(from,to,watts,watts),estimated,Double.NaN,false,"",0);}
+        public ModelInterval(Interval interval,boolean estimated,double ratedWatts,boolean night,String site,int basis){this.interval=interval;this.estimated=estimated;this.ratedWatts=ratedWatts;this.night=night;this.site=site;this.basis=basis;}
+        public ModelInterval slice(long from,long to){return new ModelInterval(new Interval(from,to,interval.value(from),interval.value(to)),estimated,ratedWatts,night,site,basis);}
     }
     /** All three values use only the intersection of observed Solar and Shunt intervals. */
     public static Flow flow(List<Sample> solar,List<Sample> battery,long from,long to) {
@@ -77,22 +81,24 @@ public final class EnergyIntegral {
         Result yield=integrate(generation,solarFrom,solarTo,false,true);
         if(solarFrom==solarTo)yield.wh=0.0;
         Result mobileEnergy=new Result();
-        if(mobile!=null){List<Interval> m=new ArrayList<>();for(ModelInterval x:mobile){m.add(x.interval);if(x.estimated)mobileEnergy.modelledMillis+=x.interval.to-x.interval.from;}
-            long modelled=mobileEnergy.modelledMillis;mobileEnergy=integrate(m,from,to,false,true);mobileEnergy.modelledMillis=modelled;}
+        if(mobile!=null){List<Interval> m=new ArrayList<>();long modelled=0,adjusted=0,limited=0;for(ModelInterval x:mobile){m.add(x.interval);long duration=x.interval.to-x.interval.from;if(x.estimated)modelled+=duration;if((x.basis&ModelInterval.BALANCED)!=0)adjusted+=duration;if((x.basis&ModelInterval.LIMITED)!=0)limited+=duration;}
+            mobileEnergy=integrate(m,from,to,false,true);mobileEnergy.modelledMillis=modelled;mobileEnergy.adjustedMillis=adjusted;mobileEnergy.limitedMillis=limited;}
         return new Flow(yield,extra==null?integrate(loads,from,to,false,true):devices(loads,extra,from,to),integrate(net,from,to,false,true),mobileEnergy,solarFrom,solarTo);
     }
     private static Result devices(List<Interval> loads,List<ModelInterval> model,long from,long to){
-        List<Interval> values=new ArrayList<>();int i=0,j=0;long estimated=0,inconsistent=0;
+        List<Interval> values=new ArrayList<>();int i=0,j=0;long estimated=0,inconsistent=0,adjusted=0,limited=0;
         while(i<loads.size()&&j<model.size()){
             Interval a=loads.get(i),b=model.get(j).interval;long start=Math.max(a.from,b.from),end=Math.min(a.to,b.to);
             if(end>start){double x=a.value(start)+b.value(start),y=a.value(end)+b.value(end);
-                // Do not present a negative device load or silently turn it into measured zero.
-                if(x<0||y<0)inconsistent+=end-start;
-                else {values.add(new Interval(start,end,x,y,a.interpolated));if(model.get(j).estimated)estimated+=end-start;}
+                // Retain the supported positive portion; a negative portion remains a real gap.
+                long validFrom=start,validTo=end;
+                if(x<0&&y<=0||y<0&&x<=0){inconsistent+=end-start;validTo=start;}
+                else if(x<0||y<0){long zero=start+Math.round((end-start)*(-x)/(y-x));if(x<0){inconsistent+=zero-start;validFrom=zero;x=0;}else{inconsistent+=end-zero;validTo=zero;y=0;}}
+                if(validTo>validFrom){long duration=validTo-validFrom;values.add(new Interval(validFrom,validTo,x,y,a.interpolated));ModelInterval basis=model.get(j);if(basis.estimated)estimated+=duration;if((basis.basis&ModelInterval.BALANCED)!=0)adjusted+=duration;if((basis.basis&ModelInterval.LIMITED)!=0)limited+=duration;}
             }
             if(a.to<=b.to)i++;if(b.to<=a.to)j++;
         }
-        Result result=integrate(values,from,to,false,true);result.modelledMillis=estimated;result.inconsistentMillis=inconsistent;return result;
+        Result result=integrate(values,from,to,false,true);result.modelledMillis=estimated;result.inconsistentMillis=inconsistent;result.adjustedMillis=adjusted;result.limitedMillis=limited;return result;
     }
     /** One configured device per kind. Overlapping sources/archives contribute once. */
     public static Result calculate(List<Sample> samples,long from,long to,boolean discharge) {
