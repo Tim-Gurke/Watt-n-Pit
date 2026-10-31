@@ -2,7 +2,7 @@
 
 ## Für das nächste Update vorgemerkt
 
-- **GPS-Standort mit Ortsnamen:** Zum aktuell verwendeten GPS-Standort den zugehörigen Ortsnamen anzeigen. Der Name steht **in derselben Zeile direkt hinter „GPS-Standort“**, beispielsweise **„GPS-Standort · Ortsname“**, damit der aktuelle Ort in der Wetterkachel sofort erkennbar ist.
+- **GPS-Standort mit Ortsnamen:** Zum aktuell verwendeten GPS-Standort den zugehörigen Ortsnamen anzeigen. Der Name steht **in derselben Zeile direkt hinter „GPS-Standort“**, beispielsweise **„GPS-Standort · Ortsname“**, damit der aktuelle Ort in der Wetterkachel sofort erkennbar ist. **Schriftbild:** „GPS-Standort“ bleibt fett. Der unmittelbar folgende Ortsname erhält denselben dünneren Schriftschnitt wie „14 Tage“; die gemeinsame Zeile bleibt erhalten.
 
 ## Mit 1.6.11 umgesetzt: zwei Hinweiszeilen, lokale Darstellungsgröße und mobile Verbrauchsschätzung
 
