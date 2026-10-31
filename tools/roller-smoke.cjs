@@ -18,6 +18,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.evaluate(scale=>WattDisplay.apply(scale),scale);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   const grid=await page.evaluate(()=>{const el=document.querySelector('.roller-values'),cells=[...el.children].map(e=>e.getBoundingClientRect().toJSON());return {columns:getComputedStyle(el).gridTemplateColumns.split(' ').length,cells,width:innerWidth,body:document.documentElement.scrollWidth};});
   assert.ok(grid.columns<=3,JSON.stringify(grid));assert.equal(grid.body<=grid.width+1,true,JSON.stringify(grid));
+  await page.locator('[data-roller-slot="0"]').click();const controls=await page.evaluate(()=>[document.getElementById('rollerValueSelect'),document.getElementById('rollerValueDefaults'),document.getElementById('rollerValueApply')].map(e=>e.getBoundingClientRect().toJSON()));for(const bounds of controls){assert.ok(bounds.left>=-1&&bounds.right<=width+1,JSON.stringify({width,scale,bounds}));}await page.locator('#closeModal').click();
+
   if(width===832&&scale===100||width===360&&(scale===50||scale===73)){assert.equal(grid.columns,3);assert.ok(Math.abs(grid.cells[3].top-grid.cells[5].top)<1);assert.ok(grid.cells[5].left>grid.cells[4].left);}
  }
  await page.evaluate(()=>WattDisplay.apply(100));
