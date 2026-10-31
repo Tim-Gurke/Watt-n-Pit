@@ -30,6 +30,8 @@ final class LanSync {
     private final LinkedHashMap<String,Boolean> requests=new LinkedHashMap<>();
     private volatile JSONObject config,remote=new JSONObject();
     private volatile long receivedAt,receivedElapsed,lastPlanRequest,lastCacheElapsed;
+    private volatile long analysisAt;
+    private volatile boolean analysisPending;
     private volatile long rollerDiscoveryUntil;
     private volatile String error="",resolvedHost="";
     private volatile int resolvedPort;
@@ -43,6 +45,8 @@ final class LanSync {
     private NsdManager.DiscoveryListener discovery;
     private final AtomicBoolean resolving=new AtomicBoolean();
     private SolarPlanning planning;
+    private ViewerAnalysis analysis;
+    private Object analysisIdentity;
     private final File cache;
     private String controlFingerprint="";
     private long controlRevision;
@@ -111,7 +115,7 @@ final class LanSync {
         JSONObject result=new JSONObject();try{
             long now=SystemClock.elapsedRealtime();JSONArray connected=new JSONArray();for(JSONObject peer:peers.values())if(now-peer.optLong("seen")<20000)connected.put(new JSONObject().put("name",peer.optString("name")));
             result.put("role",config.optString("role","off")).put("id",config.optString("id")).put("name",config.optString("name")).put("hosting",hosting).put("connected",viewer()?receivedElapsed>0&&now-receivedElapsed<10000:hosting)
-                .put("receivedAt",receivedAt).put("error",error).put("peers",connected).put("address",resolvedHost);
+                .put("receivedAt",receivedAt).put("analysisAt",analysisAt).put("analysisPending",analysisPending).put("error",error).put("peers",connected).put("address",resolvedHost);
             if(hosting)result.put("addresses",addresses()).put("port",server.getLocalPort());
         }catch(Exception ignored){}return result;
     }
@@ -196,6 +200,19 @@ final class LanSync {
         Consumer<JSONObject> callback=listener;if(callback!=null)callback.accept(bundle);
     }
     JSONObject query(String method,JSONArray args)throws Exception{
+        return query(method,args,null);
+    }
+    JSONObject query(String method,JSONArray args,Consumer<String> progress)throws Exception{
+        if(Arrays.asList("history","dashboardHistory","energyHistoryWindow","energyHistory","dailyEnergy").contains(method)){analysisPending=true;try{JSONObject result=analysis().query(method,args,progress);analysisAt=result.getJSONObject("analysis").optLong("at");return result;}finally{analysisPending=false;}}
+        return queryInput(method,args);
+    }
+    int analysisProtocol(){return remote.optInt("analysisProtocol");}
+    private synchronized ViewerAnalysis analysis(){
+        if(!viewer())throw new IllegalStateException();if(analysis==null||analysisIdentity!=config){if(analysis!=null)analysis.close();analysis=new ViewerAnalysis(context,this,config.optString("id"));analysisIdentity=config;}return analysis;
+    }
+    JSONObject analysisKnowledge(Consumer<String> progress)throws Exception{analysisPending=true;try{JSONObject result=analysis().knowledge(progress);analysisAt=result.getJSONObject("analysis").optLong("at");return result;}finally{analysisPending=false;}}
+    JSONObject analysisDiagnostics()throws Exception{return analysis().diagnostics();}
+    JSONObject queryInput(String method,JSONArray args)throws Exception{
         if(!viewer())throw new IllegalStateException();JSONObject active=config;JSONObject result=rpc(active,method,args);if(active!=config)throw new IOException("Anlage wurde gewechselt.");return result;
     }
     JSONObject rollerLink(String action,JSONObject data)throws Exception{
@@ -235,7 +252,7 @@ final class LanSync {
         if(!host()||hosting)return;
         connections=new ThreadPoolExecutor(2,2,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(6));
         server=new ServerSocket();server.setReuseAddress(true);try{server.bind(new InetSocketAddress(28760));}catch(IOException used){server.bind(new InetSocketAddress(0));}
-        server.setSoTimeout(2000);hosting=true;planning=new SolarPlanning(context,repository,result->{});
+        server.setSoTimeout(2000);hosting=true;planning=new SolarPlanning(context,repository,result->{});planning.displayActive(false);planning.captureNative();
         final ServerSocket currentServer=server;
         acceptor=Executors.newSingleThreadExecutor();acceptor.execute(()->{while(hosting&&server==currentServer){try{
             Socket socket=currentServer.accept();if(!LanWire.localAddress(socket.getInetAddress().getHostAddress())){socket.close();continue;}
@@ -259,15 +276,25 @@ final class LanSync {
         }catch(Exception ignored){/* Authentication errors never reveal data or key material. */}
     }
     private JSONObject read(String method,JSONArray args)throws Exception{
+        if(method.equals("analysisManifest"))return HistoryExchange.manifest(repository.db,args.getLong(0),args.getLong(1));
+        if(method.equals("analysisChanges"))return HistoryExchange.changes(repository.db,args.getLong(0));
+        if(method.equals("analysisInputState"))return AnalysisExchange.state(repository,planning,currentControlRevision());
+        if(method.equals("analysisPage"))return HistoryExchange.page(repository.db,args.getLong(0),args.getLong(1),args.getLong(2));
+        if(method.equals("analysisMetadata")){long revision;synchronized(this){revision=currentControlRevision();}return AnalysisExchange.metadata(context,repository,planning,args.getLong(0),args.getLong(1),revision);}
+        if(method.equals("analysisModelPage"))return AnalysisExchange.page(context,repository,planning,args.getString(0),args.getLong(1),args.getLong(2),args.getString(3),args.getLong(4));
+        if(method.equals("analysisForecasts")){
+            if(args.length()!=2||args.getLong(1)!=currentControlRevision())throw new IllegalArgumentException("Aufstellung inzwischen geändert.");
+            String rows=args.getString(0);if(rows.length()>128000)throw new IllegalArgumentException("Zu viele Vorhersagen.");planning.remember(rows);return new JSONObject().put("accepted",true);
+        }
         if(method.equals("control"))return applyControl(args);
         if(method.equals("rollerSession")){
             if(args.length()!=3||!(args.get(0) instanceof Boolean))throw new IllegalArgumentException("Ungültige Ladeanfrage.");
             RollerStore.get(context).command(args.getBoolean(0),args.getLong(1),args.getString(2));repository.invalidateStats();planning.request();return read("bundle",new JSONArray());
         }
         if(method.equals("bundle")){
-            long now=System.currentTimeMillis();if(!repository.archiveBusy&&now-lastPlanRequest>30000){lastPlanRequest=now;planning.request();}
+            backgroundInputs();
             JSONObject snapshot=repository.archiveBusy?new JSONObject(repository.backgroundSnapshot()):repository.snapshot();snapshot.remove("archiveDiagnostics");snapshot.remove("event");snapshot.remove("eventId");
-            return new JSONObject().put("snapshot",snapshot).put("setup",planning.setup()).put("planning",new JSONObject(SolarPlanning.sharedKnowledge)).put("roller",RollerHandover.view(context))
+            return new JSONObject().put("analysisProtocol",1).put("snapshot",snapshot).put("setup",planning.setup()).put("planning",new JSONObject().put("source",RollerLedger.source(repository.prefs))).put("roller",RollerHandover.view(context))
                 .put("presence",PresenceStore.get(context).snapshot()).put("controlProtocol",1).put("controlRevision",currentControlRevision()).put("sync",new JSONObject(repository.syncState())).put("bonded",PlantCommands.bonded(context));
         }
         long from=args.getLong(0);if(method.equals("sunsetSoc")){
@@ -287,6 +314,10 @@ final class LanSync {
             case "energyHistory":return planning.energyFlow(from,to,args.getLong(3),args.getString(2));
             default:throw new IllegalArgumentException();
         }
+    }
+    synchronized void backgroundInputs(){
+        long now=System.currentTimeMillis();if(!host()||planning==null||repository.archiveBusy||now-lastPlanRequest<30000)return;
+        lastPlanRequest=now;WeatherClient.refresh(repository,false);planning.captureNative();
     }
     synchronized void stopHost(){
         if(host())RollerHandover.get(context).reset();

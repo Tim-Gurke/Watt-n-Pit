@@ -14,7 +14,15 @@ final class RollerLedger extends SQLiteOpenHelper {
     private long from,lastTo,session,lastPrune;
     private double wh;
     private String source="",mac="";
-    private RollerLedger(Context c){super(c,"wattpit-roller-input.db",null,1);setWriteAheadLoggingEnabled(true);}
+    private RollerLedger(Context c){this(c,"wattpit-roller-input.db");}
+    RollerLedger(Context c,String name){super(c,name,null,1);setWriteAheadLoggingEnabled(true);}
+    synchronized void replace(String plant,long from,long to,JSONArray rows)throws Exception{
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{
+            db.delete("input_intervals","source=? AND end>? AND start<?",new String[]{plant,""+from,""+to});
+            for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);long a=r.getLong("from"),b=r.getLong("to");double value=r.getDouble("wh");if(b<=a||!Double.isFinite(value)||value<0)throw new IllegalArgumentException("Ungültiger Rollerabschnitt.");ContentValues v=new ContentValues();v.put("source",plant);v.put("start",a);v.put("end",b);v.put("wh",value);v.put("mac","");v.put("session",0);db.insertWithOnConflict("input_intervals",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
+            db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
+    }
     @Override public void onCreate(SQLiteDatabase db){db.execSQL("CREATE TABLE input_intervals(source TEXT NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,wh REAL NOT NULL,mac TEXT NOT NULL,session INTEGER NOT NULL,PRIMARY KEY(source,start))");db.execSQL("CREATE INDEX input_end ON input_intervals(source,end)");}
     @Override public void onUpgrade(SQLiteDatabase db,int old,int next){}
     static String source(SharedPreferences prefs){try{

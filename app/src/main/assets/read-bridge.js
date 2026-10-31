@@ -7,7 +7,7 @@
   const pending=method=>method==='dailyEnergy'?{days:[],pending:true}:method.startsWith('energy')?{solar:missing(),consumption:missing(),balance:missing(),mobile:missing(),pending:true}:missing();
   return class {
     constructor(raw,ready){
-      this.raw=raw;this.ready=ready;this.cache=new Map();this.queue=new Map();this.nextId=0;this.generation=0;this.busy=false;
+      this.raw=raw;this.ready=ready;this.cache=new Map();this.queue=new Map();this.nextId=0;this.generation=0;this.busy=false;this.active=true;
       this.bridge=new Proxy(raw,{get:(target,name)=>{const value=target[name];if(typeof value!=='function')return value;return methods.has(name)?(...args)=>this.read(name,args):(...args)=>target[name](...args);}});
     }
     source(){
@@ -44,10 +44,11 @@
       });
     }
     value(entry,method,refreshing=false){
-      if(!entry?.data)return JSON.stringify(entry?.error?{error:entry.error}:pending(method));
+      if(!entry?.data){const data=entry?.error?{error:entry.error}:pending(method);if(refreshing&&this.inflight?.progress)data.progress=this.inflight.progress;return JSON.stringify(data);}
       if(!refreshing&&!entry.error&&entry.generation===this.generation)return JSON.stringify(entry.data);
       const data=JSON.parse(JSON.stringify(entry.data)),mark=part=>{
         part.pending=refreshing;part.stale=true;part.dataAt=entry.at;
+        if(refreshing&&this.inflight?.progress)part.progress=this.inflight.progress;
         if(entry.error)part.refreshError=entry.error;else delete part.refreshError;
       };
       mark(data);if(method.startsWith('energy'))for(const key of ['solar','consumption','balance','mobile'])if(data[key])mark(data[key]);
@@ -77,17 +78,20 @@
       return this.value(this.previous(method,args,scope),method,true);
     }
     pump(){
-      if(this.inflight||!this.queue.size)return;
+      if(!this.active||this.inflight||!this.queue.size)return;
       const [key,query]=this.queue.entries().next().value;this.queue.delete(key);
       const request={...query,id:++this.nextId};this.inflight=request;
-      this.timer=setTimeout(()=>this.result({id:request.id,data:{error:'Der Abruf dauert zu lange. Die letzten Werte bleiben erhalten.'}}),20000);this.timer?.unref?.();
+      this.armTimeout(request.id);
       try{this.raw.requestHistory(JSON.stringify(request));}
       catch(_){this.result({id:request.id,data:{error:'Zeitraum konnte nicht geladen werden.'}});}
     }
+    armTimeout(id){clearTimeout(this.timer);this.timer=setTimeout(()=>this.result({id,data:{error:'Der Abruf dauert zu lange. Die letzten Werte bleiben erhalten.'}}),45000);this.timer?.unref?.();}
+    progress(response){if(this.inflight?.id!==response.id)return;this.inflight.progress=String(response.message||'Daten werden abgeglichen …');this.armTimeout(response.id);if(this.active)this.ready(this.inflight.method);}
+    setActive(active){this.active=!!active;if(this.active){if(this.inflight)this.armTimeout(this.inflight.id);this.ready('resume');this.pump();}}
     result(response){
       const query=this.inflight;if(!query||query.id!==response.id)return;
       clearTimeout(this.timer);this.inflight=null;
-      if(query.generation===this.generation){this.accept(query,response.data||{error:response.error||'Zeitraum konnte nicht geladen werden.'});this.ready(query.method);}
+      if(query.generation===this.generation){this.accept(query,response.data||{error:response.error||'Zeitraum konnte nicht geladen werden.'});if(this.active)this.ready(query.method);}
       this.pump();
     }
   };

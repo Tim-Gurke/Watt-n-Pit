@@ -1,4 +1,5 @@
 'use strict';
+window.wattDisplayActive=true;
 const $ = id => document.getElementById(id);
 const rawNative=window.WattPit||null;
 const controls=rawNative&&window.WattControlBridge?new window.WattControlBridge(rawNative,toast,()=>{poll();solar?.render();},()=>snapshot.controlRevision):null;
@@ -10,7 +11,7 @@ if(typeof deviceNative?.appVersion==='function'){
 }
 let readRepaint,readsDirty=false;
 function repaintReads(){
-  if(!readsDirty||lifecycle?.blocked)return;
+  if(!window.wattDisplayActive||!readsDirty||lifecycle?.blocked)return;
   readsDirty=false;dashboard?.cache.clear();lastMiniLoad=0;
   if(page==='overview'){renderOverview();loadMini(true);}
   if(page==='history')loadHistory();
@@ -22,8 +23,11 @@ const reads=deviceNative&&window.WattReadBridge?new window.WattReadBridge(device
 }):null;
 const native=reads?.bridge||deviceNative;
 window.onHistoryResult=result=>reads?.result(result);
+window.onHistoryProgress=result=>reads?.progress(result);
+window.onDisplayActive=result=>{const active=!!result.active;window.wattDisplayActive=active;reads?.setActive(active);if(!active){clearTimeout(readRepaint);solar?.stopSensors();return;}lastMiniLoad=0;solar&&(solar.renderKey='');poll();repaintReads();};
+document.addEventListener('visibilitychange',()=>window.onDisplayActive({active:!document.hidden}));
 const historyRead=(method,args,scope)=>reads?reads.read(method,args,scope):deviceNative?.[method](...args);
-const refreshNote=data=>data?.stale?(data.pending?'Letzter Stand · neue Daten werden geladen …':data.refreshError?'Letzter Stand · Aktualisierung fehlgeschlagen. Neuer Versuch folgt.':'Letzter Stand'):data?.pending?'Daten werden im Hintergrund geladen …':data?.error?'Daten konnten nicht geladen werden.':'';
+const refreshNote=data=>data?.progress|| (data?.stale?(data.pending?'Letzter Stand · neue Daten werden geladen …':data.refreshError?'Letzter Stand · Aktualisierung fehlgeschlagen. Neuer Versuch folgt.':'Letzter Stand'):data?.pending?'Daten werden im Hintergrund geladen …':data?.error?data.error:'');
 const dataTime=()=>lifecycle?.busy?lifecycle.startedAt||Date.now():Date.now();
 const icons = {
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/>',
@@ -155,6 +159,7 @@ function renderSettings() {
   document.querySelectorAll('#themeButtons button').forEach(b => b.classList.toggle('selected',b.dataset.theme===snapshot.settings.theme));
 }
 function poll() {
+  if(!window.wattDisplayActive)return;
   if(lifecycle?.poll())return;
   if (native) {
     try {
@@ -510,5 +515,5 @@ presence=new window.WattPresence({native:deviceNative,toast,openModal,closeModal
 selectRange('today');poll();renderSettings();
 if(new URLSearchParams(location.search).get('demo')==='1')setDemo(true);
 window.pullReload=new window.WattPullReload({element:$('overview'),canStart:()=>page==='overview'&&!demo&&!dashboard.editing&&!lifecycle.blocked&&!lifecycle.busy&&!snapshot.archiveBusy&&snapshot.devices.length>0&&Date.now()>=archiveRequestedUntil&&$('modal').hidden,reload:reloadMissingData});
-setInterval(poll,2000);setInterval(()=>{if(!lifecycle.blocked&&page==='history'&&snapshot.running&&!demo)loadHistory();},20000);
+setInterval(poll,2000);setInterval(()=>{if(window.wattDisplayActive&&!lifecycle.blocked&&page==='history'&&snapshot.running&&!demo)loadHistory();},20000);
 window.addEventListener('resize',()=>{drawHistory();drawMini();});

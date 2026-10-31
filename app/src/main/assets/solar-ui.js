@@ -50,6 +50,7 @@
       if(error)throw Error(error);this.renderKey='';this.contextKey=null;this.a.poll();this.render();
     }
     render(){
+      if(window.wattDisplayActive===false)return;
       let rollerState={};try{rollerState=JSON.parse(this.a.native?.rollerSnapshot?.()||'{}');}catch(_){}
       const rollerLoads=window.WattRollerCore?.loads(rollerState)||[];
       const snapshot=this.a.getSnapshot(),weather=snapshot.weather||{},eq=this.equipment(),plan=this.plan(),now=Date.now(),shunt=this.a.getReading?.('shunt'),key=JSON.stringify([weather,eq,plan,this.knowledge.updated,this.knowledge.error,Math.floor(now/60000),shunt?[Math.round(shunt.soc),Math.round(shunt.voltage*10)/10]:null,snapshot.settings.capacity,snapshot.deviceSettings,rollerLoads,this.a.getPresence?.()]);

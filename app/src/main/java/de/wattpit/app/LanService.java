@@ -10,7 +10,7 @@ public final class LanService extends Service {
     private static final String CHANNEL="wattpit-lan";
     private PowerManager.WakeLock presenceWake;
     private final java.util.concurrent.ScheduledExecutorService presence=java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
-    @Override public void onCreate(){super.onCreate();presence.scheduleWithFixedDelay(()->{if(!LanSync.get(this).viewer())PresenceStore.get(this).tick();},0,10,java.util.concurrent.TimeUnit.SECONDS);}
+    @Override public void onCreate(){super.onCreate();presence.scheduleWithFixedDelay(()->{try{LanSync lan=LanSync.get(this);if(!lan.viewer()){PresenceStore.get(this).tick();lan.backgroundInputs();}}catch(Exception ignored){}},0,10,java.util.concurrent.TimeUnit.SECONDS);}
     @android.annotation.SuppressLint("WakelockTimeout")
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         LanSync lan=LanSync.get(this);if(!lan.host()&&!lan.viewer()){stopSelf();return START_NOT_STICKY;}

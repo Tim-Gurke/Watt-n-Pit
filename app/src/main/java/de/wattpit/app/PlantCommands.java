@@ -18,7 +18,7 @@ final class PlantCommands {
     }
     static void apply(Context context,Repository repo,SolarPlanning planning,String action,JSONArray args)throws Exception{
         boolean changesSolar=java.util.Arrays.asList("saveSolarSetup","saveSolarSite","weatherPlace","saveEquipment","saveDevice","removeDevice","importSettings").contains(action);
-        if(changesSolar)planning.display.record();
+        if(changesSolar)planning.captureNative();
         switch(action){
             case "saveSolarSetup":arity(args,2);planning.save(args.getString(0),args.getBoolean(1));break;
             case "saveSolarSite":arity(args,2);planning.saveSite(args.getString(0),args.getString(1));break;
@@ -52,7 +52,7 @@ final class PlantCommands {
             case "backgroundArchive":arity(args,1);if(!repo.archiveRun.background(args.getLong(0)))throw new IllegalArgumentException("Dieser Synchronisationslauf ist bereits beendet. Bitte erneut versuchen.");break;
             default:throw new IllegalArgumentException("Diese Bedienaktion wird nicht unterstützt. Bitte beide Geräte aktualisieren.");
         }
-        if(changesSolar)planning.display.record();
+        if(changesSolar)planning.captureNative();
         repo.invalidateStats();planning.request();
     }
     private static void arity(JSONArray args,int count){if(args.length()!=count)throw new IllegalArgumentException("Ungültige Bedienanfrage.");}

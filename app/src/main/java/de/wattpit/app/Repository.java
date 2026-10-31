@@ -31,7 +31,9 @@ final class Repository {
     private JSONObject cachedStats = new JSONObject();
     private long statsTime, eventId,historyRevision;
     private String event = "";
-    private Repository(Context context) { this.context=context;prefs = context.getSharedPreferences("wattpit", Context.MODE_PRIVATE); db = new HistoryDb(context); }
+    private Repository(Context context) { this(context,"wattpit","wattpit-history.db"); }
+    private Repository(Context context,String preferences,String database) { this.context=context;prefs=context.getSharedPreferences(preferences,Context.MODE_PRIVATE);db=new HistoryDb(context,database); }
+    static Repository analysis(Context context,String prefix){return new Repository(context,prefix,prefix+"-history.db");}
 
     private volatile JSONObject archive=new JSONObject();
     /** No database or Repository monitor: progress/cancellation must survive expensive imports. */

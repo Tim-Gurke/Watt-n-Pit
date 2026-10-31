@@ -23,7 +23,7 @@ final class MobileSolarDisplay {
         db.execSQL("CREATE TABLE IF NOT EXISTS model_weather(place TEXT NOT NULL,geometry TEXT NOT NULL,end INTEGER NOT NULL,value REAL NOT NULL,slot INTEGER NOT NULL,night INTEGER NOT NULL DEFAULT 0,sunrise INTEGER NOT NULL DEFAULT 0,sunset INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(place,geometry,end))");
     }
     private JSONObject current()throws Exception{return new JSONObject().put("equipment",repo.equipment()).put("setup",planning.setup()).put("place",new JSONObject(repo.prefs.getString("weatherPlace","{}")));}
-    void record()throws Exception{synchronized(LOCK){
+    void record()throws Exception{if(planning.analysis)return;synchronized(LOCK){
         String source=RollerLedger.source(repo.prefs),payload=current().toString();long at=System.currentTimeMillis();SQLiteDatabase db=planning.getWritableDatabase();
         try(Cursor c=db.rawQuery("SELECT at,payload FROM display_contexts WHERE source=? ORDER BY at DESC LIMIT 1",new String[]{source})){
             if(c.moveToFirst()){if(payload.equals(c.getString(1)))return;at=Math.max(at,c.getLong(0)+1);}
@@ -35,7 +35,7 @@ final class MobileSolarDisplay {
         if(p==null||!Double.isFinite(p.optDouble("latitude",Double.NaN))||!Double.isFinite(p.optDouble("longitude",Double.NaN)))return "";
         return Math.round(p.optDouble("latitude")*1000)+":"+Math.round(p.optDouble("longitude")*1000);
     }
-    private void archiveWeather()throws Exception{synchronized(LOCK){
+    void archiveWeather()throws Exception{if(planning.analysis)return;synchronized(LOCK){
         String text=repo.prefs.getString("weatherCache","{}");if(text.equals(weatherSeen))return;JSONObject weather=new JSONObject(text);String location=place(weather.optJSONObject("place"));JSONArray series=weather.optJSONArray("solar");
         if(location.isEmpty()||series==null)return;ZoneId zone;try{zone=ZoneId.of(weather.optString("timezone"));}catch(Exception e){return;}
         Map<String,JSONObject> days=new HashMap<>();JSONArray dayRows=weather.optJSONArray("days");if(dayRows!=null)for(int i=0;i<dayRows.length();i++){JSONObject day=dayRows.getJSONObject(i);days.put(day.optString("day"),day);}

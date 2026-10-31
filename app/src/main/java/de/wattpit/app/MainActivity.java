@@ -93,7 +93,10 @@ public final class MainActivity extends Activity {
     @Override protected void onStart(){
         super.onStart();
         foreground=true;
-        lan.foreground(bundle->{if(lan.viewer()&&bundle.optJSONObject("planning")!=null)call("onSolarPlanData",bundle.optJSONObject("planning"));});
+        web.onResume();web.resumeTimers();solarPlanning.displayActive(true);
+        try{call("onDisplayActive",new JSONObject().put("active",true));}catch(JSONException ignored){}
+        for(java.util.Map.Entry<String,JSONObject> pending:new java.util.HashMap<>(deferredCalls).entrySet())call(pending.getKey(),pending.getValue());deferredCalls.clear();
+        lan.foreground(bundle->{});
         if(lan.viewer()||lan.host()&&!lan.state().optBoolean("hosting"))try{startForegroundService(new Intent(this,LanService.class));}catch(Exception ignored){}
         web.removeCallbacks(retryIncompleteArchive);web.postDelayed(retryIncompleteArchive,15000);
         // Refresh on each foreground entry; WeatherClient skips disabled weather
@@ -105,7 +108,7 @@ public final class MainActivity extends Activity {
             },800);
         }
     }
-    @Override protected void onStop(){pendingSiteLocation=false;siteSensors.stop();foreground=false;lan.background();web.removeCallbacks(retryIncompleteArchive);stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
+    @Override protected void onStop(){pendingSiteLocation=false;siteSensors.stop();solarPlanning.displayActive(false);web.evaluateJavascript("window.onDisplayActive && window.onDisplayActive({active:false})",null);foreground=false;lan.background();web.removeCallbacks(retryIncompleteArchive);web.onPause();web.pauseTimers();stoppedAt=SystemClock.elapsedRealtime();super.onStop();}
     private final Runnable retryIncompleteArchive=new Runnable(){@Override public void run(){startAutomaticImport(true);web.postDelayed(this,15000);}};
     private void startAutomaticImport(){
         startAutomaticImport(false);
@@ -142,8 +145,9 @@ public final class MainActivity extends Activity {
         int flags = light ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0;
         getWindow().getDecorView().setSystemUiVisibility(flags);
     }
+    private final java.util.Map<String,JSONObject> deferredCalls=new java.util.HashMap<>();
     private void call(String method, JSONObject value) {
-        runOnUiThread(() -> { if (!isFinishing() && web != null) web.evaluateJavascript("window." + method + " && window." + method + "(" + value.toString() + ")",null); });
+        runOnUiThread(() -> { if (!isFinishing() && !isDestroyed() && web != null){if(!foreground){deferredCalls.put(method,value);return;}web.evaluateJavascript("window." + method + " && window." + method + "(" + value.toString() + ")",null);} });
     }
     private void error(Exception e) {
         repository.message(Repository.safeError(e));
@@ -358,13 +362,14 @@ public final class MainActivity extends Activity {
             try{
                 if(json.length()>4096)throw new IllegalArgumentException();
                 JSONObject request=new JSONObject(json);long id=request.getLong("id");String method=request.getString("method");JSONArray args=request.getJSONArray("args");
-                long from=args.getLong(0),to=args.getLong(1);if(from<0||to<=from)throw new IllegalArgumentException();final boolean remote=lan.viewer();
+                long from=args.getLong(0),to=args.getLong(1);if(from<0||to<=from)throw new IllegalArgumentException();final boolean remote=lan.viewer();final Object owner=lan.identity();
                 historyReads.execute(()->{
                     JSONObject response=new JSONObject();
                     try{
                         JSONObject data;
-                        if(remote!=lan.viewer())return;
-                        if(remote)data=lan.query(method,args);else switch(method){
+                        if(remote!=lan.viewer()||owner!=lan.identity())return;
+                        if(!foreground)throw new java.io.IOException("Anzeige pausiert. Beim Öffnen wird neu geladen.");
+                        if(remote)data=lan.query(method,args,message->{try{call("onHistoryProgress",new JSONObject().put("id",id).put("message",message));}catch(JSONException ignored){}});else switch(method){
                             case "history":data=new JSONObject().put("points",solarPlanning.history(from,to,args.getString(2),args.getString(3)));break;
                             case "dashboardHistory":data=solarPlanning.dashboardData(from,to,args.getString(2));break;
                             case "energyHistoryWindow":data=solarPlanning.energyFlow(from,to,args.getLong(3),args.getLong(4),args.getString(2));break;
@@ -373,8 +378,8 @@ public final class MainActivity extends Activity {
                             default:throw new IllegalArgumentException();
                         }
                         response.put("id",id).put("data",data);
-                    }catch(Exception e){try{response.put("id",id).put("data",new JSONObject().put("error","Zeitraum konnte nicht geladen werden."));}catch(JSONException ignored){}}
-                    if(!isDestroyed()&&remote==lan.viewer())call("onHistoryResult",response);
+                    }catch(Exception e){try{response.put("id",id).put("data",new JSONObject().put("error",e instanceof java.io.IOException||e instanceof IllegalArgumentException?e.getMessage():"Zeitraum konnte nicht geladen werden."));}catch(JSONException ignored){}}
+                    if(!isDestroyed()&&remote==lan.viewer()&&owner==lan.identity())call("onHistoryResult",response);
                 });
             }catch(Exception ignored){}
         }
@@ -444,8 +449,9 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String saveSolarSite(String json,String place){return localControl("saveSolarSite",new JSONArray().put(json).put(place));}
         @JavascriptInterface public void searchSolarPlaces(String query){files.execute(()->{try{call("onSolarPlaces",new JSONObject().put("query",query).put("places",WeatherClient.search(query)));}catch(Exception e){try{call("onSolarPlaces",new JSONObject().put("query",query).put("error","Ortssuche nicht möglich. Bitte erneut versuchen."));}catch(JSONException ignored){}}});}
         @JavascriptInterface public void rememberSolarContext(String key){if(!lan.viewer())solarPlanning.context(key);}
-        @JavascriptInterface public void rememberSolarForecasts(String json){if(!lan.viewer())solarPlanning.remember(json);}
-        @JavascriptInterface public void requestSolarData(){if(lan.viewer()){try{call("onSolarPlanData",new JSONObject(lan.part("planning")));}catch(JSONException ignored){}}else solarPlanning.request();}
+        @JavascriptInterface public void rememberSolarForecasts(String json){if(!lan.viewer())solarPlanning.remember(json);else if(json.length()<=128000){long revision=lan.controlRevision();historyReads.execute(()->{try{lan.queryInput("analysisForecasts",new JSONArray().put(json).put(revision));}catch(Exception ignored){}});}}
+        private final java.util.concurrent.atomic.AtomicBoolean analysisBusy=new java.util.concurrent.atomic.AtomicBoolean();
+        @JavascriptInterface public void requestSolarData(){if(!foreground)return;if(!lan.viewer()){solarPlanning.request();return;}if(!analysisBusy.compareAndSet(false,true))return;Object owner=lan.identity();historyReads.execute(()->{try{if(owner==lan.identity()&&lan.viewer()&&foreground)call("onSolarPlanData",lan.analysisKnowledge(null));}catch(Exception e){try{call("onSolarPlanData",new JSONObject().put("error",e instanceof java.io.IOException?e.getMessage():"Lerndaten gerade nicht verfügbar. Die letzte Vorschau bleibt erhalten."));}catch(JSONException ignored){}}finally{analysisBusy.set(false);}});}
         @JavascriptInterface public void startSolarCompass(String place){runOnUiThread(()->{try{siteSensors.startCompass(new JSONObject(place));}catch(Exception e){siteSensors.startCompass(new JSONObject());}});}
         @JavascriptInterface public void stopSolarCompass(){runOnUiThread(()->siteSensors.stopCompass());}
         @JavascriptInterface public void cancelSolarLocation(){runOnUiThread(()->{pendingSiteLocation=false;siteSensors.cancelLocation();});}

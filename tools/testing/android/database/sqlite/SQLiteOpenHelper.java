@@ -12,7 +12,7 @@ public abstract class SQLiteOpenHelper implements AutoCloseable {
     public void setWriteAheadLoggingEnabled(boolean enabled){ }
     public synchronized SQLiteDatabase getWritableDatabase(){
         if(db==null){
-            String path=System.getProperty("wattpit.test.database");if(Boolean.getBoolean("wattpit.test.namedDatabases"))path=java.nio.file.Path.of(path).getParent().resolve(name).toString();
+            String path=System.getProperty("wattpit.test.database");if(Boolean.getBoolean("wattpit.test.namedDatabases")||name.startsWith("wattpit-view-"))path=java.nio.file.Path.of(path).getParent().resolve(name).toString();
             db=new SQLiteDatabase(path);int previous;
             try(Cursor c=db.rawQuery("PRAGMA user_version",null)){c.moveToFirst();previous=c.getInt(0);}
             if(previous==0)onCreate(db);else if(previous<version)onUpgrade(db,previous,version);

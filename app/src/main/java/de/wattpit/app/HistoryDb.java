@@ -22,7 +22,8 @@ import java.util.*;
 
 final class HistoryDb extends SQLiteOpenHelper {
     private static final String[] NUMBERS = {"voltage","current","power","soc","solar","yieldWh","ttg","consumed","temperature","aux","load","state","error","alarm","pvVoltage","auxRaw"};
-    HistoryDb(Context context) { super(context, "wattpit-history.db", null, 8); setWriteAheadLoggingEnabled(true); }
+    HistoryDb(Context context) { this(context,"wattpit-history.db"); }
+    HistoryDb(Context context,String name) { super(context,name,null,9); setWriteAheadLoggingEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL(HistorySchema.CREATE);
         createArchiveTimes(db);
@@ -31,6 +32,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         createDaily(db);
         createArchives(db);
         createDeviceSettings(db);
+        HistoryExchange.create(db);
     }
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) createDaily(db);
@@ -40,6 +42,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         if(oldVersion<6)createDeviceSettings(db);
         if(oldVersion<7)db.execSQL(HistorySchema.REPAIR_UNAVAILABLE_SHUNT_CURRENT);
         if(oldVersion<8&&newVersion>=8)createArchiveTimes(db);
+        if(oldVersion<9&&newVersion>=9)HistoryExchange.create(db);
     }
 
     private static void createArchiveTimes(SQLiteDatabase db){
@@ -314,7 +317,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         if(end<=from)return new JSONObject().put("days",days);
         List<SampleTimeline.Interval> solar=SampleTimeline.energyIntervals(powerSamples(from,end,"solar","all"),from,end,false);
         List<SampleTimeline.Interval> battery=batteryIntervals(from,end,"all",null);
-        java.time.ZoneId zone=java.time.ZoneId.systemDefault();
+        java.time.ZoneId zone;try{zone=java.time.ZoneId.of(weather.optString("analysisTimezone",java.time.ZoneId.systemDefault().getId()));}catch(Exception e){zone=java.time.ZoneId.systemDefault();}
         java.time.LocalDate day=java.time.Instant.ofEpochMilli(from).atZone(zone).toLocalDate();
         JSONArray sunDays=weather.optJSONArray("days");
         while(day.atStartOfDay(zone).toInstant().toEpochMilli()<end){
@@ -450,6 +453,7 @@ final class HistoryDb extends SQLiteOpenHelper {
         MobilePast(String key,long at,List<SampleTimeline.Interval> solar,List<SampleTimeline.Interval> battery,List<SampleTimeline.Interval> voltage){this.key=key;this.at=at;this.solar=solar;this.battery=battery;this.voltage=voltage;}
     }
     private MobilePast mobilePast;
+    void clearDisplayPrior(){synchronized(mobilePastLock){mobilePast=null;}}
     private final Object mobilePastLock=new Object();
     /** Five-minute means are used only for an explicitly estimated historical load prior. */
     private static List<SampleTimeline.Interval> priorMeans(List<SampleTimeline.Interval> input){

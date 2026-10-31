@@ -51,6 +51,6 @@ public final class SQLiteDatabase implements AutoCloseable {
         List<String> columns=new ArrayList<>();List<Object> args=new ArrayList<>();for(String column:values.keySet()){columns.add(column+"=?");args.add(values.get(column));}if(params!=null)args.addAll(Arrays.asList(params));
         return change("UPDATE "+table+" SET "+String.join(",",columns)+" WHERE "+where,args.toArray());
     }
-    public int delete(String table,String where,String[] args){return change("DELETE FROM "+table+" WHERE "+where,args);}
+    public int delete(String table,String where,String[] args){return change("DELETE FROM "+table+(where==null?"":" WHERE "+where),args);}
     public void close(){try{connection.close();}catch(SQLException e){throw new IllegalStateException(e);}}
 }
