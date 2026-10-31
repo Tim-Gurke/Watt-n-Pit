@@ -1,0 +1,105 @@
+name: Zentralen-Planer und KsuWebUI bereitstellen
+
+on:
+  push:
+    branches: ['downloads/central-planner-v1.0.0-test']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: central-planner-downloads-v1
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Vorbereitetes Modul und enthaltene Quelltexte prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/central-planner-assets" "$RUNNER_TEMP/central-planner-tests"
+          module=extras/central-planner/Watt-n-Pit-Zentralen-Planer-v1.0.0-test.zip
+          printf '0013c66dff35f0b6289b577e5e0b9b1e9bfcad50ebe4941311a80126d05c88fc  %s\n' "$module" | sha256sum --check --strict
+          python3 - <<'PY'
+          import hashlib,json,os,zipfile
+          from pathlib import Path
+          p=Path('extras/central-planner/Watt-n-Pit-Zentralen-Planer-v1.0.0-test.zip')
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None
+              report=json.loads(z.read('VERIFICATION.json'))
+              assert report['version']=='1.0.0-test'
+              assert all(r['exit_code']==0 for r in report['results'])
+              for name,digest in report['sha256'].items():
+                  assert hashlib.sha256(z.read(name)).hexdigest()==digest,name
+              assert z.read('module.prop').decode().splitlines()[0]=='id=wattpit_reboot'
+              for name in z.namelist():
+                  assert not name.startswith('/') and '..' not in Path(name).parts
+              z.extractall(Path(os.environ['RUNNER_TEMP'])/'central-planner-tests')
+          PY
+          (cd "$RUNNER_TEMP/central-planner-tests" && python3 tests/check.py && TZ=Europe/Berlin node tests/core.cjs)
+          cp "$module" "$RUNNER_TEMP/central-planner-assets/"
+      - name: Originale KsuWebUI-APK und zugehörigen Quellcode herunterladen
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/central-planner-assets"
+          curl --fail --location --retry 2 --connect-timeout 15 --max-time 120 \
+            https://github.com/KOWX712/KsuWebUIStandalone/releases/download/v1.0/KsuWebUI-1.0-48-release.apk \
+            --output "$target/KsuWebUI-1.0-48-release.apk"
+          printf 'e781356ed1312c9c19d290e80e2816609f7cb909fb8ae557e6b88b6ffc7416a2  %s\n' "$target/KsuWebUI-1.0-48-release.apk" | sha256sum --check --strict
+          curl --fail --location --retry 2 --connect-timeout 15 --max-time 120 \
+            https://api.github.com/repos/KOWX712/KsuWebUIStandalone/zipball/58e8d43d39b98a7391f58c83f6ef64dcdf1443eb \
+            --output "$target/KsuWebUI-v1.0-source.zip"
+          python3 - <<'PY'
+          import os,zipfile
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'central-planner-assets'
+          with zipfile.ZipFile(p/'KsuWebUI-1.0-48-release.apk') as z:
+              assert z.testzip() is None
+              assert {'AndroidManifest.xml','classes.dex'}<=set(z.namelist())
+          with zipfile.ZipFile(p/'KsuWebUI-v1.0-source.zip') as z:
+              assert z.testzip() is None
+              assert any(n.endswith('/LICENSE') for n in z.namelist())
+              assert any(n.endswith('/app/build.gradle.kts') for n in z.namelist())
+          PY
+          (cd "$target" && sha256sum *.apk *.zip > Zentralen-Planer-SHA256SUMS.txt)
+      - name: Downloads an Watt’n’Pit 1.6.13 ergänzen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=v1.6.13
+          gh release view "$tag" --json body,assets > "$RUNNER_TEMP/release-before.json"
+          for file in "$RUNNER_TEMP/central-planner-assets/"*; do
+            name=$(basename "$file")
+            if jq -e --arg name "$name" '.assets[] | select(.name==$name)' "$RUNNER_TEMP/release-before.json" >/dev/null; then
+              mkdir -p "$RUNNER_TEMP/existing-central-assets"
+              gh release download "$tag" --pattern "$name" --dir "$RUNNER_TEMP/existing-central-assets"
+              cmp "$file" "$RUNNER_TEMP/existing-central-assets/$name"
+            else
+              gh release upload "$tag" "$file"
+            fi
+          done
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          folder=Path(os.environ['RUNNER_TEMP'])
+          before=json.loads((folder/'release-before.json').read_text())
+          body=before['body']
+          marker='<!-- central-planner-downloads-v1 -->'
+          if marker not in body:
+              body+='\n\n'+marker+'\n'+Path('extras/central-planner/DOWNLOADS.md').read_text()
+          (folder/'release-notes.md').write_text(body)
+          PY
+          gh release edit "$tag" --notes-file "$RUNNER_TEMP/release-notes.md"
+          gh release view "$tag" --json url,assets
