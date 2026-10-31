@@ -19,6 +19,10 @@
       const stored=C.storedEnergy(p,live);$('rollerStored').textContent=stored===null?'— Wh':'≈ '+energy(stored);
       $('rollerSoc').textContent=num(live.soc)+' %';$('rollerPower').textContent=num(live.power)+' W';
       $('rollerInput').textContent=energy(session.inputWh);$('rollerCharged').textContent=energy(session.batteryWh);
+      const temperatures=Array.isArray(live.temperatures)?live.temperatures.filter(v=>typeof v==='number'&&Number.isFinite(v)):[];
+      $('rollerTemperature').textContent=num(temperatures.length?Math.max(...temperatures):null)+' °C';
+      $('rollerTemperature').title=temperatures.map(v=>num(v)+' °C').join(' / ');
+      $('rollerTemperatureLabel').textContent='Temperatur · BMS'+(temperatures.length>1?' · Maximum':'');
       $('rollerLiveNote').textContent=live.at?`${num(live.voltage,2)} V · ${num(live.current,2)} A · Wohnwagenanteil ≈ ${num(s.estimatedInputWatts)} W`:'Keine aktuellen BMS-Werte · alte Werte werden nicht fortgeschrieben.';
       $('rollerSession').textContent=session.active?'Sondernutzung beenden':'Ladung als Sondernutzung starten';$('rollerSession').disabled=!!this.pending||this.a.isDemo()||!this.a.native?.rollerSession&&!this.a.native?.requestRollerSession||!session.active&&!s.fresh||viewer&&s.status==='Hauptgerät nicht erreichbar';
       if(this.pending)$('rollerSession').textContent='Bestätigung wird erwartet …';

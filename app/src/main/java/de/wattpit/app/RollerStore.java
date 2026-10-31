@@ -53,7 +53,8 @@ final class RollerStore {
     synchronized void accept(BmsPacket p,long now){accept(p,now,"Direkt");}
     synchronized void accept(BmsPacket p,long now,String source){try{
         if(now<=lastAcceptedAt)return;double watts=p.voltage*p.current,idle=profile.optDouble("idleWatts"),efficiency=profile.optDouble("conversionEfficiency");
-        live=new JSONObject().put("source",source).put("at",now).put("voltage",p.voltage).put("current",p.current).put("power",watts).put("soc",p.soc<0?JSONObject.NULL:p.soc).put("remainingAh",p.remainingAh).put("fullAh",p.fullAh).put("chargeEnabled",p.chargeEnabled).put("dischargeEnabled",p.dischargeEnabled);
+        JSONArray temperatures=new JSONArray();for(double temperature:p.temperatures)temperatures.put(Double.isFinite(temperature)?temperature:JSONObject.NULL);
+        live=new JSONObject().put("source",source).put("at",now).put("voltage",p.voltage).put("current",p.current).put("power",watts).put("soc",p.soc<0?JSONObject.NULL:p.soc).put("remainingAh",p.remainingAh).put("fullAh",p.fullAh).put("chargeEnabled",p.chargeEnabled).put("dischargeEnabled",p.dischargeEnabled).put("temperatures",temperatures);
         int action=0;boolean started=false;
         if(profile.optBoolean("autoSpecialUse")&&(!session.active||automatic))action=detector.sample(now,watts,session.active);
         if(action==1){automatic=true;session.start(detector.startAt);revision++;session.sample(detector.startAt,detector.startPower,idle,efficiency);autoWindowFrom=detector.startAt;autoWindowTo=now;started=true;}

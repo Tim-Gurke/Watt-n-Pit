@@ -8,6 +8,11 @@ import java.lang.reflect.*;
 import java.util.*;
 public final class RollerStoreProof {
  private static void require(boolean v,String name){if(!v)throw new AssertionError(name);System.out.println("PASS "+name);}
+ private static BmsPacket temperatures(byte[] base,int... tenths){
+  byte[] b=Arrays.copyOf(base,30+tenths.length*2);b[3]=(byte)(23+tenths.length*2);b[26]=(byte)tenths.length;
+  for(int i=0;i<tenths.length;i++){int raw=2731+tenths[i];b[27+i*2]=(byte)(raw>>8);b[28+i*2]=(byte)raw;}
+  int sum=0,at=27+tenths.length*2;for(int i=2;i<at;i++)sum+=b[i]&255;int check=(-sum)&65535;b[at]=(byte)(check>>8);b[at+1]=(byte)check;b[at+2]=0x77;return BmsPacket.decode(b);
+ }
     private static SharedPreferences preferences(Path path)throws Exception{
         Properties values=new Properties();if(Files.exists(path))try(InputStream in=Files.newInputStream(path)){values.load(in);}
         return (SharedPreferences)Proxy.newProxyInstance(SharedPreferences.class.getClassLoader(),new Class<?>[]{SharedPreferences.class},(proxy,m,a)->{
@@ -46,7 +51,10 @@ public final class RollerStoreProof {
   require(s.mac().equals("AA:BB:CC:DD:EE:FF"),"roller profile stored");
   boolean rejected=false;try{s.toggle(true);}catch(IllegalArgumentException e){rejected=true;}require(rejected,"no charge session without a fresh BMS");
   byte[] b=new byte[30];b[0]=(byte)0xdd;b[1]=3;b[3]=23;b[4]=0x13;b[5]=(byte)0xd6;b[7]=(byte)189;b[23]=70;int sum=0;for(int i=2;i<27;i++)sum+=b[i]&255;int checksum=(-sum)&65535;b[27]=(byte)(checksum>>8);b[28]=(byte)checksum;b[29]=0x77;BmsPacket packet=BmsPacket.decode(b);require(packet!=null,"valid production packet");
-  long now=System.currentTimeMillis();s.accept(packet,now);s.toggle(true);Thread.sleep(5);now=System.currentTimeMillis();s.accept(packet,now);
+  long now=System.currentTimeMillis();s.accept(temperatures(b,175,223),now);
+  JSONArray reported=s.snapshot().getJSONObject("live").getJSONArray("temperatures");require(reported.length()==2&&reported.getDouble(0)==17.5&&reported.getDouble(1)==22.3,"validated BMS sensor temperatures reach the roller snapshot unchanged");
+  s.toggle(true);Thread.sleep(5);now=System.currentTimeMillis();s.accept(packet,now);
+  require(s.snapshot().getJSONObject("live").getJSONArray("temperatures").length()==0,"a fresh packet without temperature sensors clears previous sensor values");
   JSONObject live=s.snapshot();require(!live.getBoolean("fresh")||Math.abs(live.getDouble("estimatedInputWatts")-138)<.1,"calibrated power or stale BMS");
   rejected=false;try{s.configure(p.toString());}catch(IllegalArgumentException e){rejected=true;}require(rejected,"active session freezes its loss profile");
   s.toggle(false);s.toggle(false);require(s.snapshot().getJSONArray("journal").length()==1,"one completed session archived exactly once");

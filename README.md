@@ -6,9 +6,13 @@
 
 Auch Firmware-Updates deiner Victron-Geräte führst du weiterhin über die offiziellen Victron-Apps durch, bei SmartShunt und SmartSolar über VictronConnect. Watt’n’Pit kann keine Geräteupdates durchführen.
 
-**[Android-APK 1.6.12 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.12/Watt-n-Pit-v1.6.12.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.6.13 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.13/Watt-n-Pit-v1.6.13.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
+
+## Neu in 1.6.13
+
+**BMS-Temperatur in der Rollerübersicht:** Sechster Wert in °C; bei mehreren Sensoren das gekennzeichnete Maximum. Die sechs Werte stehen bei ausreichender Breite als 3 × 2. [Änderungen](docs/releases/1.6.13.md).
 
 ## Neu in 1.6.12
 
