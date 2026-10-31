@@ -26,6 +26,7 @@ window.onHistoryResult=result=>reads?.result(result);
 window.onHistoryProgress=result=>reads?.progress(result);
 window.onDisplayActive=result=>{const active=!!result.active;window.wattDisplayActive=active;reads?.setActive(active);if(!active){clearTimeout(readRepaint);solar?.stopSensors();return;}lastMiniLoad=0;solar&&(solar.renderKey='');poll();repaintReads();};
 document.addEventListener('visibilitychange',()=>window.onDisplayActive({active:!document.hidden}));
+window.addEventListener('pageshow',()=>window.onDisplayActive({active:!document.hidden}));
 const historyRead=(method,args,scope)=>reads?reads.read(method,args,scope):deviceNative?.[method](...args);
 const refreshNote=data=>data?.progress|| (data?.stale?(data.pending?'Letzter Stand · neue Daten werden geladen …':data.refreshError?'Letzter Stand · Aktualisierung fehlgeschlagen. Neuer Versuch folgt.':'Letzter Stand'):data?.pending?'Daten werden im Hintergrund geladen …':data?.error?data.error:'');
 const dataTime=()=>lifecycle?.busy?lifecycle.startedAt||Date.now():Date.now();

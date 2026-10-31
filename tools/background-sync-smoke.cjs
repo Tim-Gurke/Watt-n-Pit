@@ -35,7 +35,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  await page.evaluate(()=>poll());assert.equal(await page.locator('#syncWaiting').isVisible(),true,'review closed on next poll');
  await page.keyboard.press('Escape');assert.equal(await page.locator('#syncWaiting').isVisible(),false);
  await page.locator('[data-metric="voltage"]').click();await page.locator('#syncOpen').click();await page.waitForTimeout(400);await page.keyboard.press('Escape');await until(()=>!historyPending);assert.ok(await page.evaluate(()=>points.length)>0,'a result arriving behind the progress dialog remained stuck loading');
- await page.reload();await page.locator('#syncCompact').waitFor({state:'visible'});assert.equal(await page.locator('#activityOverlay').isVisible(),false,'Activity reload lost the native per-run choice');assert.equal(await page.locator('#syncCompact').isVisible(),true);
+ await page.reload();try{await page.locator('#syncCompact').waitFor({state:'visible'});}catch(error){console.error('Reload state',await page.evaluate(()=>({saved:sessionStorage.getItem('native-run'),run:window.run,display:window.wattDisplayActive,visibility:document.visibilityState,state:typeof lifecycle==='object'?lifecycle.state:null})));throw error;}assert.equal(await page.locator('#activityOverlay').isVisible(),false,'Activity reload lost the native per-run choice');assert.equal(await page.locator('#syncCompact').isVisible(),true);
  await page.locator('[data-page="settings"]').click();await page.locator('#capacitySetting').fill('125');
  for(const viewport of [{width:320,height:800},{width:740,height:360},{width:390,height:844}]){
   await page.setViewportSize(viewport);assert.equal(await page.evaluate(()=>document.body.scrollWidth>innerWidth),false);
