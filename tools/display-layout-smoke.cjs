@@ -48,7 +48,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   for(const width of [360,412,844])for(const theme of ['dark','light'])for(const scale of [50,100,150]){
    await page.setViewportSize({width,height:width===844?500:960});
    await page.evaluate(({theme,scale})=>{window.fixtureTheme=theme;poll();WattDisplay.apply(scale);}, {theme,scale});
-   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await check();
+   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+   // Mobile Chromium can settle CSS zoom and its layout viewport on separate frames.
+   // Keep the exact viewport bound, but wait for that resize before checking tile geometry.
+   await waitForPage(page,width=>Math.abs(document.querySelector('.bottom-nav').getBoundingClientRect().right-width)<1&&document.documentElement.scrollWidth<=innerWidth+1,width);
+   await check();
    const bounds=await page.evaluate(expectedWidth=>({width:innerWidth,scroll:document.documentElement.scrollWidth,nav:document.querySelector('.bottom-nav').getBoundingClientRect().toJSON(),profile:dashboard.profile,overflow:[...document.querySelectorAll('body *')].filter(e=>e.getClientRects().length&&getComputedStyle(e).position!=='absolute'&&e.getBoundingClientRect().right>expectedWidth+2).slice(0,8).map(e=>({tag:e.tagName,id:e.id,cls:e.className,right:e.getBoundingClientRect().right}))}),width);
    assert.ok(bounds.scroll<=bounds.width+1,JSON.stringify({width,theme,scale,...bounds}));assert.equal(bounds.profile,width>=700?'wide':'compact');assert.ok(Math.abs(bounds.nav.right-width)<1,JSON.stringify(bounds));
    if(output&&width===360&&scale===100)await page.screenshot({path:path.join(output,`display-late-${theme}.png`),fullPage:true});
