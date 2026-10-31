@@ -392,6 +392,14 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String dashboardPreset(){try{return DashboardPreset.read(MainActivity.this);}catch(Exception e){return "null";}}
         @JavascriptInterface public String dashboard() { return repository.prefs.getString("dashboard-v1","{}"); }
         @JavascriptInterface public int displayScale(){return repository.prefs.getInt("display-scale-v1",100);}
+        @JavascriptInterface public String rollerDisplay(){return repository.prefs.getString("roller-values-v1","[]");}
+        @JavascriptInterface public String saveRollerDisplay(String json){
+            try{
+                if(json==null||json.length()>1000)throw new IllegalArgumentException();JSONArray values=new JSONArray(json);if(values.length()!=6)throw new IllegalArgumentException();
+                for(int i=0;i<values.length();i++)if(!(values.get(i) instanceof String)||!values.getString(i).matches("[a-zA-Z][a-zA-Z0-9:]{0,39}"))throw new IllegalArgumentException();
+                return repository.prefs.edit().putString("roller-values-v1",values.toString()).commit()?"":"Die Wertauswahl konnte nicht gespeichert werden.";
+            }catch(Exception e){return "Ungültige Wertauswahl.";}
+        }
         @JavascriptInterface public String saveDisplayScale(int value){
             if(value<50||value>150)return "Bitte eine Darstellungsgröße zwischen 50 und 150 % wählen.";
             return repository.prefs.edit().putInt("display-scale-v1",value).commit()?"":"Darstellungsgröße konnte nicht gespeichert werden.";

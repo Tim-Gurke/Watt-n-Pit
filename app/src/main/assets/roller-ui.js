@@ -6,7 +6,7 @@
   const energy=v=>num(v)+' Wh';
   const dateInput=v=>{if(!v)return '';const d=new Date(v);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
   window.WattRoller=class{
-    constructor(a){this.a=a;this.state={profile:C.defaults,live:{},session:{}};$('rollerConfigure').onclick=$('rollerSetup').onclick=()=>this.configure();$('rollerSettings').onclick=()=>this.configure();$('rollerJournal').onclick=()=>this.journal();$('rollerSession').onclick=()=>this.session();window.onRollerResult=result=>this.result(result);if($('rollerReconnect'))$('rollerReconnect').onclick=async()=>{const error=await this.a.native?.rollerReconnect?.();this.a.toast(error||'BMS-Neuverbindung angefordert. Eine aktive Fahrtverbindung bleibt erhalten.');this.a.poll();};if($('rollerConnectionLog'))$('rollerConnectionLog').onclick=()=>{const h=this.state.handover||{};this.a.openModal('BMS-Verbindungsverlauf',(h.events||[]).slice().reverse().map(e=>`<p><strong>${esc(new Date(e.at).toLocaleString('de-DE'))}</strong><br>${esc(e.text)}</p>`).join('')||'<p>Noch keine Übergabe aufgezeichnet.</p>');};}
+    constructor(a){this.a=a;let values;try{values=JSON.parse(a.native?.rollerDisplay?a.native.rollerDisplay():localStorage.getItem('wattpit-roller-values-v1')||'[]');}catch(_){}this.values=C.normalizeDisplay(values);$('rollerValues').onclick=e=>{const cell=e.target.closest('[data-roller-slot]');if(cell)this.valuePicker(Number(cell.dataset.rollerSlot));};this.state={profile:C.defaults,live:{},session:{}};$('rollerConfigure').onclick=$('rollerSetup').onclick=()=>this.configure();$('rollerSettings').onclick=()=>this.configure();$('rollerJournal').onclick=()=>this.journal();$('rollerSession').onclick=()=>this.session();window.onRollerResult=result=>this.result(result);if($('rollerReconnect'))$('rollerReconnect').onclick=async()=>{const error=await this.a.native?.rollerReconnect?.();this.a.toast(error||'BMS-Neuverbindung angefordert. Eine aktive Fahrtverbindung bleibt erhalten.');this.a.poll();};if($('rollerConnectionLog'))$('rollerConnectionLog').onclick=()=>{const h=this.state.handover||{};this.a.openModal('BMS-Verbindungsverlauf',(h.events||[]).slice().reverse().map(e=>`<p><strong>${esc(new Date(e.at).toLocaleString('de-DE'))}</strong><br>${esc(e.text)}</p>`).join('')||'<p>Noch keine Übergabe aufgezeichnet.</p>');};}
     render(){
       try{if(this.a.native?.rollerSnapshot)this.state=JSON.parse(this.a.native.rollerSnapshot());else this.state.profile={...C.defaults,...JSON.parse(localStorage.getItem('wattpit-roller')||'{}')};}catch(_){}
       const s=this.state,p={...C.defaults,...s.profile},l=s.fresh?s.live||{}:{},r=C.plan(p,l),session=s.session||{};
@@ -16,13 +16,9 @@
       $('rollerName').textContent=p.name;const h=s.handover||{};if($('rollerOwner'))$('rollerOwner').textContent=h.owner?`${h.owner} · ${h.fresh?(h.dischargeEnabled?'Lastausgang freigegeben':'Lastausgang gesperrt'):'Sperrzustand noch nicht aktuell bestätigt'}${h.at?' · '+new Date(h.at).toLocaleTimeString('de-DE'):''}`:'';
       $('rollerState').textContent=this.a.isDemo()?'Demo · Rollerwerte werden nicht angezeigt':(session.active?(session.automatic?'Automatisch erkannt · Sondernutzung läuft · ':'Sondernutzung · Rollerladung läuft · '):'')+(s.status||'Direkte BMS-Verbindung in der Android-App');
       const live=this.a.isDemo()?{}:l;
-      const stored=C.storedEnergy(p,live);$('rollerStored').textContent=stored===null?'— Wh':'≈ '+energy(stored);
-      $('rollerSoc').textContent=num(live.soc)+' %';$('rollerPower').textContent=num(live.power)+' W';
-      $('rollerInput').textContent=energy(session.inputWh);$('rollerCharged').textContent=energy(session.batteryWh);
-      const temperatures=Array.isArray(live.temperatures)?live.temperatures.filter(v=>typeof v==='number'&&Number.isFinite(v)):[];
-      $('rollerTemperature').textContent=num(temperatures.length?Math.max(...temperatures):null)+' °C';
-      $('rollerTemperature').title=temperatures.map(v=>num(v)+' °C').join(' / ');
-      $('rollerTemperatureLabel').textContent='Temperatur · BMS'+(temperatures.length>1?' · Maximum':'');
+      for(const cell of $('rollerValues').children){const slot=Number(cell.dataset.rollerSlot),key=this.values[slot],m=C.displayReading(key,p,live,session),text=(m.approximate&&m.value!==null?'≈ ':'')+num(m.value,m.digits??1)+' '+m.unit;
+        cell.dataset.rollerMetric=key;cell.querySelector('strong').textContent=text;cell.querySelector('span').textContent=m.label;cell.title=m.title||'Antippen, um den Wert auszuwählen.';cell.setAttribute('aria-label',m.label+': '+text+'. Wert auswählen.');
+      }
       $('rollerLiveNote').textContent=live.at?`${num(live.voltage,2)} V · ${num(live.current,2)} A · Wohnwagenanteil ≈ ${num(s.estimatedInputWatts)} W`:'Keine aktuellen BMS-Werte · alte Werte werden nicht fortgeschrieben.';
       $('rollerSession').textContent=session.active?'Sondernutzung beenden':'Ladung als Sondernutzung starten';$('rollerSession').disabled=!!this.pending||this.a.isDemo()||!this.a.native?.rollerSession&&!this.a.native?.requestRollerSession||!session.active&&!s.fresh||viewer&&s.status==='Hauptgerät nicht erreichbar';
       if(this.pending)$('rollerSession').textContent='Bestätigung wird erwartet …';
@@ -38,6 +34,15 @@
       }
       if(p.planCharge||session.active)text+=' Die Akkuprognose berücksichtigt den verbleibenden Ladebedarf ab jetzt, sofern machbar und aktuelle BMS-Werte vorliegen.';
       $('rollerPlan').textContent=text;
+    }
+    saveDisplay(values){
+      const next=C.normalizeDisplay(values);let error='';try{const json=JSON.stringify(next);if(this.a.native?.saveRollerDisplay)error=this.a.native.saveRollerDisplay(json);else localStorage.setItem('wattpit-roller-values-v1',json);}catch(_){error='Die Wertauswahl konnte nicht gespeichert werden.';}
+      if(error){$('rollerValueError').textContent=error;$('rollerValueError').hidden=false;return false;}this.values=next;this.render();return true;
+    }
+    valuePicker(slot){
+      if(!Number.isInteger(slot)||slot<0||slot>=6)return;
+      this.a.openModal('Wert auswählen · Feld '+(slot+1),`<label class="form-field">Anzeigewert<select id="rollerValueSelect">${C.displayOptions(this.state.live||{},this.values).map(([key,label])=>`<option value="${esc(key)}">${esc(label)}</option>`).join('')}</select></label><p class="muted">Die Auswahl wird auf diesem Handy gespeichert.</p><p id="rollerValueError" class="form-error" hidden></p><div class="form-actions"><button id="rollerValueDefaults" class="quiet">Standardbelegung</button><button id="rollerValueApply" class="primary">Übernehmen</button></div>`);
+      $('rollerValueSelect').value=this.values[slot];$('rollerValueApply').onclick=()=>{const next=[...this.values];next[slot]=$('rollerValueSelect').value;if(this.saveDisplay(next))this.a.closeModal();};$('rollerValueDefaults').onclick=()=>{if(this.saveDisplay(C.displayDefaults))this.a.closeModal();};
     }
     journal(){const rows=this.state.journal||[];this.a.openModal('Lokales Ladejournal',rows.length?rows.slice().reverse().map(s=>`<article class="card" style="padding:14px;margin:12px 0"><strong>${esc(s.profile?.name||'Roller')} · ${esc(new Date(s.started).toLocaleString('de-DE'))}</strong><p class="muted">Sondernutzung · Rollerladung</p><p>BMS: ${energy(s.batteryWh)} · Wohnwagenanteil geschätzt: ${energy(s.inputWh)}</p><p class="muted">${num(s.observedMillis/60000)} min erfasst · ${num(s.gapMillis/1000,0)} s ohne Messung</p></article>`).join(''):'<p>Noch keine abgeschlossene Ladeaufzeichnung.</p>');}
     session(){if(this.a.isDemo()||this.pending)return;const active=!!this.state.session?.active;

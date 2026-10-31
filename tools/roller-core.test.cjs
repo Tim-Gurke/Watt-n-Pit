@@ -16,3 +16,22 @@ test('stored energy falls back to valid SOC and keeps missing or impossible valu
  for(const live of [{},{soc:NaN},{soc:-1},{soc:101},{remainingAh:15,fullAh:0}])assert.equal(C.storedEnergy(C.defaults,live),null);
  assert.equal(C.storedEnergy(C.defaults,{remainingAh:30,fullAh:26,soc:50}),26*48.1/2);
 });
+test('six roller fields retain valid choices and migrate missing or invalid slots independently',()=>{
+ const values=['voltage','current','temperature:1',null,'__proto__','temperature:00'],copy=structuredClone(values);
+ assert.deepEqual(C.normalizeDisplay(values),['voltage','current','temperature:1','charged','input','temperature']);assert.deepEqual(values,copy);
+ assert.deepEqual(C.normalizeDisplay(),C.displayDefaults);assert.deepEqual(C.normalizeDisplay(['soc','soc']).slice(0,2),['soc','soc']);
+});
+test('selected roller readings preserve units, signed current, measured zero and missing values',()=>{
+ const live={voltage:50.78,current:-1.89,soc:0,remainingAh:0,fullAh:26};
+ for(const [key,value,unit] of [['voltage',50.78,'V'],['current',-1.89,'A'],['soc',0,'%'],['remainingAh',0,'Ah'],['fullAh',26,'Ah']]){const r=C.displayReading(key,C.defaults,live);assert.equal(r.value,value);assert.equal(r.unit,unit);}
+ assert.equal(C.displayReading('current',C.defaults,{current:null}).value,null);assert.equal(C.displayReading('charged',C.defaults,{}, {batteryWh:12}).value,12);
+});
+test('roller temperature maximum and explicit sensors do not substitute a missing channel',()=>{
+ const live={temperatures:[-5.5,0,22.3,null,'30']};assert.equal(C.displayReading('temperature',C.defaults,live).value,22.3);
+ assert.equal(C.displayReading('temperature:0',C.defaults,live).value,-5.5);assert.equal(C.displayReading('temperature:1',C.defaults,live).value,0);
+ assert.equal(C.displayReading('temperature:3',C.defaults,live).value,null);assert.equal(C.displayReading('temperature:1',C.defaults,{temperatures:[22.3]}).value,null);
+});
+test('sensor choices remain available before connection and retain a selected additional channel',()=>{
+ const options=C.displayOptions({},['temperature:4']);assert.ok(options.some(([key])=>key==='temperature:0'));assert.ok(options.some(([key])=>key==='temperature:1'));assert.ok(options.some(([key])=>key==='temperature:4'));
+ assert.equal(C.normalizeDisplay(['temperature:116'])[0],'stored');
+});

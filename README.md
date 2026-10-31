@@ -12,7 +12,7 @@ Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, ke
 
 ## Neu in 1.6.13
 
-**BMS-Temperatur in der Rollerübersicht:** Sechster Wert in °C; bei mehreren Sensoren das gekennzeichnete Maximum. Die sechs Werte stehen bei ausreichender Breite als 3 × 2. [Änderungen](docs/releases/1.6.13.md).
+**Frei belegbare Rollerübersicht mit BMS-Temperatur:** Sechs antippbare Felder mit lokaler Wertauswahl, auch für Spannung, Strom und einzelne Temperatursensoren. Die sechs Werte stehen bei ausreichender Breite als 3 × 2. [Änderungen](docs/releases/1.6.13.md).
 
 ## Neu in 1.6.12
 
