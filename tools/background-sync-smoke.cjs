@@ -1,6 +1,11 @@
 /* Fictional native service: survives Activity reload; never uses a synchronous DB read during import. */
-const {chromium}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path');
+const {chromium}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path'),http=require('node:http'),fs=require('node:fs');
 (async()=>{
+ // The fixture uses browser storage to stand in for an independent native service.
+ // Give it a stable origin across Activity reloads, as file URLs may receive a new origin.
+ const assets=path.resolve(__dirname,'../app/src/main/assets');
+ const server=http.createServer((req,res)=>{const file=path.resolve(assets,'.'+new URL(req.url,'http://localhost').pathname);if(!file.startsWith(assets+path.sep)||!fs.existsSync(file)){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':'application/octet-stream');fs.createReadStream(file).pipe(res);});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const browser=await chromium.launch({headless:true,executablePath:process.env.WATTPIT_CHROMIUM,args:['--no-sandbox','--disable-gpu']});
  const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',hasTouch:true});page.setDefaultTimeout(10000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const until=async predicate=>{const deadline=Date.now()+10000;while(!await page.evaluate(predicate)){if(Date.now()>deadline)throw Error('Expected asynchronous UI state was not reached');await page.waitForTimeout(40);}};
@@ -18,7 +23,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
   const sync=(method,args)=>{if(window.run.busy)throw Error('Synchronous database query during active sync');window.syncCalls++;return JSON.stringify(data(method,args));};
   window.WattPit={syncState:()=>JSON.stringify({...window.run,cockpitNoticeAccepted:true,archive:window.archive,theme:window.fixture.settings.theme,palette:'classic'}),backgroundArchive:id=>{if(id!==window.run.runId||!window.run.busy)return 'Lauf beendet';window.run.background=true;window.saveRun();return '';},snapshot:()=>JSON.stringify({...window.fixture,syncing:window.run.busy,archiveBusy:window.run.busy,archive:window.archive}),history:(...args)=>sync('history',args),dashboardHistory:(...args)=>sync('dashboardHistory',args),energyHistoryWindow:(...args)=>sync('energyHistoryWindow',args),requestHistory:json=>{const req=JSON.parse(json);window.asyncCalls.push(req);setTimeout(()=>window.onHistoryResult({id:req.id,data:data(req.method,req.args)}),100);},cancelArchive:()=>{window.cancelCalls++;},settings:json=>{Object.assign(window.fixture.settings,JSON.parse(json));return '';}};
  });
- await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/index.html'));
+ await page.goto('http://127.0.0.1:'+server.address().port+'/index.html');
  const layouts=await page.evaluate(()=>JSON.stringify(dashboard.config.tiles.map(t=>t.layouts)));
  await page.evaluate(()=>{openModal('Eingabe','<input id="pendingText" value="Bleibt erhalten">');Object.assign(window.run,{busy:true,runId:1,background:false,startedAt:Date.now()});window.saveRun();poll();});
  assert.equal(await page.locator('#syncWaiting').isVisible(),true);assert.equal(await page.locator('#syncBackground').isVisible(),true);
@@ -51,5 +56,5 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  await page.locator('#syncBackground').click();await page.evaluate(()=>{Object.assign(window.run,{busy:false,background:false});window.archive={active:false,text:'Synchronisation abgeschlossen.'};window.fixture.historyRevision++;poll();});
  await page.locator('[data-page="overview"]').click();await until(()=>document.querySelector('[data-tile="default-solarEnergy"] .tile-number')?.textContent==='120,00');
  assert.equal(await page.evaluate(()=>JSON.stringify(dashboard.config.tiles.map(t=>t.layouts))),layouts);
- assert.equal(errors.length,0,errors.join('\n'));await browser.close();console.log('Per-run background choice, reload/device continuity, asynchronous periods, responsive status/cancel, completion, unsaved inputs and both orientations/themes passed.');
+ assert.equal(errors.length,0,errors.join('\n'));await browser.close();await new Promise(resolve=>server.close(resolve));console.log('Per-run background choice, reload/device continuity, asynchronous periods, responsive status/cancel, completion, unsaved inputs and both orientations/themes passed.');
 })().catch(e=>{console.error(e);process.exit(1);});
