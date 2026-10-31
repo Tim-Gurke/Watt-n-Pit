@@ -156,7 +156,7 @@
       const period=m.flow?this.config.energyPeriod:t.period,day=['today','sunrise'].includes(period.mode)?new Date(window.from).toLocaleDateString('sv-SE'):'';
       const scope=retainScope||JSON.stringify(['dashboard',m.flow?'flow':backend,period,m.flow?this.config.tiles.find(t=>t.metric==='solarEnergy')?.period:null,day,this.a.isDemo()]);
       const read=(method,args)=>this.a.read?this.a.read(method,args,scope):this.a.native[method](...args);
-      const key=[m.flow?'energy-flow':backend,Math.floor(window.from/10000),Math.floor(window.to/10000),m.flow?Math.floor(solarFrom/10000):'',m.flow?Math.floor(solarTo/10000):'',this.a.isDemo()].join(':');
+      const key=JSON.stringify([scope,m.flow?'energy-flow':backend,Math.floor(window.from/10000),Math.floor(window.to/10000),m.flow?Math.floor(solarFrom/10000):'',m.flow?Math.floor(solarTo/10000):'',this.a.isDemo()]);
       if(this.cache.has(key))return m.flow?this.cache.get(key)[m.flow]:this.cache.get(key);
       let data={points:[],summary:{}};
       try {

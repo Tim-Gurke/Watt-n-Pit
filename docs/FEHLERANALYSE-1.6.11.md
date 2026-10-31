@@ -8,6 +8,8 @@ Eine noch ausstehende Energieantwort wird als ausstehend dargestellt. Sie löst 
 
 Der Kachelcache speicherte außerdem fehlgeschlagene und ausstehende Antworten. Bei einem festen Zeitraum, etwa nach Sonnenuntergang, erreichte die nächste Anzeige dadurch den vorgesehenen erneuten Abruf nicht mehr. Solche Antworten werden jetzt ausschließlich im Abfragekanal verwaltet. Eine erste fehlgeschlagene Abfrage kann nach der bestehenden Wartefrist wieder erfolgreich laden, ohne dass der Zeitraum oder die Anordnung geändert werden muss.
 
+Der Kachelcache unterscheidet zusätzlich den logischen Anzeigebereich. Die Großansicht muss ihren eigenen ersten Abruf erhalten, statt vorübergehend einen Cachewert der Übersicht zu übernehmen und diesen beim nächsten Aktualisieren zu verlieren. Der Oberflächentest wartet zunächst auf diesen ersten Abruf und prüft anschließend, dass sein Wert bei verzögerten oder fehlgeschlagenen Folgeabfragen erhalten bleibt.
+
 Solargrenzen, die identisch mit den laufenden Abfragegrenzen sind, verwenden denselben Zeittakt für den Abfrageschlüssel. So löst ein Neuzeichnen wenige Millisekunden nach einer Antwort keine neue Energieberechnung aus. Unabhängig festgelegte Solargrenzen behalten ihren eigenen Schlüssel.
 
 Lokal geprüft: 182 JavaScript-Tests; Größenregler und beide Layouts/Farbschemata; unveränderte Kachelkoordinaten beim Bearbeiten unter 50, 73, 100 und 150 Prozent trotz abweichendem `innerWidth`; weiterhin bedienbare lokale Oberfläche bei angehaltener Hintergrundantwort; Importabschluss und Erhalt älterer Werte; erneuter Abruf nach einem Fehler und gebündelte laufende Abfragen.
