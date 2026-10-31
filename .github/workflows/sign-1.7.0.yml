@@ -1,0 +1,112 @@
+name: Geprüfte Watt’n’Pit 1.7.0 APK signieren
+on:
+  push:
+    branches: ['sign/1.7.0']
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: wattpit-sign-1.7.0
+  cancel-in-progress: false
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: fad054fee46145413b0747e4983215368a1797a1
+      APPROVED_RUN: '41198013909'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fad054fee46145413b0747e4983215368a1797a1
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Erfolgreichen Quellstand und zugehörige APK übernehmen
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'Tim-Gurke/Watt-n-Pit'
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          mkdir -p "$RUNNER_TEMP/wattpit-sign170"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$APPROVED_RUN" > "$RUNNER_TEMP/wattpit-sign170/run.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          r=json.loads((Path(os.environ['RUNNER_TEMP'])/'wattpit-sign170/run.json').read_text())
+          assert r['head_sha']==os.environ['SOURCE_SHA'] and r['conclusion']=='success'
+          assert r['path']=='.github/workflows/android.yml' and r['head_branch']=='test/1.7.0-light-central'
+          print('Erfolgreicher Android-Build mit Tests, Lint, SQLite-, TCP- und Browserprüfungen bestätigt.')
+          PY
+          gh run download "$APPROVED_RUN" --repo "$GITHUB_REPOSITORY" --name Watt-n-Pit-CI-release --dir "$RUNNER_TEMP/wattpit-sign170/input"
+      - name: Mit bisheriger Updatesignatur signieren und prüfen
+        env:
+          SIGNING_BACKUP_BASE64: ${{ secrets.WATTPIT_SIGNING_BACKUP_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, hashlib, io, json, os, subprocess, zipfile
+          from pathlib import Path, PurePosixPath
+          directory=Path(os.environ['RUNNER_TEMP'])/'wattpit-sign170'
+          inputs=list((directory/'input').rglob('*.apk'))
+          assert len(inputs)==1
+          unsigned=inputs[0]
+          sdk=Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
+          candidates=list((sdk/'build-tools').glob('*/apksigner'))
+          assert candidates
+          tools=max(candidates,key=lambda p:tuple(int(x) for x in p.parent.name.split('.'))).parent
+          def package(path):
+              text=subprocess.check_output([str(tools/'aapt'),'dump','badging',str(path)],text=True)
+              assert "name='de.wattpit.app'" in text and "versionName='1.7.0'" in text and "versionCode='63'" in text
+          package(unsigned)
+          encoded=''.join(os.environ.get('SIGNING_BACKUP_BASE64','').split())
+          assert 0<len(encoded)<2000000
+          with zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded,validate=True))) as z:
+              assert len(z.infolist())<=30 and sum(x.file_size for x in z.infolist())<1000000
+              keys=[x for x in z.namelist() if PurePosixPath(x).name.lower().endswith('.p12') and not x.startswith('__MACOSX/')]
+              configs=[x for x in z.namelist() if PurePosixPath(x).name=='signing.json' and not x.startswith('__MACOSX/')]
+              assert len(keys)==len(configs)==1
+              key_data=z.read(keys[0]);config=json.loads(z.read(configs[0]))
+          password=config.get('password')
+          assert isinstance(password,str) and password and '\n' not in password and '\r' not in password and config.get('alias','wattpit')=='wattpit'
+          print('::add-mask::'+password)
+          key=directory/'temporary-release-key.p12';signed=directory/'Watt-n-Pit-v1.7.0.apk'
+          try:
+              key.write_bytes(key_data);key.chmod(0o600)
+              env=dict(os.environ,WATTPIT_EPHEMERAL_PASSWORD=password)
+              subprocess.run([str(tools/'apksigner'),'sign','--ks',str(key),'--ks-type','PKCS12','--ks-key-alias','wattpit','--ks-pass','env:WATTPIT_EPHEMERAL_PASSWORD','--key-pass','env:WATTPIT_EPHEMERAL_PASSWORD','--out',str(signed),str(unsigned)],env=env,check=True)
+              cert=subprocess.check_output([str(tools/'apksigner'),'verify','--verbose','--print-certs',str(signed)],text=True)
+              fingerprint='0e6e04bc2b50990a8f28bebae31dea596c2cd2f8563f1505aaaafc07277faeb2'
+              assert 'certificate SHA-256 digest: '+fingerprint in cert
+              package(signed)
+              digest=hashlib.sha256(signed.read_bytes()).hexdigest()
+              (directory/'SHA256SUMS.txt').write_text(digest+'  '+signed.name+'\n')
+              (directory/'BUILD-VERIFICATION.json').write_text(json.dumps({'source':os.environ['SOURCE_SHA'],'ci_run':int(os.environ['APPROVED_RUN']),'version':'1.7.0','versionCode':63,'certificate_sha256':fingerprint,'unsigned_sha256':hashlib.sha256(unsigned.read_bytes()).hexdigest(),'signed_sha256':digest,'signed_size':signed.stat().st_size},indent=2)+'\n')
+              print('Bisherige Updatesignatur, Paket und Version bestätigt. APK SHA-256: '+digest)
+          finally:
+              key.unlink(missing_ok=True)
+          PY
+      - name: Geprüfte Veröffentlichungsdateien auf getrenntem Branch ablegen
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          cp "$RUNNER_TEMP/wattpit-sign170/Watt-n-Pit-v1.7.0.apk" .release/
+          cp "$RUNNER_TEMP/wattpit-sign170/SHA256SUMS.txt" .release/
+          cp "$RUNNER_TEMP/wattpit-sign170/BUILD-VERIFICATION.json" .release/
+          git add -f .release/Watt-n-Pit-v1.7.0.apk .release/SHA256SUMS.txt .release/BUILD-VERIFICATION.json
+          git commit -m 'Prepare verified Watt’n’Pit 1.7.0 publication'
+          test -z "$(git diff HEAD^ HEAD --name-only | sed '/^\.release\//d')"
+          git push origin HEAD:refs/heads/signed/1.7.0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Watt-n-Pit-1.7.0-signiert
+          path: |
+            ${{ runner.temp }}/wattpit-sign170/Watt-n-Pit-v1.7.0.apk
+            ${{ runner.temp }}/wattpit-sign170/SHA256SUMS.txt
+            ${{ runner.temp }}/wattpit-sign170/BUILD-VERIFICATION.json
