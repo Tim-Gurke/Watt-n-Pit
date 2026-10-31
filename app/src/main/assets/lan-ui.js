@@ -24,7 +24,7 @@
       $('lanBanner').hidden=false;
       $('lanOpen').textContent=active?'Verbund öffnen':'Geräte verknüpfen';
       $('lanTitle').textContent=active?s.name:'Anlagenverbund';
-      const status=viewer?(s.connected?`Anzeige · Auswertung auf diesem Handy${s.analysisPending?' · Datenabgleich läuft':s.analysisAt?' · Datenstand '+stamp(s.analysisAt):''}`:`Hauptgerät nicht erreichbar · Stand ${stamp(s.receivedAt)}`):host?(s.hosting?`Hauptgerät · ${s.peers?.length||0} Anzeige${s.peers?.length===1?'':'n'} verbunden`:s.error||'Hauptgerät wird gestartet …'):'Messwerte direkt auf diesem Gerät';
+      const status=viewer?(s.connected?`Anzeige · Daten vom Hauptgerät · Auswertung hier${s.analysisPending?' · Datenabgleich läuft':s.analysisAt?' · Datenstand '+stamp(s.analysisAt):''}`:`Hauptgerät nicht erreichbar · Stand ${stamp(s.receivedAt)}`):host?(s.hosting?`Hauptgerät · ${s.peers?.length||0} Anzeige${s.peers?.length===1?'':'n'} verbunden`:s.error||'Hauptgerät wird gestartet …'):'Messwerte direkt auf diesem Gerät';
       $('lanStatus').textContent=status;$('lanSummary').textContent=active?`${s.name} · ${status}`:'Ein Hauptgerät zeichnet auf. Weitere Handys zeigen denselben Datenstand im WLAN.';
       $('lanBanner').classList.toggle('lan-offline',viewer&&!s.connected);
       $('lanBanner').closest('.cockpit-tile')?.classList.toggle('lan-offline',viewer&&!s.connected);
