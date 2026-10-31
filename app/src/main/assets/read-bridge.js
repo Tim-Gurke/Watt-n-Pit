@@ -87,7 +87,7 @@
     }
     armTimeout(id){clearTimeout(this.timer);this.timer=setTimeout(()=>this.result({id,data:{error:'Der Abruf dauert zu lange. Die letzten Werte bleiben erhalten.'}}),45000);this.timer?.unref?.();}
     progress(response){if(this.inflight?.id!==response.id)return;this.inflight.progress=String(response.message||'Daten werden abgeglichen …');this.armTimeout(response.id);if(this.active)this.ready(this.inflight.method);}
-    setActive(active){this.active=!!active;if(this.active){if(this.inflight)this.armTimeout(this.inflight.id);this.ready('resume');this.pump();}}
+    setActive(active){this.active=!!active;if(!this.active){clearTimeout(this.timer);return;}if(this.inflight)this.armTimeout(this.inflight.id);this.ready('resume');this.pump();}
     result(response){
       const query=this.inflight;if(!query||query.id!==response.id)return;
       clearTimeout(this.timer);this.inflight=null;

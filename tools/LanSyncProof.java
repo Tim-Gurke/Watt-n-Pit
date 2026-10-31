@@ -14,7 +14,7 @@ import java.util.concurrent.*;
 /** Real LanSync TCP host/client and real HistoryDb; substitutes Android lifecycle/NSD only. */
 public final class LanSyncProof {
     private static void check(boolean value,String name){if(!value)throw new AssertionError(name);System.out.println("PASS "+name);}
-    private static final class TestContext extends ContextWrapper {
+    static final class TestContext extends ContextWrapper {
         final Path root;final Map<String,SharedPreferences> values=new HashMap<>();
         TestContext(Path root)throws Exception{super(null);this.root=root;Files.createDirectories(root);}
         @Override public Context getApplicationContext(){return this;}
@@ -40,12 +40,12 @@ public final class LanSyncProof {
             return values.getOrDefault((String)args[0],args[1]);
         });
     }
-    private static Repository repository(TestContext context)throws Exception{
+    static Repository repository(TestContext context)throws Exception{
         System.setProperty("wattpit.test.database",context.root.resolve("history.db").toString());System.setProperty("wattpit.test.namedDatabases","true");
         Field instance=Repository.class.getDeclaredField("instance");instance.setAccessible(true);instance.set(null,null);Repository repo=Repository.get(context);repo.db.getWritableDatabase();return repo;
     }
-    private static LanSync sync(TestContext context)throws Exception{Constructor<LanSync> constructor=LanSync.class.getDeclaredConstructor(Context.class);constructor.setAccessible(true);return constructor.newInstance(context);}
-    private static void close(LanSync sync)throws Exception{sync.stopHost();Field worker=LanSync.class.getDeclaredField("client");worker.setAccessible(true);((ScheduledExecutorService)worker.get(sync)).shutdownNow();}
+    static LanSync sync(TestContext context)throws Exception{Constructor<LanSync> constructor=LanSync.class.getDeclaredConstructor(Context.class);constructor.setAccessible(true);return constructor.newInstance(context);}
+    static void close(LanSync sync)throws Exception{sync.stopHost();Field replica=LanSync.class.getDeclaredField("analysis");replica.setAccessible(true);if(replica.get(sync)!=null)((ViewerAnalysis)replica.get(sync)).close();Field worker=LanSync.class.getDeclaredField("client");worker.setAccessible(true);((ScheduledExecutorService)worker.get(sync)).shutdownNow();}
     private static void measurement(Repository repo,long at,double power)throws Exception{Reading r=new Reading();r.device="AA:00:00:00:00:01";r.kind="shunt";r.origin="live";r.period=10;r.timestamp=at;r.power=power;r.voltage=12.8;r.current=power/12.8;r.soc=76.4;repo.db.insert(r);}
     public static void main(String[] args)throws Exception{
         Class.forName("org.sqlite.JDBC");Path root=Path.of(args[0]);TestContext main=new TestContext(root.resolve("host"));Repository source=repository(main);long now=System.currentTimeMillis();

@@ -31,6 +31,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
     private volatile JSONArray suppliedPresence;
     private volatile JSONObject suppliedPresenceState;
     private volatile long forcedSince=Long.MAX_VALUE;
+    private volatile long analysisUntil,invalidateSince=Long.MAX_VALUE;
     private volatile JSONObject lastKnowledge=new JSONObject();
     private volatile String lastFailure="";
     private volatile boolean displayActive=true;
@@ -58,16 +59,17 @@ final class SolarPlanning extends SQLiteOpenHelper {
         if(oldVersion<6&&newVersion>=6)createModelRevision(db);
     }
     private static void createModelRevision(SQLiteDatabase db){
-        db.execSQL("CREATE TABLE analysis_model_meta(revision INTEGER NOT NULL)");db.execSQL("INSERT INTO analysis_model_meta VALUES(1)");
-        db.execSQL("CREATE TABLE analysis_model_tables(name TEXT PRIMARY KEY,revision INTEGER NOT NULL)");
-        for(String table:AnalysisExchange.TABLES){db.execSQL("INSERT INTO analysis_model_tables VALUES(?,1)",new Object[]{table});for(String event:new String[]{"INSERT","UPDATE","DELETE"})db.execSQL("CREATE TRIGGER model_"+table+"_"+event+" AFTER "+event+" ON "+table+" BEGIN UPDATE analysis_model_meta SET revision=revision+1; UPDATE analysis_model_tables SET revision=(SELECT revision FROM analysis_model_meta) WHERE name='"+table+"'; END");}
-        db.execSQL("CREATE INDEX analysis_observations ON observations(start)");db.execSQL("CREATE INDEX analysis_forecasts ON forecasts(start)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS analysis_model_meta(revision INTEGER NOT NULL)");db.execSQL("INSERT INTO analysis_model_meta SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM analysis_model_meta)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS analysis_model_tables(name TEXT PRIMARY KEY,revision INTEGER NOT NULL)");
+        for(String table:AnalysisExchange.TABLES){db.execSQL("INSERT OR IGNORE INTO analysis_model_tables VALUES(?,1)",new Object[]{table});for(String event:new String[]{"INSERT","UPDATE","DELETE"})db.execSQL("CREATE TRIGGER IF NOT EXISTS model_"+table+"_"+event+" AFTER "+event+" ON "+table+" BEGIN UPDATE analysis_model_meta SET revision=revision+1; UPDATE analysis_model_tables SET revision=(SELECT revision FROM analysis_model_meta) WHERE name='"+table+"'; END");}
+        db.execSQL("CREATE INDEX IF NOT EXISTS analysis_observations ON observations(start)");db.execSQL("CREATE INDEX IF NOT EXISTS analysis_forecasts ON forecasts(start)");
     }
     long modelRevision(){try(Cursor c=getReadableDatabase().rawQuery("SELECT revision FROM analysis_model_meta",null)){return c.moveToFirst()?c.getLong(0):0;}}
     boolean hasObservations(){try(Cursor c=getReadableDatabase().rawQuery("SELECT 1 FROM observations WHERE source=? LIMIT 1",new String[]{RollerLedger.source(repository.prefs)})){return c.moveToFirst();}}
-    void analysisPresence(JSONArray rows,JSONObject state,long since){suppliedPresence=rows;suppliedPresenceState=state;forcedSince=Math.min(forcedSince,since);}
-    long learningSince()throws Exception{
-        long now=System.currentTimeMillis(),since=now-7L*86400000;String source=source(devices());
+    void analysisPresence(JSONArray rows,JSONObject state,long since,long until){suppliedPresence=rows;suppliedPresenceState=state;forcedSince=Math.min(forcedSince,since);analysisUntil=until;}
+    void invalidateLearning(long since){if(since>0)invalidateSince=Math.min(invalidateSince,since);}
+    long learningSince(long now)throws Exception{
+        long since=now-7L*86400000;String source=source(devices());
         try(Cursor c=getReadableDatabase().rawQuery("SELECT MAX(end) FROM observations WHERE source=? AND end<=?",new String[]{source,""+now})){if(c.moveToFirst()&&!c.isNull(0))since=Math.max(since,c.getLong(0)-2L*86400000);else{long first=repository.db.stats().optLong("from");if(first>0)since=Math.min(since,first);}}
         return Math.max(LearningWindow.since(now),Math.min(since,forcedSince));
     }
@@ -324,7 +326,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
     void request(){
         if(closed||!analysis&&!displayActive)return;if(!busy.compareAndSet(false,true)){requestedAgain.set(true);return;}
         worker.execute(()->{JSONObject result=new JSONObject();try{
-            if(repository.archiveBusy)return;long now=System.currentTimeMillis();String[] devices=devices();String source=source(devices());
+            if(repository.archiveBusy)return;long now=analysis&&analysisUntil>0?analysisUntil:System.currentTimeMillis();String[] devices=devices();String source=source(devices());
             JSONObject weather=new JSONObject(repository.prefs.getString("weatherCache","{}"));SQLiteDatabase db=getWritableDatabase();long since=now-7L*86400000;
             boolean confirmed=PlanningConfirmation.installApproved(db,source);PlanningConfirmation.Result confirmations=PlanningConfirmation.read(db,source,weather);
             repository.prefs.edit().putLong("planningWeatherSince",confirmations.weatherSince).apply();
@@ -365,7 +367,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
             rollerInputs=rollerLedger.read(source,since,now);
             for(int i=0;i<rollerInputs.length();i++){JSONObject input=rollerInputs.getJSONObject(i);changes.add(input.getLong("from"));changes.add(input.getLong("to"));}
             JSONArray observations=weather.optInt("version")>=4&&!signature.equals(weather.optString("signature"))?new JSONArray():repository.db.planningObservations(since,now,observationWeather,devices[0],devices[1],changes);
-            db.beginTransaction();try{for(int i=0;i<observations.length();i++){
+            db.beginTransaction();try{if(analysis&&invalidateSince!=Long.MAX_VALUE)db.delete("observations","source=? AND end>? AND start<?",new String[]{source,""+invalidateSince,""+now});for(int i=0;i<observations.length();i++){
                 JSONObject row=observations.getJSONObject(i);long from=row.getLong("from"),to=row.getLong("to");
                 // A shorter rolling weather cache cannot erase an older valid
                 // observation before its missing historical weather is restored.
@@ -384,7 +386,7 @@ final class SolarPlanning extends SQLiteOpenHelper {
             JSONArray notices=new JSONArray();for(PlanningConfirmation.Entry e:confirmations.entries)notices.put(e.notice());
             result.put("source",source).put("observations",samples).put("forecasts",forecasts).put("confirmedSetups",notices).put("presence",suppliedPresenceState==null?PresenceStore.get(context).snapshot():suppliedPresenceState).put("updated",now);
         }catch(Exception e){try{result.put("error","Lerndaten gerade nicht verfügbar. Die Solarvorschau bleibt nutzbar.");}catch(JSONException ignored){}}
-        finally{busy.set(false);lastFailure=result.optString("error","");if(!closed&&result.length()>0){if(!result.has("error")){lastKnowledge=result;forcedSince=Long.MAX_VALUE;if(!analysis)sharedKnowledge=result.toString();}callback.accept(result);}if(!closed&&requestedAgain.getAndSet(false))request();}});
+        finally{busy.set(false);lastFailure=result.optString("error","");if(!closed&&result.length()>0){if(!result.has("error")){lastKnowledge=result;forcedSince=invalidateSince=Long.MAX_VALUE;if(!analysis)sharedKnowledge=result.toString();}callback.accept(result);}if(!closed&&requestedAgain.getAndSet(false))request();}});
     }
     Future<JSONObject> diagnosticSnapshot(){return worker.submit(()->{
         long now=System.currentTimeMillis();String[] selected=devices();String currentSource=source(selected);SQLiteDatabase db=getReadableDatabase();

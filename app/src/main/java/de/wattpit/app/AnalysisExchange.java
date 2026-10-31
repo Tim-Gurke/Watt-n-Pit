@@ -58,8 +58,9 @@ final class AnalysisExchange {
         settings.put("devices",devices.toString()).put("capacity",repo.prefs.getFloat("capacity",100)).put("sampleSeconds",repo.prefs.getInt("sampleSeconds",10));
         // Seed the existing learning checkpoint; a viewer then advances its own derived ledger.
         JSONObject markers=new JSONObject();for(Map.Entry<String,?> e:repo.prefs.getAll().entrySet())if(e.getKey().startsWith("planningEnergyVersion.")||e.getKey().startsWith("planningArchiveTimeRevision.")||e.getKey().startsWith("planningSpecialUsage.")||e.getKey().startsWith("planningRollerInputEnd."))markers.put(e.getKey(),e.getValue());
-        long first=0;try(Cursor c=repo.db.getReadableDatabase().rawQuery("SELECT MIN(ts) FROM readings WHERE ts>=0",null)){if(c.moveToFirst()&&!c.isNull(0))first=c.getLong(0);}
-        return new JSONObject().put("protocol",1).put("algorithm",SolarPlanning.ALGORITHM).put("inputToken",before.getString("token")).put("changed",!before.getString("token").equals(state(repo,plan,controlRevision).getString("token"))).put("firstMeasurement",first).put("settings",settings).put("markers",markers).put("tables",versions)
+        long first=0,last=0;try(Cursor c=repo.db.getReadableDatabase().rawQuery("SELECT MIN(ts) FROM readings WHERE ts>=0",null)){if(c.moveToFirst()&&!c.isNull(0))first=c.getLong(0);}
+        try(Cursor c=repo.db.getReadableDatabase().rawQuery("SELECT MAX(ts) FROM readings WHERE ts>=0 AND ts<=?",new String[]{""+System.currentTimeMillis()})){if(c.moveToFirst()&&!c.isNull(0))last=c.getLong(0);}
+        return new JSONObject().put("protocol",1).put("algorithm",SolarPlanning.ALGORITHM).put("inputToken",before.getString("token")).put("changed",!before.getString("token").equals(state(repo,plan,controlRevision).getString("token"))).put("firstMeasurement",first).put("measurementAt",Math.min(last,System.currentTimeMillis())).put("settings",settings).put("markers",markers).put("tables",versions)
             .put("presenceHistory",PresenceStore.get(context).history(from)).put("presence",PresenceStore.get(context).snapshot()).put("controlRevision",controlRevision)
             .put("timezone",TimeZone.getDefault().getID()).put("at",System.currentTimeMillis());
     }

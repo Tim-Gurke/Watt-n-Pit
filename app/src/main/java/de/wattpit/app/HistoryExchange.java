@@ -12,18 +12,18 @@ final class HistoryExchange {
     static final int PAGE=512;
     static final String[] COLUMNS=(de.wattpit.app.core.HistorySchema.COLUMNS+",archiveCounter,archiveOriginalTs").split(",");
     static void create(SQLiteDatabase db){
-        db.execSQL("CREATE TABLE analysis_meta(epoch TEXT NOT NULL,revision INTEGER NOT NULL)");
-        db.execSQL("INSERT INTO analysis_meta VALUES(?,1)",new Object[]{UUID.randomUUID().toString()});
-        db.execSQL("CREATE TABLE analysis_blocks(block INTEGER PRIMARY KEY,revision INTEGER NOT NULL,n INTEGER NOT NULL)");
-        db.execSQL("CREATE INDEX analysis_changes ON analysis_blocks(revision,block)");
-        db.execSQL("INSERT INTO analysis_blocks SELECT ts/900000,1,COUNT(*) FROM readings WHERE ts>=0 GROUP BY ts/900000");
+        db.execSQL("CREATE TABLE IF NOT EXISTS analysis_meta(epoch TEXT NOT NULL,revision INTEGER NOT NULL)");
+        db.execSQL("INSERT INTO analysis_meta SELECT ?,1 WHERE NOT EXISTS(SELECT 1 FROM analysis_meta)",new Object[]{UUID.randomUUID().toString()});
+        db.execSQL("CREATE TABLE IF NOT EXISTS analysis_blocks(block INTEGER PRIMARY KEY,revision INTEGER NOT NULL,n INTEGER NOT NULL)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS analysis_changes ON analysis_blocks(revision,block)");
+        db.execSQL("INSERT OR IGNORE INTO analysis_blocks SELECT ts/900000,1,COUNT(*) FROM readings WHERE ts>=0 GROUP BY ts/900000");
         String bump="UPDATE analysis_meta SET revision=revision+1;";
         String old="INSERT OR IGNORE INTO analysis_blocks VALUES(OLD.ts/900000,0,0);UPDATE analysis_blocks SET revision=(SELECT revision FROM analysis_meta),n=n-1 WHERE block=OLD.ts/900000 AND OLD.ts>=0;";
         String next="INSERT OR IGNORE INTO analysis_blocks VALUES(NEW.ts/900000,0,0);UPDATE analysis_blocks SET revision=(SELECT revision FROM analysis_meta),n=n+1 WHERE block=NEW.ts/900000 AND NEW.ts>=0;";
-        db.execSQL("CREATE TRIGGER analysis_insert AFTER INSERT ON readings WHEN NEW.ts>=0 BEGIN "+bump+next+" END");
-        db.execSQL("CREATE TRIGGER analysis_delete AFTER DELETE ON readings WHEN OLD.ts>=0 BEGIN "+bump+old+" END");
-        db.execSQL("CREATE TRIGGER analysis_update AFTER UPDATE ON readings BEGIN "+bump+old+next+" END");
-        db.execSQL("CREATE TABLE replica_blocks(block INTEGER PRIMARY KEY,revision INTEGER NOT NULL,n INTEGER NOT NULL)");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS analysis_insert AFTER INSERT ON readings WHEN NEW.ts>=0 BEGIN "+bump+next+" END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS analysis_delete AFTER DELETE ON readings WHEN OLD.ts>=0 BEGIN "+bump+old+" END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS analysis_update AFTER UPDATE ON readings BEGIN "+bump+old+next+" END");
+        db.execSQL("CREATE TABLE IF NOT EXISTS replica_blocks(block INTEGER PRIMARY KEY,revision INTEGER NOT NULL,n INTEGER NOT NULL)");
     }
     static JSONObject manifest(HistoryDb history,long from,long to)throws Exception{
         if(from<0||to<=from||to-from>376L*86400000||to>System.currentTimeMillis()+86400000)throw new IllegalArgumentException("Ungültiger Datenzeitraum.");

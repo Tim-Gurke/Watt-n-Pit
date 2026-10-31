@@ -69,3 +69,19 @@ test('independent solar boundaries remain distinct even within a live time bucke
  const {b,requests,reply}=viewer();b.read('energyHistoryWindow',[0,100000,'all',2000,90000],'today');reply({solar:{summary:{last:20}}});
  assert.equal(JSON.parse(b.read('energyHistoryWindow',[0,100000,'all',2500,90000],'today')).pending,true);assert.equal(requests.length,2);
 });
+
+test('hidden display pauses new work and accepts completed data without repainting',()=>{
+ const requests=[],ready=[];const b=new Bridge({requestHistory:q=>requests.push(JSON.parse(q))},m=>ready.push(m));
+ b.read('history',[0,100000,'power','all'],'one');b.setActive(false);b.read('history',[0,200000,'power','all'],'two');
+ b.result({id:requests[0].id,data:{points:[{v:12}]}});assert.equal(requests.length,1);assert.deepEqual(ready,[]);
+ b.setActive(true);assert.equal(requests.length,2);assert.deepEqual(ready,['resume']);assert.equal(JSON.parse(b.read('history',[0,100000,'power','all'],'one')).points[0].v,12);
+ b.result({id:requests[1].id,data:{points:[{v:13}]}});
+});
+test('chunk progress extends the pending request and retains the last complete curve',()=>{
+ const requests=[];const b=new Bridge({requestHistory:q=>requests.push(JSON.parse(q))},()=>{});
+ b.read('history',[0,100000,'power','all'],'day');b.result({id:requests[0].id,data:{points:[{v:42}]}});b.invalidate();b.read('history',[0,100000,'power','all'],'day');
+ b.progress({id:requests[1].id,message:'Messdaten werden abgeglichen …'});const value=JSON.parse(b.read('history',[0,100000,'power','all'],'day'));
+ assert.equal(value.points[0].v,42);assert.equal(value.pending,true);assert.match(value.progress,/Messdaten/);
+ b.progress({id:requests[0].id,message:'wrong source'});assert.match(JSON.parse(b.read('history',[0,100000,'power','all'],'day')).progress,/Messdaten/);
+ b.result({id:requests[1].id,data:{points:[{v:45}]}});assert.equal(JSON.parse(b.read('history',[0,100000,'power','all'],'day')).progress,undefined);
+});

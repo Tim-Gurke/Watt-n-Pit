@@ -22,7 +22,7 @@ final class SolarKeys {
         java.text.Collator order=java.text.Collator.getInstance(Locale.US);groups.sort((a,b)->order.compare(a.optString(0),b.optString(0)));
         JSONArray sorted=new JSONArray();for(JSONArray row:groups)sorted.put(row);
         double lat=hardware?0:place.getDouble("latitude"),lon=hardware?0:place.getDouble("longitude");
-        String text=new JSONArray().put(source).put(fixed(lat)).put(fixed(lon)).put(sorted).toString();
+        String text=new JSONArray().put(source).put(fixed(lat)).put(fixed(lon)).put(sorted).toString().replace("\\/","/");
         int a=(int)2166136261L,b=(int)3339675911L;for(int i=0;i<text.length();i++){a=(a^text.charAt(i))*16777619;b=(b^text.charAt(i))*(int)2246822519L;}
         return String.format(Locale.ROOT,"k-%08x%08x",a,b);
     }

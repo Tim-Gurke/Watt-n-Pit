@@ -6,9 +6,13 @@
 
 Auch Firmware-Updates deiner Victron-Geräte führst du weiterhin über die offiziellen Victron-Apps durch, bei SmartShunt und SmartSolar über VictronConnect. Watt’n’Pit kann keine Geräteupdates durchführen.
 
-**[Android-APK 1.6.13 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.6.13/Watt-n-Pit-v1.6.13.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
+**[Android-APK 1.7.0 herunterladen](https://github.com/Tim-Gurke/Watt-n-Pit/releases/download/v1.7.0/Watt-n-Pit-v1.7.0.apk)** · [Release](https://github.com/Tim-Gurke/Watt-n-Pit/releases/latest) · **[Anleitung mit Screenshots](docs/ANLEITUNG.md)** · [CSV-Import](docs/CSV-IMPORT.md)
 
 Android 8 oder neuer · Kein Konto · Keine Werbung · Unabhängiges Projekt, kein offizielles Victron-Produkt.
+
+## Neu in 1.7.0
+
+**Leichtere Zentrale, Auswertung auf den Anzeigen:** Das Hauptgerät zeichnet weiter auf und speichert die Originaldaten. S20, S10 und weitere Anzeigen berechnen Verlauf, Energie und Lerndaten aus eigenen, getrennten Kopien der gemeinsamen Grundlagen. Nur neue oder geänderte Messabschnitte werden nachgeladen. Bei gesperrtem Hauptgerät pausiert dessen Darstellung; Aufzeichnung und Anlagenverbund bleiben aktiv. Gemeinsame Einstellungen bleiben von den Anzeigen aus bedienbar. **Zuerst das Hauptgerät, danach die Anzeigen aktualisieren.** [Änderungen und Prüfgrenzen](docs/releases/1.7.0.md).
 
 ## Neu in 1.6.13
 

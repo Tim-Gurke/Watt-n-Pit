@@ -144,7 +144,7 @@ final class LanSync {
         values.put(RollerStore.get(context).snapshot().optJSONObject("profile"));values.put(context.getSharedPreferences("wattpit-presence",Context.MODE_PRIVATE).getLong("revision",0));return digest(values.toString());
     }
     private static String digest(String value)throws Exception{return java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}
-    private long currentControlRevision()throws Exception{
+    private synchronized long currentControlRevision()throws Exception{
         String next=fingerprint();if(!next.equals(controlFingerprint)){
             controlRevision++;if(!prefs.edit().putLong("controlRevision",controlRevision).commit())throw new IOException();controlFingerprint=next;
         }return controlRevision;
@@ -282,10 +282,6 @@ final class LanSync {
         if(method.equals("analysisPage"))return HistoryExchange.page(repository.db,args.getLong(0),args.getLong(1),args.getLong(2));
         if(method.equals("analysisMetadata")){long revision;synchronized(this){revision=currentControlRevision();}return AnalysisExchange.metadata(context,repository,planning,args.getLong(0),args.getLong(1),revision);}
         if(method.equals("analysisModelPage"))return AnalysisExchange.page(context,repository,planning,args.getString(0),args.getLong(1),args.getLong(2),args.getString(3),args.getLong(4));
-        if(method.equals("analysisForecasts")){
-            if(args.length()!=2||args.getLong(1)!=currentControlRevision())throw new IllegalArgumentException("Aufstellung inzwischen geändert.");
-            String rows=args.getString(0);if(rows.length()>128000)throw new IllegalArgumentException("Zu viele Vorhersagen.");planning.remember(rows);return new JSONObject().put("accepted",true);
-        }
         if(method.equals("control"))return applyControl(args);
         if(method.equals("rollerSession")){
             if(args.length()!=3||!(args.get(0) instanceof Boolean))throw new IllegalArgumentException("Ungültige Ladeanfrage.");

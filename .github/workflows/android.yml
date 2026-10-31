@@ -76,6 +76,7 @@ jobs:
           node tools/lan-smoke.cjs
           node tools/plant-control-smoke.cjs
           node tools/history-retention-smoke.cjs
+          node tools/display-pause-smoke.cjs
           node tools/dashboard-usability-smoke.cjs
       - uses: actions/upload-artifact@v4
         with:
@@ -98,6 +99,10 @@ jobs:
             app/build/reports/lan-proof/report.json
             app/build/reports/lan-proof/results.log
             app/build/reports/lan-proof/presence-results.log
+            app/build/reports/lan-proof/viewer-report.json
+            app/build/reports/lan-proof/viewer-results.log
+            app/build/reports/lan-proof/mobile-viewer-results.log
+            app/build/reports/lan-proof/solar-inputs.json
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/publish/')

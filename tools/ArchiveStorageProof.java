@@ -126,7 +126,7 @@ public final class ArchiveStorageProof {
             require(before < -100,"legacy unavailable-current records reproduce a false consumption drop through actual HistoryDb");
             db.execSQL("ALTER TABLE readings DROP COLUMN archiveCounter");db.execSQL("ALTER TABLE readings DROP COLUMN archiveOriginalTs");db.execSQL("PRAGMA user_version=6");history.close();
             history=new HistoryDb(null);db=history.getWritableDatabase();
-            try(Cursor c=db.rawQuery("PRAGMA user_version",null)){c.moveToFirst();require(c.getInt(0)==8,"opening a version-6 database automatically runs the current repair and timestamp metadata upgrade");}
+            try(Cursor c=db.rawQuery("PRAGMA user_version",null)){c.moveToFirst();require(c.getInt(0)==9,"opening a version-6 database automatically runs the current repair and timestamp metadata upgrade");}
             require(count(db,"readings","1=1")==15&&count(db,"readings","current=2097.151")==0,"repair keeps every sample and removes both unavailable currents");
             require(count(db,"readings","device='na-shunt' AND origin='live' AND current IS NULL AND power IS NULL AND alarm=0")==2,"repair clears unavailable current and derived power while retaining alarm data");
             require(count(db,"readings","ts="+(start+60000)+" AND voltage=13.4 AND soc=100 AND period=10")==1,"repair retains voltage, SOC and sample resolution from the affected row");

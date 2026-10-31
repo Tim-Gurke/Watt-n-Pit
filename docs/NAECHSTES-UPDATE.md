@@ -4,6 +4,10 @@
 
 - **GPS-Standort mit Ortsnamen:** Zum aktuell verwendeten GPS-Standort den zugehörigen Ortsnamen anzeigen. Der Name steht **in derselben Zeile direkt hinter „GPS-Standort“**, beispielsweise **„GPS-Standort · Ortsname“**, damit der aktuelle Ort in der Wetterkachel sofort erkennbar ist. **Schriftbild:** „GPS-Standort“ bleibt fett. Der unmittelbar folgende Ortsname erhält denselben dünneren Schriftschnitt wie „14 Tage“; die gemeinsame Zeile bleibt erhalten.
 
+## Mit 1.7.0 umgesetzt: Zentrale aufzeichnen lassen, auf den Anzeigen auswerten
+
+Das Hauptgerät speichert Originaldaten und gemeinsame App-Einstellungen. Die Anzeigen übernehmen Verlauf, Energie- und Lernberechnungen mit getrennten Kopien derselben Grundlagen. Die Darstellung pausiert bei gesperrtem Hauptgerät, während native Aufzeichnung und Anlagenverbund verfügbar bleiben. Gemeinsame Einstellungen werden nach Bestätigung der Zentrale übernommen; Darstellung und Größe bleiben je Handy lokal. Siehe [1.7.0](releases/1.7.0.md).
+
 ## Mit 1.6.11 umgesetzt: zwei Hinweiszeilen, lokale Darstellungsgröße und mobile Verbrauchsschätzung
 
 - Kachelhinweise auf höchstens zwei Zeilen begrenzen; Auslassungspunkte gehören in die zweite Zeile. Nachgeladene Meldungen dürfen die Kachelgeometrie nicht verdrängen. Vollständige Erklärung in der Großansicht.

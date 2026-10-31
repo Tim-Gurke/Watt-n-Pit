@@ -13,7 +13,7 @@
       this.a=a;this.knowledge={source:'',observations:[],forecasts:[],updated:0};this.renderKey='';this.lastRequest=0;this.contextKey=null;this.lastRemembered='';
       $('solarSetupSettings').onclick=()=>this.openSetup();$('solarSetupButton').onclick=()=>this.openSetup();$('solarConsumptionSettings').onclick=()=>this.openUsage();
       $('solarMobileToggle').onclick=()=>this.mobile();$('solarGpsSettings').onclick=()=>{this.openSetup();this.locate();};
-      window.onSolarPlanData=data=>{if(data.error){this.knowledge.error=data.error;}else{this.knowledge=data;this.knowledge.observations??=[];this.knowledge.forecasts??=[];}this.renderKey='';this.render();};
+      window.onSolarPlanData=data=>{if(data.analysis?.plant&&data.analysis.plant!==this.a.getSnapshot().lan?.id)return;if(data.error){this.knowledge.error=data.error;this.lastRequest=Math.min(this.lastRequest,Date.now()-270000);}else{this.knowledge=data;this.knowledge.observations??=[];this.knowledge.forecasts??=[];}this.renderKey='';this.render();};
       window.onSolarSunsetSoc=result=>{
         if(result.id!==this.sunsetRead?.id)return;
         Object.assign(this.sunsetRead,{done:true,point:result.point,error:result.error});this.renderKey='';this.render();
@@ -51,6 +51,7 @@
     }
     render(){
       if(window.wattDisplayActive===false)return;
+      const plant=this.a.getSnapshot().lan?.id||'local';if(this.plant!==undefined&&this.plant!==plant){this.knowledge={source:'',observations:[],forecasts:[],updated:0};this.lastRequest=0;this.contextKey=null;this.lastRemembered='';this.renderKey='';}this.plant=plant;
       let rollerState={};try{rollerState=JSON.parse(this.a.native?.rollerSnapshot?.()||'{}');}catch(_){}
       const rollerLoads=window.WattRollerCore?.loads(rollerState)||[];
       const snapshot=this.a.getSnapshot(),weather=snapshot.weather||{},eq=this.equipment(),plan=this.plan(),now=Date.now(),shunt=this.a.getReading?.('shunt'),key=JSON.stringify([weather,eq,plan,this.knowledge.updated,this.knowledge.error,Math.floor(now/60000),shunt?[Math.round(shunt.soc),Math.round(shunt.voltage*10)/10]:null,snapshot.settings.capacity,snapshot.deviceSettings,rollerLoads,this.a.getPresence?.()]);
@@ -63,7 +64,7 @@
       this.savedSunset(snapshot,now);
       this.renderNote(snapshot,weather,now);
       const place=snapshot.settings.weatherPlace||weather.place,context=C.setupKey(eq,plan,place,this.knowledge.source),solarKey=C.calibrationKey(eq,plan,place,this.knowledge.source);
-      if(context&&this.knowledge.source&&context!==this.contextKey){this.contextKey=context;this.a.native?.rememberSolarContext?.(JSON.stringify({key:context,solarKey,systemKey:C.systemKey(eq,this.knowledge.source)}));this.a.native?.requestSolarData?.();}
+      if(context&&this.knowledge.source&&context!==this.contextKey){this.contextKey=context;if(!this.a.native?.isLanViewer?.()){this.a.native?.rememberSolarContext?.(JSON.stringify({key:context,solarKey,systemKey:C.systemKey(eq,this.knowledge.source)}));this.a.native?.requestSolarData?.();}}
       const remembered=solarKey+':'+weather.updated;
       if(remembered!==this.lastRemembered&&this.knowledge.source){this.lastRemembered=remembered;const rows=C.trainingRows(weather,eq,plan,this.days,this.knowledge.source);if(rows.length)this.a.native?.rememberSolarForecasts?.(JSON.stringify(rows));}
       const radiation=this.days.map(d=>d.radiation).filter(x=>Number.isFinite(x)&&x>=0),maximum=Math.max(1,...radiation),days=$('weatherDays');
